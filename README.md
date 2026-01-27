@@ -2,8 +2,8 @@
 
 ## Version 3.1 - PhD Research Implementation
 
-**Author:** Sajjad  
-**Advisor:** Dr. Leila Mohammadkhanli  
+**Author:** Sajjad Pirahesh  
+**Advisor:** Dr. Leila Mohammadkhanli   
 **Institution:** PhD in Information Technology (Computer Networks)  
 **Date:** January 2025
 
