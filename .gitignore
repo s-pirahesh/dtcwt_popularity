@@ -1,8 +1,84 @@
-# Python
+# ==========================================
+# فایل .gitignore برای پروژه DTCWT
+# ==========================================
+#
+# این فایل را در ریشه پروژه با نام ".gitignore" ذخیره کنید
+# (بدون پسوند، دقیقاً همین نام: .gitignore)
+#
+# ==========================================
+
+# ==========================================
+# DATA FILES - حجیم و نباید در Git باشند
+# ==========================================
+
+# داده‌های خام
+data/raw/
+data/raw/*
+
+# داده‌های تبدیل شده
+data/datasets/
+data/datasets/*
+
+# فایل‌های موقت
+data/temp/
+data/tmp/
+
+# فایل‌های بزرگ
+*.csv
+*.tsv
+*.dat
+*.txt
+*.parquet
+*.feather
+*.hdf
+
+# استثناها - این فایل‌ها مجاز هستند
+!requirements.txt
+!README.txt
+!README.md
+
+# ==========================================
+# RESULTS - نتایج آزمایش‌ها
+# ==========================================
+
+results/
+results/*
+
+# مدل‌ها
+models/
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+
+# تصاویر و نمودارها
+figures/
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+
+# استثنا: تصاویر مستندات
+!docs/images/*.png
+!docs/images/*.jpg
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# ==========================================
+# PYTHON
+# ==========================================
+
+# Cache و Bytecode
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
+# Distribution
 .Python
 build/
 develop-eggs/
@@ -21,53 +97,115 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
+# PyInstaller
+*.manifest
+*.spec
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
+# Testing
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
 
 # Jupyter Notebook
 .ipynb_checkpoints
 *.ipynb
 
-# Results and data
-results/raw_data/*
-results/feature_cache/*
-!results/raw_data/.gitkeep
-!results/feature_cache/.gitkeep
-data/datasets/*
-!data/datasets/.gitkeep
+# pyenv
+.python-version
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# IDEs
+# ==========================================
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ==========================================
+# OS FILES
+# ==========================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ==========================================
+# LOGS & TEMP FILES
+# ==========================================
 
 # Logs
 *.log
-*.out
-
-# MLflow
-mlruns/
+logs/
 
 # Temporary files
 *.tmp
-*.bak
-*.backup
+*.temp
+tmp/
+temp/
 
-# OS
-Thumbs.db
-.DS_Store
+# Archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
+# ==========================================
+# DATABASE
+# ==========================================
 
-# Documentation
-docs/_build/
+*.db
+*.sqlite
+
+# ==========================================
+# KEEP DIRECTORY STRUCTURE
+# ==========================================
+
+# این فایل‌ها را نگه دار
+!.gitkeep
+!*/.gitkeep
+!README.md
+!*/README.md
