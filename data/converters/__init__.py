@@ -322,3 +322,21 @@ class ConverterFactory:
     def list_converters(cls) -> List[str]:
         """لیست دیتاست‌های پشتیبانی شده"""
         return list(cls._converters.keys())
+
+# ==========================================
+# Import Converters to Register Them
+# ==========================================
+# هر converter باید اینجا import شود تا در Factory ثبت شود
+
+# MovieLens Converter
+try:
+    from . import movielens_converter
+except ImportError as e:
+    import warnings
+    warnings.warn(f"Could not import movielens_converter: {e}")
+
+# TODO: Import other converters here as they are created
+# from . import youtube_converter
+# from . import foursquare_converter
+# from . import higgs_twitter_converter
+# from . import nyc_taxi_converter
