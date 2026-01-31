@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 اسکریپت آماده‌سازی داده‌ها
 تبدیل دیتاست‌های خام به فرمت استاندارد CSV
@@ -36,6 +37,13 @@ import sys
 from pathlib import Path
 from glob import glob
 import yaml
+
+# Fix encoding for Windows
+if sys.platform == 'win32':
+    import io
+
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # اضافه کردن پروژه به path
 sys.path.insert(0, str(Path(__file__).parent))

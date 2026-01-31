@@ -90,10 +90,10 @@ DATASETS = {
         'count_col': 'view_count',
     },
     'movielens': {
-        'path': DATA_DIR / 'movielens.csv',
+        'path': DATA_DIR / 'movielens_test.csv',
         'time_col': 'timestamp',
-        'item_col': 'movie_id',
-        'count_col': 'rating_count',
+        'item_col': 'item_id',
+        'count_col': 'count',
     },
     'foursquare': {
         'path': DATA_DIR / 'foursquare.csv',
