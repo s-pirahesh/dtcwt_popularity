@@ -1,233 +1,292 @@
+# -*- coding: utf-8 -*-
 """
-Evaluation Metrics for Popularity Assessment
+Comprehensive Metrics Calculator V2
+Metrics for scoring/assessment (not prediction)
+Author: Sajjad
+Date: February 2025
 """
+
 import numpy as np
-from typing import List, Dict, Tuple, Any
-from sklearn.metrics import precision_score, recall_score, f1_score
+import pandas as pd
+from scipy.stats import spearmanr, kendalltau
+from sklearn.metrics import ndcg_score, mean_absolute_error, mean_squared_error
+from typing import Dict, Tuple
 
 
-class AssessmentMetrics:
+class MetricsCalculator:
     """
-    Metrics for evaluating popularity assessment methods
+    محاسبه معیارهای ارزیابی جامع
+    فقط برای assessment/scoring (بدون prediction)
     """
     
     @staticmethod
-    def hit_rate(ranking: List[Any], true_popular: set, top_k_ratio: float = 0.10) -> float:
+    def calculate_all_metrics(scores: np.ndarray, actual_counts: np.ndarray) -> Dict:
         """
-        Hit Rate: What fraction of truly popular items are in predicted top-K?
+        محاسبه همه معیارها برای یک مجموعه آیتم
         
         Args:
-            ranking: Ranked list of items (by predicted popularity)
-            true_popular: Set of truly popular items
-            top_k_ratio: Fraction of top items to consider (e.g., 0.10 = top 10%)
-            
+            scores: امتیازهای محاسبه شده توسط روش (popularity scores)
+            actual_counts: تعداد دسترسی‌های واقعی
+        
         Returns:
-            Hit rate (0 to 1)
+            dict حاوی همه معیارها
         """
-        k = max(1, int(len(ranking) * top_k_ratio))
-        predicted_top_k = set(ranking[:k])
+        # تبدیل به numpy arrays
+        scores = np.asarray(scores, dtype=np.float64)
+        actual = np.asarray(actual_counts, dtype=np.float64)
         
-        if len(true_popular) == 0:
-            return 0.0
+        # حذف NaN values
+        valid_idx = ~(np.isnan(scores) | np.isnan(actual))
+        scores = scores[valid_idx]
+        actual = actual[valid_idx]
         
-        hits = len(predicted_top_k.intersection(true_popular))
-        hit_rate = hits / len(true_popular)
+        if len(scores) == 0:
+            return MetricsCalculator._empty_metrics()
         
-        return hit_rate
+        metrics = {}
+        
+        # 1. Ranking Metrics
+        try:
+            rank_predicted = (-scores).argsort().argsort() + 1
+            rank_actual = (-actual).argsort().argsort() + 1
+            
+            spearman_corr, spearman_p = spearmanr(scores, actual)
+            kendall_corr, kendall_p = kendalltau(scores, actual)
+            
+            metrics['spearman'] = spearman_corr if not np.isnan(spearman_corr) else 0.0
+            metrics['spearman_pvalue'] = spearman_p if not np.isnan(spearman_p) else 1.0
+            metrics['kendall'] = kendall_corr if not np.isnan(kendall_corr) else 0.0
+            metrics['kendall_pvalue'] = kendall_p if not np.isnan(kendall_p) else 1.0
+            
+        except Exception as e:
+            metrics['spearman'] = 0.0
+            metrics['spearman_pvalue'] = 1.0
+            metrics['kendall'] = 0.0
+            metrics['kendall_pvalue'] = 1.0
+            rank_predicted = np.arange(len(scores)) + 1
+            rank_actual = np.arange(len(actual)) + 1
+        
+        # 2. Error Metrics
+        mae = mean_absolute_error(actual, scores)
+        rmse = np.sqrt(mean_squared_error(actual, scores))
+        
+        # MAPE با handling برای divide by zero
+        with np.errstate(divide='ignore', invalid='ignore'):
+            mape = np.mean(np.abs((actual - scores) / np.where(actual == 0, 1, actual))) * 100
+            if np.isnan(mape) or np.isinf(mape):
+                mape = 0.0
+        
+        metrics['mae'] = mae
+        metrics['rmse'] = rmse
+        metrics['mape'] = mape
+        
+        # 3. NDCG
+        try:
+            # تبدیل به فرمت مناسب برای ndcg_score
+            ndcg = ndcg_score([actual], [scores])
+            if np.isnan(ndcg):
+                ndcg = 0.0
+        except:
+            ndcg = 0.0
+        
+        metrics['ndcg'] = ndcg
+        
+        # 4. Coverage
+        coverage = (scores > 0).sum() / len(scores) if len(scores) > 0 else 0.0
+        metrics['coverage'] = coverage
+        
+        # 5. Rank-based metrics
+        metrics['mean_rank_error'] = np.mean(np.abs(rank_predicted - rank_actual))
+        metrics['median_rank_error'] = np.median(np.abs(rank_predicted - rank_actual))
+        
+        # 6. Additional statistics
+        metrics['mean_score'] = np.mean(scores)
+        metrics['std_score'] = np.std(scores)
+        metrics['mean_actual'] = np.mean(actual)
+        metrics['std_actual'] = np.std(actual)
+        
+        # 7. Rankings (for detailed analysis)
+        metrics['rank_predicted'] = rank_predicted
+        metrics['rank_actual'] = rank_actual
+        
+        return metrics
     
     @staticmethod
-    def precision_at_k(ranking: List[Any], true_popular: set, top_k_ratio: float = 0.10) -> float:
-        """
-        Precision@K: What fraction of predicted top-K are truly popular?
-        
-        Args:
-            ranking: Ranked list of items
-            true_popular: Set of truly popular items
-            top_k_ratio: Fraction of top items
-            
-        Returns:
-            Precision (0 to 1)
-        """
-        k = max(1, int(len(ranking) * top_k_ratio))
-        predicted_top_k = set(ranking[:k])
-        
-        if len(predicted_top_k) == 0:
-            return 0.0
-        
-        tp = len(predicted_top_k.intersection(true_popular))
-        precision = tp / len(predicted_top_k)
-        
-        return precision
+    def _empty_metrics() -> Dict:
+        """متریک‌های خالی برای حالت error"""
+        return {
+            'spearman': 0.0,
+            'spearman_pvalue': 1.0,
+            'kendall': 0.0,
+            'kendall_pvalue': 1.0,
+            'mae': 0.0,
+            'rmse': 0.0,
+            'mape': 0.0,
+            'ndcg': 0.0,
+            'coverage': 0.0,
+            'mean_rank_error': 0.0,
+            'median_rank_error': 0.0,
+            'mean_score': 0.0,
+            'std_score': 0.0,
+            'mean_actual': 0.0,
+            'std_actual': 0.0,
+            'rank_predicted': np.array([]),
+            'rank_actual': np.array([]),
+        }
     
     @staticmethod
-    def false_positive_rate(ranking: List[Any], true_popular: set, 
-                           top_k_ratio: float = 0.10) -> float:
+    def calculate_stratum_metrics(scores: np.ndarray, actual_counts: np.ndarray, 
+                                  item_ids: np.ndarray, stratum_items: np.ndarray) -> Dict:
         """
-        False Positive Rate: What fraction of predicted top-K are NOT popular?
+        محاسبه معیارها برای یک stratum خاص
         
         Args:
-            ranking: Ranked list of items
-            true_popular: Set of truly popular items
-            top_k_ratio: Fraction of top items
-            
+            scores: همه امتیازها
+            actual_counts: همه تعداد دسترسی‌ها
+            item_ids: همه شناسه‌های آیتم
+            stratum_items: آیتم‌های این stratum
+        
         Returns:
-            FP rate (0 to 1)
+            dict حاوی معیارها
         """
-        k = max(1, int(len(ranking) * top_k_ratio))
-        predicted_top_k = set(ranking[:k])
+        # فیلتر کردن فقط آیتم‌های این stratum
+        mask = np.isin(item_ids, stratum_items)
         
-        fp = len(predicted_top_k - true_popular)
-        fp_rate = fp / len(predicted_top_k)
+        if not np.any(mask):
+            return MetricsCalculator._empty_metrics()
         
-        return fp_rate
+        stratum_scores = scores[mask]
+        stratum_actual = actual_counts[mask]
+        
+        return MetricsCalculator.calculate_all_metrics(stratum_scores, stratum_actual)
     
     @staticmethod
-    def ndcg_at_k(ranking: List[Any], relevance_scores: Dict[Any, float],
-                  top_k_ratio: float = 0.10) -> float:
+    def calculate_temporal_stability(scores_t: np.ndarray, scores_t_prev: np.ndarray) -> Dict:
         """
-        Normalized Discounted Cumulative Gain
+        محاسبه پایداری زمانی امتیازها
         
         Args:
-            ranking: Ranked list of items
-            relevance_scores: Dictionary of item -> relevance score
-            top_k_ratio: Fraction of top items
-            
+            scores_t: امتیازها در زمان t
+            scores_t_prev: امتیازها در زمان t-1
+        
         Returns:
-            NDCG score (0 to 1)
+            dict حاوی معیارهای پایداری
         """
-        k = max(1, int(len(ranking) * top_k_ratio))
+        if len(scores_t) != len(scores_t_prev):
+            raise ValueError("Score arrays must have same length")
         
-        # Compute DCG
-        dcg = 0.0
-        for i, item in enumerate(ranking[:k]):
-            relevance = relevance_scores.get(item, 0.0)
-            dcg += relevance / np.log2(i + 2)  # i+2 because i starts at 0
+        # حذف NaN
+        valid_idx = ~(np.isnan(scores_t) | np.isnan(scores_t_prev))
+        scores_t = scores_t[valid_idx]
+        scores_t_prev = scores_t_prev[valid_idx]
         
-        # Compute ideal DCG (sort by relevance)
-        sorted_items = sorted(relevance_scores.keys(), 
-                            key=lambda x: relevance_scores[x], reverse=True)
-        idcg = 0.0
-        for i, item in enumerate(sorted_items[:k]):
-            relevance = relevance_scores[item]
-            idcg += relevance / np.log2(i + 2)
+        if len(scores_t) == 0:
+            return {'stability': 0.0, 'volatility': 0.0}
         
-        if idcg == 0:
-            return 0.0
+        # 1. Score stability (1 - normalized absolute change)
+        score_changes = np.abs(scores_t - scores_t_prev)
+        mean_change = np.mean(score_changes)
+        max_possible_change = np.max([np.max(np.abs(scores_t)), np.max(np.abs(scores_t_prev))])
         
-        return dcg / idcg
+        if max_possible_change > 0:
+            stability = 1.0 - (mean_change / max_possible_change)
+        else:
+            stability = 1.0
+        
+        # 2. Rank volatility
+        rank_t = (-scores_t).argsort().argsort() + 1
+        rank_t_prev = (-scores_t_prev).argsort().argsort() + 1
+        rank_changes = np.abs(rank_t - rank_t_prev)
+        volatility = np.mean(rank_changes)
+        
+        return {
+            'stability': stability,
+            'volatility': volatility,
+            'mean_score_change': mean_change,
+            'max_score_change': np.max(score_changes),
+        }
     
     @staticmethod
-    def compute_all_metrics(ranking: List[Any], 
-                           future_accesses: Dict[Any, float],
-                           top_k_ratios: List[float] = [0.05, 0.10, 0.20]) -> Dict[str, Dict]:
+    def compare_methods(method_scores: Dict[str, np.ndarray], 
+                       actual_counts: np.ndarray) -> pd.DataFrame:
         """
-        Compute all metrics for multiple top-K ratios
+        مقایسه چند روش با یکدیگر
         
         Args:
-            ranking: Ranked list of items
-            future_accesses: Dictionary of item -> future access count
-            top_k_ratios: List of top-K ratios to evaluate
-            
-        Returns:
-            Nested dictionary: {top_k: {metric: value}}
-        """
-        results = {}
+            method_scores: {method_name: scores array}
+            actual_counts: تعداد دسترسی‌های واقعی
         
-        for ratio in top_k_ratios:
-            # Determine true popular items (top ratio by future accesses)
-            k_true = max(1, int(len(future_accesses) * ratio))
-            sorted_by_future = sorted(future_accesses.keys(),
-                                     key=lambda x: future_accesses[x],
-                                     reverse=True)
-            true_popular = set(sorted_by_future[:k_true])
+        Returns:
+            DataFrame حاوی مقایسه
+        """
+        results = []
+        
+        for method_name, scores in method_scores.items():
+            metrics = MetricsCalculator.calculate_all_metrics(scores, actual_counts)
             
-            # Compute metrics
-            metrics = {
-                'hit_rate': AssessmentMetrics.hit_rate(ranking, true_popular, ratio),
-                'precision': AssessmentMetrics.precision_at_k(ranking, true_popular, ratio),
-                'fp_rate': AssessmentMetrics.false_positive_rate(ranking, true_popular, ratio),
-                'ndcg': AssessmentMetrics.ndcg_at_k(ranking, future_accesses, ratio),
+            # فقط معیارهای اصلی
+            result = {
+                'method': method_name,
+                'spearman': metrics['spearman'],
+                'kendall': metrics['kendall'],
+                'mae': metrics['mae'],
+                'rmse': metrics['rmse'],
+                'mape': metrics['mape'],
+                'ndcg': metrics['ndcg'],
+                'coverage': metrics['coverage'],
             }
             
-            # F1 score
-            if metrics['precision'] + metrics['hit_rate'] > 0:
-                metrics['f1'] = 2 * (metrics['precision'] * metrics['hit_rate']) / \
-                               (metrics['precision'] + metrics['hit_rate'])
-            else:
-                metrics['f1'] = 0.0
-            
-            results[f'top_{int(ratio*100)}%'] = metrics
+            results.append(result)
         
-        return results
+        df = pd.DataFrame(results)
+        
+        # مرتب‌سازی بر اساس spearman (بالاتر بهتر)
+        df = df.sort_values('spearman', ascending=False)
+        
+        return df
     
     @staticmethod
-    def spearman_correlation(ranking1: List[Any], ranking2: List[Any]) -> float:
+    def calculate_improvement(baseline_metrics: Dict, method_metrics: Dict) -> Dict:
         """
-        Compute Spearman rank correlation between two rankings
+        محاسبه میزان بهبود نسبت به baseline
         
         Args:
-            ranking1: First ranking
-            ranking2: Second ranking
-            
+            baseline_metrics: معیارهای baseline
+            method_metrics: معیارهای روش پیشنهادی
+        
         Returns:
-            Spearman correlation (-1 to 1)
+            dict حاوی درصد بهبود
         """
-        from scipy.stats import spearmanr
+        improvements = {}
         
-        # Create rank dictionaries
-        rank1 = {item: i for i, item in enumerate(ranking1)}
-        rank2 = {item: i for i, item in enumerate(ranking2)}
+        # معیارهایی که بالاتر بهتر است
+        higher_better = ['spearman', 'kendall', 'ndcg', 'coverage']
         
-        # Get common items
-        common_items = set(rank1.keys()).intersection(set(rank2.keys()))
+        # معیارهایی که پایین‌تر بهتر است
+        lower_better = ['mae', 'rmse', 'mape', 'mean_rank_error']
         
-        if len(common_items) < 2:
-            return 0.0
+        for metric in higher_better:
+            if metric in baseline_metrics and metric in method_metrics:
+                baseline_val = baseline_metrics[metric]
+                method_val = method_metrics[metric]
+                
+                if baseline_val != 0:
+                    improvement = ((method_val - baseline_val) / abs(baseline_val)) * 100
+                else:
+                    improvement = 0.0
+                
+                improvements[f'{metric}_improvement'] = improvement
         
-        # Get ranks for common items
-        ranks1 = [rank1[item] for item in common_items]
-        ranks2 = [rank2[item] for item in common_items]
+        for metric in lower_better:
+            if metric in baseline_metrics and metric in method_metrics:
+                baseline_val = baseline_metrics[metric]
+                method_val = method_metrics[metric]
+                
+                if baseline_val != 0:
+                    improvement = ((baseline_val - method_val) / abs(baseline_val)) * 100
+                else:
+                    improvement = 0.0
+                
+                improvements[f'{metric}_improvement'] = improvement
         
-        correlation, _ = spearmanr(ranks1, ranks2)
-        
-        return correlation if not np.isnan(correlation) else 0.0
-
-
-class PredictionMetrics:
-    """
-    Metrics for evaluating prediction methods (secondary component)
-    """
-    
-    @staticmethod
-    def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        """Mean Absolute Error"""
-        return float(np.mean(np.abs(y_true - y_pred)))
-    
-    @staticmethod
-    def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        """Root Mean Squared Error"""
-        return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
-    
-    @staticmethod
-    def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        """Mean Absolute Percentage Error"""
-        mask = y_true != 0
-        if not np.any(mask):
-            return 0.0
-        return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
-    
-    @staticmethod
-    def r2_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        """R² Score"""
-        from sklearn.metrics import r2_score as sklearn_r2
-        return float(sklearn_r2(y_true, y_pred))
-    
-    @staticmethod
-    def compute_all_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-        """Compute all prediction metrics"""
-        return {
-            'mae': PredictionMetrics.mae(y_true, y_pred),
-            'rmse': PredictionMetrics.rmse(y_true, y_pred),
-            'mape': PredictionMetrics.mape(y_true, y_pred),
-            'r2': PredictionMetrics.r2_score(y_true, y_pred),
-        }
+        return improvements
