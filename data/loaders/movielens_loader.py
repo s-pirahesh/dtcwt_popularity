@@ -41,7 +41,7 @@ class MovieLensLoader(BaseLoader):
         Args:
             data_dir: مسیر دایرکتوری MovieLens
         """
-        super().__init__(data_dir, 'MovieLens 25M')
+        super().__init__(data_dir, 'MovieLens 32M')
         
         self.ratings_file = self.data_dir / 'ratings.csv'
         self.movies_file = self.data_dir / 'movies.csv'

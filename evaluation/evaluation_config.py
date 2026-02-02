@@ -246,7 +246,7 @@ class EvaluationConfig:
             f"  Items: {self.num_items or 'all'}, Selection: {self.item_selection}\n"
             f"  DWT Level: {self.wavelet_config['dwt']['level']}, "
             f"DTCWT Level: {self.wavelet_config['dtcwt']['level']}\n"
-            f"  Output: {self.output_format} ({self.compression})\n"
+            f"  Output: {self.final_format} ({self.compression})\n"
             f"  Parallel: {self.parallel} (cores: {self.num_cores})\n"
             f")"
         )
