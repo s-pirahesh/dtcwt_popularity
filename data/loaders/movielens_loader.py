@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 MovieLens Data Loader
-بارگذاری و پردازش دیتاست MovieLens 25M
+بارگذاری و پردازش دیتاست MovieLens 32M
 
-MovieLens 25M contains:
-- 25 million ratings
-- 62,000 movies
-- 162,000 users
-- Time span: 1995-2018
+MovieLens 32M contains:
+- 32 million ratings
+- 87,585 movies
+- 200,948 users
+- Time span: 1995-2023
 
 Author: Sajjad
-Date: February 2025
+Date: February 2026
 """
 
 import pandas as pd
