@@ -14,7 +14,7 @@ Main Pipeline for Content Popularity Assessment and Prediction
   3. show_results.py → نمایش متنی و گرافیکی
 
 Author: Sajjad
-Date: February 2025
+Date: February 2026
 """
 
 import sys
@@ -119,8 +119,8 @@ def get_data_loader(dataset_name: str):
         DataLoader instance
     """
     if dataset_name == 'movielens':
-        return MovieLensLoader(DATASETS['movielens'])
-    
+        # return MovieLensLoader(DATASETS['movielens'])
+        return MovieLensLoader(DATASETS['movielens']['path'].parent)
     elif dataset_name == 'youtube07':
         raise NotImplementedError(
             "YouTubeLoader هنوز پیاده‌سازی نشده است.\n"
