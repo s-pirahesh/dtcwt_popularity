@@ -90,7 +90,7 @@ DATASETS = {
         'count_col': 'view_count',
     },
     'movielens': {
-        'path': DATA_DIR / 'movielens_test.csv',
+        'path': DATA_DIR / 'movielens.csv',
         'time_col': 'timestamp',
         'item_col': 'item_id',
         'count_col': 'count',
@@ -102,7 +102,7 @@ DATASETS = {
         'count_col': 'checkin_count',
     },
     'higgs_twitter': {
-        'path': DATA_DIR / 'higgs.csv',
+        'path': DATA_DIR / 'higgs_twitter.csv',
         'time_col': 'timestamp',
         'item_col': 'tweet_id',
         'count_col': 'retweet_count',

@@ -11,9 +11,8 @@ Date: February 2025
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Any
 import pandas as pd
-import numpy as np
 from datetime import datetime
 import logging
 
@@ -28,14 +27,17 @@ class BaseLoader(ABC):
     انتزاعی را پیاده‌سازی نمایند.
     """
     
-    def __init__(self, data_dir: str, dataset_name: str):
+    def __init__(self, config: Dict[str, Any]):
         """
         Args:
-            data_dir: مسیر دایرکتوری داده‌ها
-            dataset_name: نام دیتاست
+            config: پیکربندی دیتاست (مسیر فایل و نام ستون‌ها)
         """
-        self.data_dir = Path(data_dir)
-        self.dataset_name = dataset_name
+        self.config = config
+        self.data_path = Path(self.config['path'])
+        self.time_col = self.config['time_col']
+        self.item_col = self.config['item_col']
+        self.count_col = self.config['count_col']
+        self.dataset_name = self.config.get('name', self.data_path.stem)
         self.data: Optional[pd.DataFrame] = None
         
         logger.info(f"Initializing {self.dataset_name} loader")
@@ -47,11 +49,11 @@ class BaseLoader(ABC):
         
         این متد باید:
         1. فایل داده را بخواند
-        2. timestamp را به datetime تبدیل کند
-        3. ستون‌های ضروری را داشته باشد: ['timestamp', 'item_id', 'user_id']
+        2. ستون زمان را به datetime تبدیل کند
+        3. ستون‌های ضروری را داشته باشد (time_col/item_col/count_col)
         
         Returns:
-            DataFrame با ستون‌های [timestamp, item_id, user_id, ...]
+            DataFrame با ستون‌های استاندارد دیتاست
         """
         pass
     
@@ -86,13 +88,13 @@ class BaseLoader(ABC):
         # فیلتر تاریخ شروع
         if start_date:
             start_dt = pd.to_datetime(start_date)
-            df = df[df['timestamp'] >= start_dt]
+            df = df[df[self.time_col] >= start_dt]
             logger.info(f"Filtered from {start_date}: {len(df):,} records")
         
         # فیلتر تاریخ پایان
         if end_date:
             end_dt = pd.to_datetime(end_date)
-            df = df[df['timestamp'] <= end_dt]
+            df = df[df[self.time_col] <= end_dt]
             logger.info(f"Filtered until {end_date}: {len(df):,} records")
         
         return df
@@ -105,23 +107,30 @@ class BaseLoader(ABC):
             df: DataFrame با timestamp
         
         Returns:
-            DataFrame با ستون‌های [date, item_id, count]
+            DataFrame با ستون‌های [time_col, item_col, count_col]
         """
         # استخراج تاریخ (بدون ساعت)
-        df['date'] = df['timestamp'].dt.date
+        df = df.copy()
+        df[self.time_col] = df[self.time_col].dt.date
         
         # تجمیع روزانه
-        daily = df.groupby(['date', 'item_id']).size().reset_index(name='count')
+        daily = (
+            df.groupby([self.time_col, self.item_col])[self.count_col]
+            .sum()
+            .reset_index()
+        )
         
         # تبدیل date به datetime
-        daily['date'] = pd.to_datetime(daily['date'])
+        daily[self.time_col] = pd.to_datetime(daily[self.time_col])
         
         # مرتب‌سازی
-        daily = daily.sort_values(['date', 'item_id']).reset_index(drop=True)
+        daily = daily.sort_values([self.time_col, self.item_col]).reset_index(drop=True)
         
         logger.info(f"Aggregated to daily: {len(daily):,} records")
-        logger.info(f"Date range: {daily['date'].min()} to {daily['date'].max()}")
-        logger.info(f"Unique items: {daily['item_id'].nunique():,}")
+        logger.info(
+            f"Date range: {daily[self.time_col].min()} to {daily[self.time_col].max()}"
+        )
+        logger.info(f"Unique items: {daily[self.item_col].nunique():,}")
         
         return daily
     
@@ -141,7 +150,11 @@ class BaseLoader(ABC):
             لیست item_id های انتخاب شده
         """
         # شمارش تعداد دفعات هر آیتم
-        item_counts = df['item_id'].value_counts()
+        item_counts = (
+            df.groupby(self.item_col)[self.count_col]
+            .sum()
+            .sort_values(ascending=False)
+        )
         
         # اگر num_items تعریف نشده، همه را برگردان
         if num_items is None:
@@ -213,7 +226,7 @@ class BaseLoader(ABC):
             item_selection: روش انتخاب
         
         Returns:
-            DataFrame با ستون‌های [date, item_id, count]
+            DataFrame با ستون‌های [time_col, item_col, count_col]
         """
         logger.info("="*70)
         logger.info("DATA PREPARATION")
@@ -224,7 +237,7 @@ class BaseLoader(ABC):
         
         # 2. انتخاب آیتم‌ها
         items = self.get_item_list(df, num_items, item_selection)
-        df = df[df['item_id'].isin(items)]
+        df = df[df[self.item_col].isin(items)]
         logger.info(f"Filtered to {len(items):,} items: {len(df):,} records")
         
         # 3. تجمیع روزانه
@@ -233,10 +246,13 @@ class BaseLoader(ABC):
         # 4. آمار نهایی
         logger.info("="*70)
         logger.info(f"Dataset:         {self.dataset_name}")
-        logger.info(f"Items:           {daily_data['item_id'].nunique():,}")
-        logger.info(f"Days:            {daily_data['date'].nunique():,}")
+        logger.info(f"Items:           {daily_data[self.item_col].nunique():,}")
+        logger.info(f"Days:            {daily_data[self.time_col].nunique():,}")
         logger.info(f"Records:         {len(daily_data):,}")
-        logger.info(f"Date range:      {daily_data['date'].min()} to {daily_data['date'].max()}")
+        logger.info(
+            f"Date range:      {daily_data[self.time_col].min()} "
+            f"to {daily_data[self.time_col].max()}"
+        )
         logger.info("="*70 + "\n")
         
         return daily_data
@@ -255,7 +271,7 @@ class BaseLoader(ABC):
             ValueError: اگر داده نامعتبر باشد
         """
         # بررسی ستون‌های ضروری
-        required_cols = ['timestamp', 'item_id', 'user_id']
+        required_cols = [self.time_col, self.item_col, self.count_col]
         missing = [col for col in required_cols if col not in df.columns]
         
         if missing:
@@ -266,8 +282,8 @@ class BaseLoader(ABC):
             raise ValueError("Empty dataset")
         
         # بررسی timestamp
-        if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
-            raise ValueError("timestamp column must be datetime")
+        if not pd.api.types.is_datetime64_any_dtype(df[self.time_col]):
+            raise ValueError(f"{self.time_col} column must be datetime")
         
         # بررسی مقادیر null
         null_counts = df[required_cols].isnull().sum()
@@ -289,11 +305,10 @@ class BaseLoader(ABC):
         
         stats = {
             'total_records': len(self.data),
-            'unique_users': self.data['user_id'].nunique(),
-            'unique_items': self.data['item_id'].nunique(),
+            'unique_items': self.data[self.item_col].nunique(),
             'date_range': self.get_date_range(),
             'duration_days': (
-                self.data['timestamp'].max() - self.data['timestamp'].min()
+                self.data[self.time_col].max() - self.data[self.time_col].min()
             ).days,
         }
         

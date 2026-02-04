@@ -108,7 +108,7 @@ def create_methods_dict(config: EvaluationConfig) -> dict:
     return methods
 
 
-def get_data_loader(dataset_name: str):
+def get_data_loader(dataset_name: str, data_path: str = None):
     """
     ایجاد data loader مناسب
     
@@ -119,7 +119,10 @@ def get_data_loader(dataset_name: str):
         DataLoader instance
     """
     if dataset_name == 'movielens':
-        return MovieLensLoader(DATASETS['movielens'])
+        dataset_config = DATASETS['movielens'].copy()
+        if data_path:
+            dataset_config['path'] = Path(data_path)
+        return MovieLensLoader(dataset_config)
     
     elif dataset_name == 'youtube07':
         raise NotImplementedError(
@@ -150,6 +153,7 @@ def run_temporal_evaluation(dataset_name: str,
                            final_format: str = 'csv',
                            parallel: bool = True,
                            num_cores: int = -1,
+                           data_path: str = None,
                            **kwargs):
     """
     اجرای ارزیابی زمانی کامل
@@ -231,7 +235,7 @@ def run_temporal_evaluation(dataset_name: str,
         print(config)
     
     # 2. بارگذاری داده
-    data_loader = get_data_loader(dataset_name)
+    data_loader = get_data_loader(dataset_name, data_path=data_path)
     
     # 3. ایجاد روش‌ها
     methods_dict = create_methods_dict(config)
@@ -350,6 +354,9 @@ def main():
     parser.add_argument('--item-selection', type=str, default='top',
                        choices=['top', 'random', 'stratified'],
                        help='Item selection strategy (default: top)')
+
+    parser.add_argument('--data-path', type=str, default=None,
+                       help='مسیر فایل داده (override مسیر config.py)')
     
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress verbose output')
@@ -368,6 +375,7 @@ def main():
         final_format=args.format,
         parallel=not args.no_parallel,
         num_cores=args.cores,
+        data_path=args.data_path,
         item_selection=args.item_selection,
         verbose=not args.quiet
     )
