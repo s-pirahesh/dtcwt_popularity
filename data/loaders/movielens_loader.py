@@ -14,8 +14,6 @@ Date: February 2026
 """
 
 import pandas as pd
-import numpy as np
-from pathlib import Path
 from typing import Tuple
 from datetime import datetime
 import logging
@@ -29,62 +27,38 @@ class MovieLensLoader(BaseLoader):
     """
     بارگذاری دیتاست MovieLens 25M
     
-    فایل ratings.csv شامل:
-    - userId: شناسه کاربر
-    - movieId: شناسه فیلم
-    - rating: امتیاز (0.5-5.0)
-    - timestamp: زمان Unix (seconds)
+    فایل خروجی آماده‌سازی شامل:
+    - timestamp: زمان (datetime)
+    - item_id: شناسه فیلم
+    - count: تعداد تعاملات
     """
     
-    def __init__(self, data_dir: str = 'data/raw/movielens'):
+    def __init__(self, config: dict):
         """
         Args:
-            data_dir: مسیر دایرکتوری MovieLens
+            config: تنظیمات دیتاست MovieLens
         """
-        super().__init__(data_dir, 'MovieLens 32M')
-        
-        self.ratings_file = self.data_dir / 'ratings.csv'
-        self.movies_file = self.data_dir / 'movies.csv'
-        
-        # بررسی وجود فایل‌ها
-        if not self.ratings_file.exists():
-            raise FileNotFoundError(f"Ratings file not found: {self.ratings_file}")
-        
-        logger.info(f"MovieLens data directory: {self.data_dir}")
+        super().__init__(config)
     
     def load_data(self) -> pd.DataFrame:
         """
-        بارگذاری ratings از فایل CSV
+        بارگذاری داده‌های پردازش‌شده از فایل CSV
         
         Returns:
-            DataFrame با ستون‌های [timestamp, item_id, user_id, rating]
+            DataFrame با ستون‌های [timestamp, item_id, count, ...]
         """
-        logger.info(f"Loading MovieLens ratings from {self.ratings_file}")
+        logger.info(f"Loading MovieLens data from {self.data_path}")
         
         # بارگذاری CSV
-        df = pd.read_csv(
-            self.ratings_file,
-            dtype={
-                'userId': np.int32,
-                'movieId': np.int32,
-                'rating': np.float32,
-                'timestamp': np.int64
-            }
-        )
+        df = pd.read_csv(self.data_path)
         
-        logger.info(f"Loaded {len(df):,} ratings")
+        logger.info(f"Loaded {len(df):,} records")
         
-        # تبدیل timestamp از Unix seconds به datetime
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-        
-        # تغییر نام ستون‌ها به استاندارد
-        df = df.rename(columns={
-            'userId': 'user_id',
-            'movieId': 'item_id'
-        })
+        # تبدیل ستون زمان به datetime
+        df[self.time_col] = pd.to_datetime(df[self.time_col])
         
         # مرتب‌سازی بر اساس زمان
-        df = df.sort_values('timestamp').reset_index(drop=True)
+        df = df.sort_values(self.time_col).reset_index(drop=True)
         
         # اعتبارسنجی
         self.validate_data(df)
@@ -93,9 +67,10 @@ class MovieLensLoader(BaseLoader):
         self.data = df
         
         # نمایش آمار
-        logger.info(f"Users:  {df['user_id'].nunique():,}")
-        logger.info(f"Movies: {df['item_id'].nunique():,}")
-        logger.info(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+        logger.info(f"Movies: {df[self.item_col].nunique():,}")
+        logger.info(
+            f"Date range: {df[self.time_col].min()} to {df[self.time_col].max()}"
+        )
         
         return df
     
@@ -109,8 +84,8 @@ class MovieLensLoader(BaseLoader):
         if self.data is None:
             self.data = self.load_data()
         
-        start = self.data['timestamp'].min()
-        end = self.data['timestamp'].max()
+        start = self.data[self.time_col].min()
+        end = self.data[self.time_col].max()
         
         return (start, end)
     
@@ -121,14 +96,8 @@ class MovieLensLoader(BaseLoader):
         Returns:
             DataFrame با ستون‌های [movieId, title, genres]
         """
-        if not self.movies_file.exists():
-            logger.warning(f"Movies file not found: {self.movies_file}")
-            return pd.DataFrame()
-        
-        movies = pd.read_csv(self.movies_file)
-        logger.info(f"Loaded {len(movies):,} movies metadata")
-        
-        return movies
+        logger.warning("Movies metadata not available in processed dataset.")
+        return pd.DataFrame()
     
     def get_genre_statistics(self) -> pd.DataFrame:
         """
@@ -165,6 +134,10 @@ class MovieLensLoader(BaseLoader):
         if self.data is None:
             self.data = self.load_data()
         
+        if 'rating' not in self.data.columns:
+            logger.warning("Rating column not available; returning full dataset.")
+            return self.data.copy()
+
         df = self.data[self.data['rating'] >= min_rating].copy()
         logger.info(f"Filtered by rating >= {min_rating}: {len(df):,} records")
         
@@ -178,16 +151,24 @@ class MovieLensLoader(BaseLoader):
             top_n: تعداد فیلم‌های برتر
         
         Returns:
-            DataFrame با [item_id, count, avg_rating]
+            DataFrame با [item_id, count, avg_rating (optional)]
         """
         if self.data is None:
             self.data = self.load_data()
         
-        popular = self.data.groupby('item_id').agg({
-            'rating': ['count', 'mean']
-        }).reset_index()
-        
-        popular.columns = ['item_id', 'count', 'avg_rating']
+        if 'rating' in self.data.columns:
+            popular = self.data.groupby(self.item_col).agg({
+                'rating': ['count', 'mean']
+            }).reset_index()
+            popular.columns = [self.item_col, 'count', 'avg_rating']
+        else:
+            popular = (
+                self.data.groupby(self.item_col)[self.count_col]
+                .sum()
+                .reset_index()
+                .rename(columns={self.count_col: 'count'})
+            )
+
         popular = popular.sort_values('count', ascending=False).head(top_n)
         
         return popular
@@ -203,8 +184,8 @@ class MovieLensLoader(BaseLoader):
             self.data = self.load_data()
         
         df = self.data.copy()
-        df['year'] = df['timestamp'].dt.year
-        df['month'] = df['timestamp'].dt.month
+        df['year'] = df[self.time_col].dt.year
+        df['month'] = df[self.time_col].dt.month
         
         temporal = df.groupby(['year', 'month']).size().reset_index(name='count')
         
@@ -228,7 +209,7 @@ class MovieLensLoader(BaseLoader):
         
         # نمونه‌برداری تصادفی
         sample = self.data.sample(frac=sample_ratio, random_state=42)
-        sample = sample.sort_values('timestamp').reset_index(drop=True)
+        sample = sample.sort_values(self.time_col).reset_index(drop=True)
         
         logger.info(f"Created sample with {len(sample):,} records ({sample_ratio*100:.1f}%)")
         
@@ -241,12 +222,12 @@ class MovieLensLoader(BaseLoader):
 
 
 # تابع کمکی برای ایجاد loader
-def get_movielens_loader(data_dir: str = 'data/raw/movielens') -> MovieLensLoader:
+def get_movielens_loader(config: dict = None) -> MovieLensLoader:
     """
     Factory function برای ایجاد MovieLensLoader
     
     Args:
-        data_dir: مسیر دایرکتوری داده
+        config: تنظیمات دیتاست (اختیاری)
     
     Returns:
         MovieLensLoader instance
@@ -259,4 +240,7 @@ def get_movielens_loader(data_dir: str = 'data/raw/movielens') -> MovieLensLoade
         ...     num_items=1000
         ... )
     """
-    return MovieLensLoader(data_dir)
+    if config is None:
+        from config import DATASETS
+        config = DATASETS['movielens']
+    return MovieLensLoader(config)
