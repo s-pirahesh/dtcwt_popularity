@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class MovieLensLoader(BaseLoader):
     """
-    بارگذاری دیتاست MovieLens 25M
+    بارگذاری دیتاست MovieLens 32M
     
     فایل خروجی آماده‌سازی شامل:
     - timestamp: زمان (datetime)

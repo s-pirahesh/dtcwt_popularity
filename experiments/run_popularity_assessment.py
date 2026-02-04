@@ -119,7 +119,11 @@ def get_data_loader(dataset_name: str, data_path: str = None):
         DataLoader instance
     """
     if dataset_name == 'movielens':
-        return MovieLensLoader(DATASETS['movielens'])
+        config = DATASETS['movielens'].copy()
+        if data_path:
+            # اگر کاربر مسیری را در خط فرمان وارد کرده باشد، جایگزین مسیر پیش‌فرض می‌شود
+            config['path'] = Path(data_path)
+        return MovieLensLoader(config)
     
     elif dataset_name == 'youtube07':
         raise NotImplementedError(
