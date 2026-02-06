@@ -14,38 +14,39 @@ Date: February 2025
 """
 
 from .traditional import TraditionalBaselines
+from methods.base_method import BaseMethod
 
-# Wrapper classes برای سازگاری با interface موجود
-class AccessFrequency:
-    """Access Frequency baseline"""
-    @staticmethod
-    def assess(time_series):
+class AccessFrequency(BaseMethod):
+    def __init__(self):
+        super().__init__("AF")
+    def assess(self, time_series):
         return TraditionalBaselines.access_frequency(time_series)
 
-class LRU:
-    """Least Recently Used baseline"""
-    @staticmethod
-    def assess(time_series):
-        return TraditionalBaselines.lru_score(time_series)
+class LRU(BaseMethod):
+    def __init__(self):
+        super().__init__("LRU")
+    def assess(self, time_series):
+        return TraditionalBaselines.lru(time_series)
 
-class LFU:
-    """Least Frequently Used baseline"""
-    @staticmethod
-    def assess(time_series):
-        return TraditionalBaselines.lfu_score(time_series)
+class LFU(BaseMethod):
+    def __init__(self):
+        super().__init__("LFU")
+    def assess(self, time_series):
+        return TraditionalBaselines.lfu(time_series)
 
-class EWMA:
-    """Exponentially Weighted Moving Average baseline"""
-    @staticmethod
-    def assess(time_series, alpha=0.3):
-        return TraditionalBaselines.ewma_score(time_series, alpha)
+class EWMA(BaseMethod):
+    def __init__(self, alpha=0.3):
+        super().__init__("EWMA")
+        self.alpha = alpha
+    def assess(self, time_series):
+        return TraditionalBaselines.ewma(time_series, self.alpha)
 
 __all__ = [
-    'TraditionalBaselines',
     'AccessFrequency',
     'LRU',
     'LFU',
     'EWMA',
+    'TraditionalBaselines'
 ]
 
 __version__ = '1.0.0'
