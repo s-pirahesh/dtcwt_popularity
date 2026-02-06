@@ -19,26 +19,26 @@ from methods.base_method import BaseMethod
 class AccessFrequency(BaseMethod):
     def __init__(self):
         super().__init__("AF")
-    def assess(self, time_series):
+    def assess_single(self, time_series):
         return TraditionalBaselines.access_frequency(time_series)
 
 class LRU(BaseMethod):
     def __init__(self):
         super().__init__("LRU")
-    def assess(self, time_series):
+    def assess_single(self, time_series):
         return TraditionalBaselines.lru(time_series)
 
 class LFU(BaseMethod):
     def __init__(self):
         super().__init__("LFU")
-    def assess(self, time_series):
+    def assess_single(self, time_series):
         return TraditionalBaselines.lfu(time_series)
 
 class EWMA(BaseMethod):
     def __init__(self, alpha=0.3):
         super().__init__("EWMA")
         self.alpha = alpha
-    def assess(self, time_series):
+    def assess_single(self, time_series):
         return TraditionalBaselines.ewma(time_series, self.alpha)
 
 __all__ = [
