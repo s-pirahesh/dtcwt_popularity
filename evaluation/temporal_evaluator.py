@@ -500,17 +500,31 @@ class TemporalEvaluator:
         comparison_data = []
         
         for method_name, summary_df in method_summaries.items():
-            comparison_data.append({
-                'method': method_name,
-                'mean_mae': summary_df['mean_mae'].mean(),
-                'mean_mape': summary_df['mean_mape'].mean(),
-                'mean_spearman': summary_df['spearman_corr'].mean(),
-                'mean_kendall': summary_df['kendall_tau'].mean(),
-                'mean_ndcg': summary_df['ndcg'].mean(),
-                'mean_coverage': summary_df['coverage'].mean(),
-            })
+            try:
+                comparison_data.append({
+                    'method': method_name,
+                    'mean_mae': summary_df['mean_mae'].mean(),
+                    'mean_mape': summary_df['mean_mape'].mean(),
+                    'mean_spearman': summary_df['spearman_corr'].mean(),
+                    'mean_kendall': summary_df['kendall_tau'].mean(),
+                    'mean_ndcg': summary_df['ndcg'].mean(),
+                    'mean_coverage': summary_df['coverage'].mean(),
+                })
+            except KeyError as e:
+                if self.config.verbose:
+                    print(f"  Warning: {method_name} summary missing column {e}")
+                    print(f"  Available columns: {list(summary_df.columns)}")
+                    print(f"  Please delete 'results/' folder and re-run to regenerate with correct format")
+                continue
         
         comparison_df = pd.DataFrame(comparison_data)
+        
+        if len(comparison_df) == 0:
+            if self.config.verbose:
+                print("  No valid method summaries found for comparison")
+                print("  Please delete 'results/' folder and re-run")
+            return
+        
         comparison_df = comparison_df.sort_values('mean_spearman', ascending=False)
         
         # ذخیره
