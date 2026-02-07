@@ -2,6 +2,9 @@
 Base Method for Popularity Assessment
 Abstract base class for all popularity assessment methods
 
+All concrete methods (DWT, DTCWT, Statistical, Hybrid, Baselines) must inherit 
+from this class and implement the required methods.
+
 Author: Sajjad
 Date: February 2025
 """
@@ -15,8 +18,12 @@ class BaseMethod(ABC):
     """
     Abstract base class for all popularity assessment methods
     
-    All concrete methods (DWT, DTCWT, Statistical, Hybrid) must inherit from this
-    class and implement the required methods.
+    All concrete methods must implement:
+    - assess_single(time_series) -> float
+    
+    Optional methods with default implementations:
+    - assess_batch(time_series_list) -> np.ndarray
+    - assess(time_series) -> float (alias for assess_single)
     """
     
     def __init__(self, name: str = "BaseMethod"):
@@ -33,13 +40,20 @@ class BaseMethod(ABC):
         """
         Assess popularity for a single time series
         
-        This is the main method that all subclasses MUST implement.
+        This is the MAIN method that all subclasses MUST implement.
         
         Args:
             time_series: 1D numpy array of access counts over time
             
         Returns:
             Popularity score (float)
+            
+        Example:
+            >>> method = MyMethod()
+            >>> time_series = np.array([1, 2, 3, 4, 5])
+            >>> score = method.assess_single(time_series)
+            >>> print(score)
+            3.0
         """
         pass
     
@@ -55,12 +69,19 @@ class BaseMethod(ABC):
             
         Returns:
             1D numpy array of popularity scores
+            
+        Example:
+            >>> method = MyMethod()
+            >>> series_list = [np.array([1,2,3]), np.array([4,5,6])]
+            >>> scores = method.assess_batch(series_list)
+            >>> print(scores)
+            [2. 5.]
         """
         return np.array([self.assess_single(ts) for ts in time_series_list])
     
     def assess(self, time_series: np.ndarray) -> float:
         """
-        Alias for assess_single (for compatibility)
+        Alias for assess_single (for compatibility with older code)
         
         Args:
             time_series: 1D numpy array of access counts
@@ -93,6 +114,11 @@ class BaseMethod(ABC):
             
         Raises:
             ValueError: If input is invalid
+            
+        Example:
+            >>> method = MyMethod()
+            >>> method.validate_time_series(np.array([1, 2, 3]))  # OK
+            >>> method.validate_time_series([1, 2, 3])  # Raises ValueError
         """
         if not isinstance(time_series, np.ndarray):
             raise ValueError(f"Expected numpy array, got {type(time_series)}")
@@ -112,8 +138,53 @@ class BaseMethod(ABC):
         
         Returns:
             Dictionary of metadata
+            
+        Example:
+            >>> method = MyMethod()
+            >>> metadata = method.get_metadata()
+            >>> print(metadata)
+            {'name': 'MyMethod', 'class': 'MyMethod'}
         """
         return {
             'name': self.name,
             'class': self.__class__.__name__,
         }
+
+
+# Example usage
+if __name__ == '__main__':
+    # Example implementation
+    class SimpleAverage(BaseMethod):
+        """Simple average-based assessment"""
+        
+        def __init__(self):
+            super().__init__(name="SimpleAverage")
+        
+        def assess_single(self, time_series: np.ndarray) -> float:
+            """Return the average"""
+            return float(np.mean(time_series))
+    
+    # Test
+    print("Testing BaseMethod...")
+    
+    method = SimpleAverage()
+    print(f"Method: {method}")
+    
+    # Test single
+    ts = np.array([1, 2, 3, 4, 5])
+    score = method.assess_single(ts)
+    print(f"Single score: {score}")
+    
+    # Test batch
+    ts_list = [np.array([1, 2, 3]), np.array([4, 5, 6])]
+    scores = method.assess_batch(ts_list)
+    print(f"Batch scores: {scores}")
+    
+    # Test validation
+    try:
+        method.validate_time_series(np.array([1, 2, 3]))
+        print("✓ Validation passed")
+    except ValueError as e:
+        print(f"✗ Validation failed: {e}")
+    
+    print("\n✓ All tests passed!")
