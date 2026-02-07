@@ -19,27 +19,47 @@ from methods.base_method import BaseMethod
 class AccessFrequency(BaseMethod):
     def __init__(self):
         super().__init__("AF")
+    
     def assess_single(self, time_series):
         return TraditionalBaselines.access_frequency(time_series)
+    
+    def calculate(self, time_series):
+        """Alias for backward compatibility"""
+        return self.assess_single(time_series)
 
 class LRU(BaseMethod):
     def __init__(self):
         super().__init__("LRU")
+    
     def assess_single(self, time_series):
-        return TraditionalBaselines.lru(time_series)
+        return TraditionalBaselines.lru_score(time_series)
+    
+    def calculate(self, time_series):
+        """Alias for backward compatibility"""
+        return self.assess_single(time_series)
 
 class LFU(BaseMethod):
     def __init__(self):
         super().__init__("LFU")
+    
     def assess_single(self, time_series):
-        return TraditionalBaselines.lfu(time_series)
+        return TraditionalBaselines.lfu_score(time_series)
+    
+    def calculate(self, time_series):
+        """Alias for backward compatibility"""
+        return self.assess_single(time_series)
 
 class EWMA(BaseMethod):
     def __init__(self, alpha=0.3):
         super().__init__("EWMA")
         self.alpha = alpha
+    
     def assess_single(self, time_series):
-        return TraditionalBaselines.ewma(time_series, self.alpha)
+        return TraditionalBaselines.ewma_score(time_series, self.alpha)
+    
+    def calculate(self, time_series):
+        """Alias for backward compatibility"""
+        return self.assess_single(time_series)
 
 __all__ = [
     'AccessFrequency',
