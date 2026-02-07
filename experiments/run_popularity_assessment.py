@@ -31,6 +31,13 @@ from evaluation import (
     get_youku_config,
     TemporalEvaluator
 )
+try:
+    from evaluation.incremental_evaluator import IncrementalTemporalEvaluator
+    INCREMENTAL_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Warning: Incremental evaluator not available: {e}")
+    IncrementalTemporalEvaluator = None
+    INCREMENTAL_AVAILABLE = False
 from data.loaders import MovieLensLoader
 # YouTubeLoader و YoukuLoader هنوز پیاده‌سازی نشده‌اند - فعلاً فقط MovieLens پشتیبانی می‌شود
 # Import methods (برخی ممکن است به dependencies اضافی نیاز داشته باشند)
@@ -155,6 +162,7 @@ def run_temporal_evaluation(dataset_name: str,
                            parallel: bool = True,
                            num_cores: int = -1,
                            data_path: str = None,
+                           incremental: bool = False,
                            **kwargs):
     """
     اجرای ارزیابی زمانی کامل
@@ -244,11 +252,45 @@ def run_temporal_evaluation(dataset_name: str,
     print(f"\nMethods to evaluate: {list(methods_dict.keys())}\n")
     
     # 4. ایجاد evaluator
-    evaluator = TemporalEvaluator(
-        data_loader=data_loader,
-        methods=methods_dict,
-        config=config
-    )
+    if incremental and INCREMENTAL_AVAILABLE:
+        print("Using INCREMENTAL evaluation mode")
+        print("  ✓ Memory efficient (<200 MB)")
+        print("  ✓ Crash-safe (continuous saving)")
+        print("  ✓ Method-specific window sizes\n")
+
+        # Load data once for incremental mode
+        data, items = data_loader.load_for_temporal_evaluation(config)
+
+        # Build storage path
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # storage_path = Path(config.results_dir) / config.dataset_name / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
+        # تعیین output directory
+        if config.output_dir is None:
+            output_base = Path('results')
+        else:
+            output_base = Path(config.output_dir)
+
+        storage_path = output_base / config.dataset_name / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
+
+        evaluator = IncrementalTemporalEvaluator(
+            config=config,
+            methods=methods_dict,
+            data=data,
+            items=items,
+            storage_path=storage_path
+        )
+    else:
+        if incremental and not INCREMENTAL_AVAILABLE:
+            print("⚠️  Incremental mode requested but not available, using standard mode")
+
+        print("Using STANDARD evaluation mode\n")
+
+        evaluator = TemporalEvaluator(
+            data_loader=data_loader,
+            methods=methods_dict,
+            config=config
+        )
     
     # 5. اجرای ارزیابی
     evaluator.evaluate()
@@ -358,6 +400,9 @@ def main():
 
     parser.add_argument('--data-path', type=str, default=None,
                        help='مسیر فایل داده (override مسیر config.py)')
+
+    parser.add_argument('--incremental', action='store_true',
+                       help='Use incremental evaluation (saves memory, crash-safe)')
     
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress verbose output')
@@ -377,6 +422,7 @@ def main():
         parallel=not args.no_parallel,
         num_cores=args.cores,
         data_path=args.data_path,
+        incremental=args.incremental,
         item_selection=args.item_selection,
         verbose=not args.quiet
     )
