@@ -43,28 +43,55 @@ class MetricsCalculator:
         if len(scores) == 0:
             return MetricsCalculator._empty_metrics()
         
-        metrics = {}
+        # چک edge cases قبل از محاسبه
+        # 1. تعداد نمونه کم (حداقل 3 برای kendall)
+        if len(scores) < 3:
+            return MetricsCalculator._empty_metrics()
         
-        # 1. Ranking Metrics
-        try:
-            rank_predicted = (-scores).argsort().argsort() + 1
-            rank_actual = (-actual).argsort().argsort() + 1
-            
-            spearman_corr, spearman_p = spearmanr(scores, actual)
-            kendall_corr, kendall_p = kendalltau(scores, actual)
-            
-            metrics['spearman'] = spearman_corr if not np.isnan(spearman_corr) else 0.0
-            metrics['spearman_pvalue'] = spearman_p if not np.isnan(spearman_p) else 1.0
-            metrics['kendall'] = kendall_corr if not np.isnan(kendall_corr) else 0.0
-            metrics['kendall_pvalue'] = kendall_p if not np.isnan(kendall_p) else 1.0
-            
-        except Exception as e:
-            metrics['spearman'] = 0.0
-            metrics['spearman_pvalue'] = 1.0
-            metrics['kendall'] = 0.0
-            metrics['kendall_pvalue'] = 1.0
+        # 2. همه scores یکسان یا همه actual یکسان
+        scores_constant = np.std(scores) == 0
+        actual_constant = np.std(actual) == 0
+        
+        if scores_constant or actual_constant:
+            # correlation تعریف نشده، از metrics ساده استفاده کن
+            metrics = {
+                'spearman': 0.0,
+                'spearman_pvalue': 1.0,
+                'kendall': 0.0,
+                'kendall_pvalue': 1.0,
+            }
             rank_predicted = np.arange(len(scores)) + 1
             rank_actual = np.arange(len(actual)) + 1
+        else:
+            # محاسبه عادی
+            metrics = {}
+            
+            # 1. Ranking Metrics
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', category=RuntimeWarning)
+                    warnings.filterwarnings('ignore', message='.*constant.*')
+                    warnings.filterwarnings('ignore', message='.*too small.*')
+                    
+                    rank_predicted = (-scores).argsort().argsort() + 1
+                    rank_actual = (-actual).argsort().argsort() + 1
+                    
+                    spearman_corr, spearman_p = spearmanr(scores, actual)
+                    kendall_corr, kendall_p = kendalltau(scores, actual)
+                    
+                    metrics['spearman'] = spearman_corr if not np.isnan(spearman_corr) else 0.0
+                    metrics['spearman_pvalue'] = spearman_p if not np.isnan(spearman_p) else 1.0
+                    metrics['kendall'] = kendall_corr if not np.isnan(kendall_corr) else 0.0
+                    metrics['kendall_pvalue'] = kendall_p if not np.isnan(kendall_p) else 1.0
+                    
+            except Exception as e:
+                metrics['spearman'] = 0.0
+                metrics['spearman_pvalue'] = 1.0
+                metrics['kendall'] = 0.0
+                metrics['kendall_pvalue'] = 1.0
+                rank_predicted = np.arange(len(scores)) + 1
+                rank_actual = np.arange(len(actual)) + 1
         
         # 2. Error Metrics
         mae = mean_absolute_error(actual, scores)
