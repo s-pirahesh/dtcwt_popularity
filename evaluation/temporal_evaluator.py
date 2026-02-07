@@ -21,6 +21,7 @@ from .stratification import StratificationSystem
 from .metrics import MetricsCalculator
 from .wavelet_validator import WaveletWindowValidator
 from .storage import StorageSystem
+from .method_configs import get_method_config
 
 
 class TemporalEvaluator:
@@ -249,6 +250,20 @@ class TemporalEvaluator:
             method_name: نام روش
             method: instance روش
         """
+        # دریافت window size مخصوص این method
+        try:
+            method_config = get_method_config(method_name)
+            method_window_size = method_config.window_days
+            method_min_obs = method_config.min_observations
+        except KeyError:
+            # اگر method در configs نباشد، از config اصلی استفاده کن
+            method_window_size = self.config.window_size
+            method_min_obs = self.config.min_observations
+        
+        if self.config.verbose:
+            print(f"  Window size: {method_window_size} days")
+            print(f"  Min observations: {method_min_obs}")
+        
         all_results = []
         stratum_summaries = []
         
@@ -256,15 +271,19 @@ class TemporalEvaluator:
         min_date = self.data['timestamp'].min()
         max_date = self.data['timestamp'].max()
         
+        # محاسبه تعداد windows بر اساس method window size
+        total_days = (max_date - min_date).days + 1
+        num_windows = max(0, total_days - method_window_size - self.config.prediction_horizon + 1)
+        
         # پیشرفت
         if self.config.progress_bar:
-            pbar = tqdm(total=self.num_windows, desc=f"{method_name}")
+            pbar = tqdm(total=num_windows, desc=f"{method_name}")
         
         # برای هر پنجره (true sliding window)
-        for window_idx in range(self.num_windows):
+        for window_idx in range(num_windows):
             # محاسبه بازه زمانی این پنجره
             train_start = min_date + timedelta(days=window_idx)
-            train_end = train_start + timedelta(days=self.config.window_size)
+            train_end = train_start + timedelta(days=method_window_size)
             test_start = train_end
             test_end = test_start + timedelta(days=self.config.prediction_horizon)
             
@@ -291,7 +310,7 @@ class TemporalEvaluator:
             window_results = self._evaluate_window(
                 method, method_name, window_idx,
                 train_window, test_window,
-                test_start, strata
+                test_start, strata, method_min_obs
             )
             
             all_results.extend(window_results)
@@ -313,7 +332,7 @@ class TemporalEvaluator:
             
             # لاگ
             if self.config.verbose and window_idx % self.config.log_interval == 0:
-                print(f"  Window {window_idx}/{self.num_windows}: {len(window_results)} items")
+                print(f"  Window {window_idx}/{num_windows}: {len(window_results)} items")
         
         if self.config.progress_bar:
             pbar.close()
@@ -330,7 +349,7 @@ class TemporalEvaluator:
     
     def _evaluate_window(self, method, method_name: str, window_idx: int,
                         train_window: pd.DataFrame, test_window: pd.DataFrame,
-                        test_start: datetime, strata: Dict) -> List[Dict]:
+                        test_start: datetime, strata: Dict, min_observations: int) -> List[Dict]:
         """
         ارزیابی یک پنجره برای همه آیتم‌ها
         
@@ -342,6 +361,7 @@ class TemporalEvaluator:
             test_window: داده تست
             test_start: تاریخ شروع تست
             strata: طبقه‌بندی آیتم‌ها
+            min_observations: حداقل مشاهدات لازم برای این method
         
         Returns:
             لیست نتایج برای هر آیتم
@@ -356,7 +376,7 @@ class TemporalEvaluator:
             # داده این آیتم در پنجره آموزش
             item_train = train_window[train_window['item_id'] == item_id]
             
-            if len(item_train) < self.config.min_observations:
+            if len(item_train) < min_observations:
                 continue
             
             # محاسبه امتیاز (assessment, not prediction)
