@@ -231,12 +231,23 @@ class ResultsVisualizer:
                 })
                 stratum_comp = stratum_comp.sort_values('order')
                 
-                values = stratum_comp['mean'].values
-                errors = stratum_comp['std'].values
+                # ایجاد array کامل با NaN برای strata های خالی
+                values = np.full(len(strata_names), np.nan)
+                errors = np.full(len(strata_names), np.nan)
                 
-                ax.bar(x + i * width, values, width, 
-                      label=method, yerr=errors, capsize=3,
-                      color=self.colors[i], alpha=0.8)
+                # پر کردن مقادیر موجود
+                for _, row in stratum_comp.iterrows():
+                    stratum_idx = int(row['order'])
+                    if stratum_idx < len(strata_names):
+                        values[stratum_idx] = row['mean']
+                        errors[stratum_idx] = row['std']
+                
+                # رسم فقط strata های غیر-NaN
+                valid_mask = ~np.isnan(values)
+                if valid_mask.any():
+                    ax.bar(x[valid_mask] + i * width, values[valid_mask], width, 
+                          label=method, yerr=errors[valid_mask], capsize=3,
+                          color=self.colors[i], alpha=0.8)
             
             except Exception as e:
                 print(f"Warning: Could not plot {method}: {e}")
