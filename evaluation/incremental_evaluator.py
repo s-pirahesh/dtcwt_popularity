@@ -18,6 +18,7 @@ from tqdm import tqdm
 from .evaluation_config import EvaluationConfig
 from .incremental_storage import IncrementalStorage
 from .method_configs import get_method_config, METHOD_CONFIGS
+from .time_utils import create_time_helper, TimeSlotHelper
 from .metrics import MetricsCalculator
 from .stratification import StratificationSystem
 
@@ -65,9 +66,20 @@ class IncrementalTemporalEvaluator:
         # محاسبه thresholds بر اساس کل داده
         self._initialize_stratification()
         
-        # محاسبه محدوده زمانی کلی
-        self.data_start = self.data['timestamp'].min()
-        self.data_end = self.data['timestamp'].max()
+        # محاسبه محدوده زمانی
+        # Evaluation range: روزهایی که می‌خواهیم assess کنیم
+        if config.start_date:
+            self.data_start = pd.to_datetime(config.start_date)
+        else:
+            self.data_start = self.data['timestamp'].min()
+        
+        if config.end_date:
+            self.data_end = pd.to_datetime(config.end_date)
+        else:
+            self.data_end = self.data['timestamp'].max()
+        
+        # توجه: self.data شامل کل داده است (حتی قبل از start_date)
+        # تا بتوانیم از pre-range data برای training استفاده کنیم
         
         # آمار
         self.runtime_stats = {
@@ -79,16 +91,18 @@ class IncrementalTemporalEvaluator:
     
     def evaluate(self):
         """
-        اجرای evaluation کامل
+        اجرای evaluation کامل (assessment mode)
         """
         self.runtime_stats['start_time'] = time.time()
         
         print(f"\n{'='*70}")
-        print("INCREMENTAL TEMPORAL EVALUATION")
+        print("INCREMENTAL TEMPORAL EVALUATION (ASSESSMENT MODE)")
         print(f"{'='*70}")
         print(f"Total methods: {len(self.methods)}")
         print(f"Total items: {len(self.items)}")
-        print(f"Date range: {self.data_start.date()} to {self.data_end.date()}")
+        print(f"Evaluation range: {self.data_start.date()} to {self.data_end.date()}")
+        print(f"Full data range: {self.data['timestamp'].min().date()} to {self.data['timestamp'].max().date()}")
+        print(f"Use pre-range data: {self.config.use_pre_range_data}")
         print(f"Storage: {self.storage_path}")
         print(f"Buffer size: 1000 records")
         print(f"{'='*70}\n")
@@ -154,12 +168,23 @@ class IncrementalTemporalEvaluator:
         
         print(f"\nTotal duration: {self.runtime_stats['total_duration']/60:.1f} minutes")
         print(f"Storage stats: {self.storage.get_stats()}")
+        
+        # ذخیره فایل‌های JSON اضافی
+        # self._save_runtime_stats()
+        self._save_config_json()
+        self._save_thresholds_json()
+        self._save_runtime_stats_json()
+        
         print(f"✓ All results saved to: {self.storage_path}")
         print(f"{'='*70}\n")
     
     def _evaluate_method_incremental(self, method_name: str, method):
         """
-        ارزیابی یک method با incremental saving
+        ارزیابی یک method با incremental saving (assessment mode)
+        
+        Args:
+            method_name: نام method
+            method: instance method
         """
         # دریافت config این method
         try:
@@ -173,11 +198,12 @@ class IncrementalTemporalEvaluator:
         
         print(f"  Window size: {window_days} days")
         print(f"  Min observations: {min_obs}")
+        print(f"  Use pre-range data: {self.config.use_pre_range_data}")
         
         # محاسبه windows
         windows = self._calculate_windows(window_days)
         
-        print(f"  Total windows: {len(windows)}")
+        print(f"  Total windows: {len(windows)} (one per day in range)")
         
         if len(windows) == 0:
             print(f"  Warning: No valid windows for this time range")
@@ -228,27 +254,47 @@ class IncrementalTemporalEvaluator:
     
     def _calculate_windows(self, window_days: int) -> List[tuple]:
         """
-        محاسبه windows بر اساس window_days
+        محاسبه windows - هر روز یک window (assessment mode)
+        
+        Args:
+            window_days: اندازه training window
+        
+        Returns:
+            لیست (train_start, train_end, test_start, test_end)
         """
         windows = []
         
-        current = self.data_start
-        horizon = self.config.prediction_horizon
+        # Absolute data range (شامل pre-range data)
+        absolute_min = self.data['timestamp'].min()
         
-        while current < self.data_end:
-            train_start = current
-            train_end = train_start + timedelta(days=window_days)
-            test_start = train_end
-            test_end = test_start + timedelta(days=horizon)
+        # Evaluation range (روزهایی که می‌خواهیم assess کنیم)
+        eval_start = self.data_start
+        eval_end = self.data_end
+        
+        total_days = (eval_end - eval_start).days + 1
+        
+        # برای هر روز در evaluation range
+        for day_idx in range(total_days):
+            target_date = eval_start + timedelta(days=day_idx)
             
-            # اگر test_end از data_end گذشت، تمام
-            if test_end > self.data_end:
-                break
+            # Training: window_days روز منتهی به target (شامل target)
+            train_end = target_date
+            train_start = train_end - timedelta(days=window_days - 1)
+            
+            # اگر train_start قبل از absolute_min است
+            if train_start < absolute_min:
+                if self.config.use_pre_range_data:
+                    # استفاده از absolute_min (داده قبلی موجود نیست)
+                    train_start = absolute_min
+                else:
+                    # فقط از eval_start استفاده کن (implicit zero-padding)
+                    train_start = max(train_start, eval_start)
+            
+            # Test: همان target day
+            test_start = target_date
+            test_end = target_date + timedelta(days=1)  # برای query
             
             windows.append((train_start, train_end, test_start, test_end))
-            
-            # حرکت به window بعدی (sliding با گام 1 روز)
-            current += timedelta(days=1)
         
         return windows
     
@@ -337,6 +383,11 @@ class IncrementalTemporalEvaluator:
             # تعیین stratum
             stratum_label = self.stratification.get_stratum_label(train_counts[i])
             
+            # محاسبه error metrics برای این item
+            pred = scores[i]
+            actual = actuals[i]
+            error = abs(pred - actual)
+            
             results['detailed'].append({
                 'window_id': window_idx,
                 'timestamp': timestamp_ms,
@@ -347,6 +398,10 @@ class IncrementalTemporalEvaluator:
                 'train_count': int(train_counts[i]),
                 'rank_predicted': int(metrics['rank_predicted'][i]) if i < len(metrics['rank_predicted']) else 0,
                 'rank_actual': int(metrics['rank_actual'][i]) if i < len(metrics['rank_actual']) else 0,
+                # اضافه کردن error metrics
+                'mae': float(error),
+                'squared_error': float(error ** 2),
+                'mape': float(error / actual * 100) if actual > 0 else 0.0,
             })
         
         # محاسبه summary per stratum
@@ -356,7 +411,21 @@ class IncrementalTemporalEvaluator:
                 for tc in train_counts
             ])
             
+            # اگر stratum خالی است، از metrics پیش‌فرض استفاده کن
             if not stratum_mask.any():
+                results['summary'].append({
+                    'window_id': window_idx,
+                    'timestamp': timestamp_ms,
+                    'stratum': stratum_label,
+                    'stratum_name': self.stratification.get_stratum_name(stratum_label),
+                    'num_items': 0,
+                    'mean_mae': 0.0,
+                    'mean_mape': 0.0,
+                    'spearman_corr': 0.0,
+                    'kendall_tau': 0.0,
+                    'mean_rmse': 0.0,
+                    'ndcg': 0.0,
+                })
                 continue
             
             stratum_scores = scores[stratum_mask]
@@ -367,6 +436,20 @@ class IncrementalTemporalEvaluator:
                     stratum_scores, stratum_actuals
                 )
             except:
+                # در صورت خطا، از metrics پیش‌فرض استفاده کن
+                results['summary'].append({
+                    'window_id': window_idx,
+                    'timestamp': timestamp_ms,
+                    'stratum': stratum_label,
+                    'stratum_name': self.stratification.get_stratum_name(stratum_label),
+                    'num_items': int(stratum_mask.sum()),
+                    'mean_mae': 0.0,
+                    'mean_mape': 0.0,
+                    'spearman_corr': 0.0,
+                    'kendall_tau': 0.0,
+                    'mean_rmse': 0.0,
+                    'ndcg': 0.0,
+                })
                 continue
             
             results['summary'].append({
@@ -409,6 +492,94 @@ class IncrementalTemporalEvaluator:
         print(f"  Medium: {self.stratification.thresholds[1]:.0f} - {self.stratification.thresholds[2]:.0f}")
         print(f"  High: >= {self.stratification.thresholds[2]:.0f}")
         print()
+    
+    def _save_runtime_stats(self):
+        """ذخیره آمار زمان اجرا"""
+        
+        stats = {
+            **self.runtime_stats,
+            'dataset_name': self.config.dataset_name if hasattr(self.config, 'dataset_name') else 'unknown',
+            'window_size': self.config.window_size,
+            'prediction_horizon': self.config.prediction_horizon,
+            'time_granularity': self.config.time_granularity if hasattr(self.config, 'time_granularity') else 'daily',
+            'num_items': len(self.items),
+            'item_selection': self.config.item_selection if hasattr(self.config, 'item_selection') else 'top',
+            'min_observations': self.config.min_observations,
+            'start_date': str(self.data_start.date()),
+            'end_date': str(self.data_end.date()),
+            'use_pre_range_data': self.config.use_pre_range_data if hasattr(self.config, 'use_pre_range_data') else True,
+            'methods': list(self.methods.keys()),
+            'strata_names': self.config.strata_names,
+        }
+        
+        self.storage.save_runtime_stats(stats)
+        self.config.save_config(self.config.output_dir / 'metadata' / 'config.json')
+        self.stratification.save_thresholds(
+            self.config.output_dir / 'metadata' / 'thresholds.json'
+        )
+
+
+    def _save_config_json(self):
+        """ذخیره config.json در root فولدر"""
+        import json
+        
+        config_dict = {
+            'dataset_name': self.config.dataset_name if hasattr(self.config, 'dataset_name') else 'unknown',
+            'window_size': self.config.window_size,
+            'prediction_horizon': self.config.prediction_horizon,
+            'time_granularity': self.config.time_granularity if hasattr(self.config, 'time_granularity') else 'daily',
+            'num_items': len(self.items),
+            'item_selection': self.config.item_selection if hasattr(self.config, 'item_selection') else 'top',
+            'min_observations': self.config.min_observations,
+            'start_date': str(self.data_start.date()),
+            'end_date': str(self.data_end.date()),
+            'use_pre_range_data': self.config.use_pre_range_data if hasattr(self.config, 'use_pre_range_data') else True,
+            'methods': list(self.methods.keys()),
+            'strata_names': self.config.strata_names,
+        }
+        
+        config_path = self.storage_path / 'metadata' / 'config.json'
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config_dict, f, indent=2, ensure_ascii=False)
+        
+        if self.config.verbose:
+            print(f"  ✓ Saved config.json")
+    
+    def _save_thresholds_json(self):
+        """ذخیره thresholds.json در root فولدر"""
+        import json
+        
+        thresholds_dict = {
+            'thresholds': self.stratification.thresholds if hasattr(self.stratification, 'thresholds') else [],
+            'strata_names': self.config.strata_names,
+            'total_items': len(self.items)
+        }
+        
+        thresholds_path = self.storage_path / 'metadata' / 'thresholds.json'
+        with open(thresholds_path, 'w', encoding='utf-8') as f:
+            json.dump(thresholds_dict, f, indent=2)
+        
+        if self.config.verbose:
+            print(f"  ✓ Saved thresholds.json")
+    
+    def _save_runtime_stats_json(self):
+        """ذخیره runtime_stats.json در root فولدر"""
+        import json
+        
+        runtime_dict = {
+            'total_duration': self.runtime_stats.get('total_duration', 0),
+            'total_duration_minutes': self.runtime_stats.get('total_duration', 0) / 60,
+            'start_time': self.runtime_stats.get('start_time'),
+            'end_time': self.runtime_stats.get('end_time'),
+            'methods_stats': self.runtime_stats.get('methods_stats', {})
+        }
+        
+        runtime_path = self.storage_path / 'metadata' / 'runtime_stats.json'
+        with open(runtime_path, 'w', encoding='utf-8') as f:
+            json.dump(runtime_dict, f, indent=2)
+        
+        if self.config.verbose:
+            print(f"  ✓ Saved runtime_stats.json")
 
 
 if __name__ == '__main__':

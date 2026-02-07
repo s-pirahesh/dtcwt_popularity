@@ -267,11 +267,15 @@ def run_temporal_evaluation(dataset_name: str,
         # storage_path = Path(config.results_dir) / config.dataset_name / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
         # تعیین output directory
         if config.output_dir is None:
-            output_base = Path('results')
+            # output_base = Path('results') 
+            # output_base = Path('results') / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
+            output_base = Path('results') / config.dataset_name
         else:
             output_base = Path(config.output_dir)
 
-        storage_path = output_base / config.dataset_name / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
+        # storage_path = output_base / config.dataset_name / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
+        storage_path = output_base 
+
 
         evaluator = IncrementalTemporalEvaluator(
             config=config,

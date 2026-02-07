@@ -101,7 +101,7 @@ class IncrementalStorage:
         df = pd.DataFrame(self.detailed_buffers[method_name])
         
         # مسیر فایل
-        filepath = self.detailed_dir / f"{method_name}_detailed.parquet"
+        filepath = self.detailed_dir / f"{method_name}_scores.parquet"
         
         # Append یا Create
         if filepath.exists():
@@ -212,7 +212,7 @@ class IncrementalStorage:
         Returns:
             DataFrame یا None
         """
-        filepath = self.detailed_dir / f"{method_name}_detailed.parquet"
+        filepath = self.detailed_dir / f"{method_name}_scores.parquet"
         
         if not filepath.exists():
             return None

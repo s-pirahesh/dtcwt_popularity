@@ -22,6 +22,7 @@ from .metrics import MetricsCalculator
 from .wavelet_validator import WaveletWindowValidator
 from .storage import StorageSystem
 from .method_configs import get_method_config
+from .time_utils import create_time_helper, TimeSlotHelper
 
 
 class TemporalEvaluator:
@@ -50,6 +51,9 @@ class TemporalEvaluator:
         # سیستم‌های جانبی
         self.stratification = StratificationSystem(config)
         self.storage = StorageSystem(config)
+        
+        # Time slot helper
+        self.time_helper = create_time_helper(config)
         
         # اعتبارسنجی wavelet
         self._validate_wavelet_config()
@@ -106,32 +110,50 @@ class TemporalEvaluator:
             print(f"  Total records: {len(self.data):,}")
             print(f"  Date range: {self.data['timestamp'].min()} to {self.data['timestamp'].max()}")
         
-        # 2. فیلتر زمانی
-        if self.config.start_date or self.config.end_date:
-            self.data = self._apply_time_filter(self.data)
-            
-            if self.config.verbose:
-                print(f"  After time filter: {len(self.data):,} records")
+        # 2. ذخیره evaluation range (range-ای که می‌خواهیم assess کنیم)
+        if self.config.start_date:
+            self.data_start = pd.to_datetime(self.config.start_date)
+        else:
+            self.data_start = self.data['timestamp'].min()
         
-        # 3. انتخاب آیتم‌ها
-        self.items = self._select_items()
+        if self.config.end_date:
+            self.data_end = pd.to_datetime(self.config.end_date)
+        else:
+            self.data_end = self.data['timestamp'].max()
+        
+        if self.config.verbose:
+            print(f"  Evaluation range: {self.data_start.date()} to {self.data_end.date()}")
+            print(f"  Full data range: {self.data['timestamp'].min().date()} to {self.data['timestamp'].max().date()}")
+        
+        # 3. انتخاب آیتم‌ها (بر اساس evaluation range)
+        eval_data = self.data[
+            (self.data['timestamp'] >= self.data_start) & 
+            (self.data['timestamp'] <= self.data_end)
+        ]
+        
+        if self.config.verbose:
+            print(f"  Records in eval range: {len(eval_data):,}")
+        
+        # استفاده از eval_data برای انتخاب items
+        self.items = self._select_items_from_data(eval_data)
         
         if self.config.verbose:
             print(f"  Selected items: {len(self.items):,}")
         
-        # 4. فیلتر داده فقط برای آیتم‌های انتخابی
+        # 4. فیلتر داده برای آیتم‌های انتخابی (ولی نگه داشتن pre-range data)
         self.data = self.data[self.data['item_id'].isin(self.items)]
         
         if self.config.verbose:
-            print(f"  Final records: {len(self.data):,}")
+            print(f"  Final records (all dates): {len(self.data):,}")
         
-        # 5. محاسبه تعداد پنجره‌ها
-        total_days = (self.data['timestamp'].max() - self.data['timestamp'].min()).days + 1
-        self.num_windows = self.config.get_num_windows(total_days)
+        # 5. محاسبه تعداد windows = تعداد slots در evaluation range
+        num_slots = self.time_helper.count_slots(self.data_start, self.data_end)
+        self.num_windows = num_slots + 1  # +1 برای شامل کردن slot آخر
         
         if self.config.verbose:
-            print(f"  Total days: {total_days}")
-            print(f"  Number of windows: {self.num_windows:,}")
+            unit = self.time_helper.get_unit_name(plural=True)
+            print(f"  Evaluation {unit}: {self.num_windows}")
+            print(f"  Number of windows: {self.num_windows} (one per {self.time_helper.get_unit_name()})")
             print(f"  Total calculations: {self.num_windows * len(self.items) * len(self.methods):,}")
         
         print("="*70 + "\n")
@@ -149,11 +171,11 @@ class TemporalEvaluator:
         
         return data
     
-    def _select_items(self) -> np.ndarray:
-        """انتخاب آیتم‌ها بر اساس استراتژی"""
+    def _select_items_from_data(self, data: pd.DataFrame) -> np.ndarray:
+        """انتخاب آیتم‌ها بر اساس استراتژی از data مشخص شده"""
         
         # محاسبه تعداد دسترسی هر آیتم
-        item_counts = self.data.groupby('item_id')['count'].sum()
+        item_counts = data.groupby('item_id')['count'].sum()
         
         # فیلتر بر اساس حداقل مشاهدات
         item_counts = item_counts[item_counts >= self.config.min_observations]
@@ -214,6 +236,17 @@ class TemporalEvaluator:
         if self.data is None:
             self.prepare_data()
         
+        if self.config.verbose:
+            print(f"\n{'='*70}")
+            print(f"ASSESSMENT MODE (not prediction)")
+            print(f"{'='*70}")
+            unit = self.time_helper.get_unit_name()
+            print(f"  Each {unit} = one window")
+            print(f"  Training: window_size {self.time_helper.get_unit_name(plural=True)} up to target")
+            print(f"  Test: actual count on target {unit}")
+            print(f"  Use pre-range data: {self.config.use_pre_range_data}")
+            print(f"{'='*70}\n")
+        
         # 2. شروع زمان‌سنجی
         self.runtime_stats['start_time'] = time.time()
         
@@ -226,25 +259,22 @@ class TemporalEvaluator:
             
             self._evaluate_method(method_name, method)
         
-        # 4. پایان زمان‌سنجی
         self.runtime_stats['end_time'] = time.time()
         self.runtime_stats['total_duration'] = (
             self.runtime_stats['end_time'] - self.runtime_stats['start_time']
         )
         
-        # 5. مقایسه روش‌ها
         self._compare_methods()
         
-        # 6. ذخیره آمار
         self._save_runtime_stats()
         
-        # 7. خلاصه
+          
         if self.config.verbose:
             self._print_summary()
     
     def _evaluate_method(self, method_name: str, method):
         """
-        ارزیابی یک روش در همه پنجره‌ها
+        ارزیابی یک روش در همه روزها (assessment نه prediction)
         
         Args:
             method_name: نام روش
@@ -261,31 +291,64 @@ class TemporalEvaluator:
             method_min_obs = self.config.min_observations
         
         if self.config.verbose:
-            print(f"  Window size: {method_window_size} days")
+            unit = self.time_helper.get_unit_name(plural=(method_window_size > 1))
+            window_desc = self.time_helper.format_window_size(method_window_size)
+            print(f"  Window size: {window_desc}")
             print(f"  Min observations: {method_min_obs}")
+            print(f"  Use pre-range data: {self.config.use_pre_range_data}")
         
         all_results = []
         stratum_summaries = []
         
         # محاسبه تاریخ شروع و پایان
-        min_date = self.data['timestamp'].min()
-        max_date = self.data['timestamp'].max()
+        min_date = self.data['timestamp'].min()  # absolute minimum (may be before start_date)
+        max_date = self.data['timestamp'].max()  # absolute maximum
         
-        # محاسبه تعداد windows بر اساس method window size
-        total_days = (max_date - min_date).days + 1
-        num_windows = max(0, total_days - method_window_size - self.config.prediction_horizon + 1)
+        # Selected range
+        eval_start = self.data_start  # از این تاریخ می‌خواهیم assess کنیم
+        eval_end = self.data_end      # تا این تاریخ
+        
+        total_days = (eval_end - eval_start).days + 1
+        
+        # محاسبه تعداد slots بر اساس granularity
+        num_slots = self.time_helper.count_slots(eval_start, eval_end)
+        # اضافه 1 برای شامل کردن روز آخر
+        num_windows = num_slots + 1
+        
+        if self.config.verbose:
+            unit = self.time_helper.get_unit_name(plural=True)
+            print(f"  Total {unit} in range: {num_windows}")
+            print(f"  Total windows: {num_windows} (one per {self.time_helper.get_unit_name()})")
+            if self.config.use_pre_range_data:
+                pre_slots = self.time_helper.count_slots(min_date, eval_start)
+                pre_desc = self.time_helper.format_window_size(pre_slots)
+                print(f"  Pre-range data available: {pre_desc}")
         
         # پیشرفت
         if self.config.progress_bar:
             pbar = tqdm(total=num_windows, desc=f"{method_name}")
         
-        # برای هر پنجره (true sliding window)
-        for window_idx in range(num_windows):
-            # محاسبه بازه زمانی این پنجره
-            train_start = min_date + timedelta(days=window_idx)
-            train_end = train_start + timedelta(days=method_window_size)
-            test_start = train_end
-            test_end = test_start + timedelta(days=self.config.prediction_horizon)
+        # برای هر slot در range
+        for slot_idx in range(num_windows):
+            # Target slot
+            target_date = self.time_helper.add_slots(eval_start, slot_idx)
+            
+            # Training window: method_window_size slots منتهی به target (شامل target)
+            train_end = target_date
+            train_start = self.time_helper.add_slots(train_end, -(method_window_size - 1))
+            
+            # اگر از min_date قبل‌تر رفت
+            if train_start < min_date:
+                if self.config.use_pre_range_data:
+                    # نمی‌توانیم برویم، از min_date شروع کن
+                    train_start = min_date
+                else:
+                    # فقط از eval_start استفاده کن (zero-padding implicit)
+                    train_start = max(train_start, eval_start)
+            
+            # Test: همان target slot
+            test_start = target_date
+            test_end = self.time_helper.add_slots(target_date, 1)  # برای query
             
             # استخراج داده پنجره
             train_window = self.data[
@@ -308,7 +371,7 @@ class TemporalEvaluator:
             
             # ارزیابی برای هر آیتم
             window_results = self._evaluate_window(
-                method, method_name, window_idx,
+                method, method_name, slot_idx,
                 train_window, test_window,
                 test_start, strata, method_min_obs
             )
@@ -317,7 +380,7 @@ class TemporalEvaluator:
             
             # خلاصه stratum
             stratum_summary = self._calculate_stratum_summary(
-                window_results, window_idx, test_start
+                window_results, slot_idx, test_start
             )
             stratum_summaries.extend(stratum_summary)
             
@@ -331,8 +394,8 @@ class TemporalEvaluator:
                 pbar.update(1)
             
             # لاگ
-            if self.config.verbose and window_idx % self.config.log_interval == 0:
-                print(f"  Window {window_idx}/{num_windows}: {len(window_results)} items")
+            if self.config.verbose and slot_idx % self.config.log_interval == 0:
+                print(f"  Window {slot_idx}/{num_windows}: {len(window_results)} items")
         
         if self.config.progress_bar:
             pbar.close()
@@ -468,13 +531,46 @@ class TemporalEvaluator:
         for stratum_label in range(4):  # 0, 1, 2, 3
             stratum_data = df[df['stratum'] == stratum_label]
             
+            # اگر stratum خالی است، از metrics پیش‌فرض استفاده کن
             if len(stratum_data) == 0:
+                summary = {
+                    'window_id': window_idx,
+                    'timestamp': timestamp_ms,
+                    'stratum': stratum_label,
+                    'stratum_name': self.stratification.get_stratum_name(stratum_label),
+                    'num_items': 0,
+                    'mean_mae': 0.0,
+                    'mean_mape': 0.0,
+                    'spearman_corr': 0.0,
+                    'kendall_tau': 0.0,
+                    'ndcg': 0.0,
+                    'coverage': 0.0,
+                }
+                summaries.append(summary)
                 continue
             
             scores = stratum_data['popularity_score'].values
             actuals = stratum_data['actual_count'].values
             
-            metrics = MetricsCalculator.calculate_all_metrics(scores, actuals)
+            try:
+                metrics = MetricsCalculator.calculate_all_metrics(scores, actuals)
+            except Exception as e:
+                # در صورت خطا در محاسبه metrics، از پیش‌فرض استفاده کن
+                summary = {
+                    'window_id': window_idx,
+                    'timestamp': timestamp_ms,
+                    'stratum': stratum_label,
+                    'stratum_name': self.stratification.get_stratum_name(stratum_label),
+                    'num_items': len(stratum_data),
+                    'mean_mae': 0.0,
+                    'mean_mape': 0.0,
+                    'spearman_corr': 0.0,
+                    'kendall_tau': 0.0,
+                    'ndcg': 0.0,
+                    'coverage': 0.0,
+                }
+                summaries.append(summary)
+                continue
             
             summary = {
                 'window_id': window_idx,
