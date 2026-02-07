@@ -220,6 +220,83 @@ class MovieLensLoader(BaseLoader):
         
         return sample
 
+    def load_for_temporal_evaluation(self, config):
+        """
+        بارگذاری داده برای ارزیابی incremental temporal
+        
+        Args:
+            config: EvaluationConfig instance
+            
+        Returns:
+            tuple: (data DataFrame, items numpy array)
+        """
+        import numpy as np
+        
+        # 1. بارگذاری کل داده
+        if self.data is None:
+            logger.info("Loading full dataset...")
+            data = self.load_data()  # ← تصحیح شد: load_data() بجای load()
+        else:
+            data = self.data.copy()
+        
+        logger.info(f"Initial data: {len(data):,} records")
+        
+        # 2. فیلتر بازه زمانی
+        if hasattr(config, 'start_date') and config.start_date:
+            start = pd.to_datetime(config.start_date)
+            data = data[data[self.time_col] >= start]
+            logger.info(f"After start_date filter: {len(data):,} records")
+        
+        if hasattr(config, 'end_date') and config.end_date:
+            end = pd.to_datetime(config.end_date)
+            data = data[data[self.time_col] <= end]
+            logger.info(f"After end_date filter: {len(data):,} records")
+        
+        # 3. انتخاب items
+        if config.num_items and config.num_items > 0:
+            # محاسبه محبوبیت
+            item_popularity = data.groupby(self.item_col)[self.count_col].sum().sort_values(ascending=False)
+            
+            logger.info(f"Total unique items: {len(item_popularity)}")
+            
+            # انتخاب top items
+            selection_strategy = getattr(config, 'item_selection', 'top')
+            
+            if selection_strategy == 'top':
+                selected_items = item_popularity.nlargest(config.num_items).index.values
+            elif selection_strategy == 'random':
+                selected_items = item_popularity.sample(
+                    n=min(config.num_items, len(item_popularity)),
+                    random_state=42
+                ).index.values
+            elif selection_strategy == 'bottom':
+                selected_items = item_popularity.nsmallest(config.num_items).index.values
+            else:
+                selected_items = item_popularity.nlargest(config.num_items).index.values
+            
+            logger.info(f"Selected {len(selected_items)} items")
+            
+            # فیلتر data
+            data = data[data[self.item_col].isin(selected_items)]
+            items = selected_items
+            
+        else:
+            # همه items
+            items = data[self.item_col].unique()
+            logger.info(f"Using all {len(items)} items")
+        
+        # 4. مرتب‌سازی نهایی
+        data = data.sort_values(self.time_col).reset_index(drop=True)
+        
+        # 5. لاگ نهایی
+        logger.info("="*60)
+        logger.info("DATA LOADED FOR INCREMENTAL EVALUATION")
+        logger.info(f"  Records: {len(data):,}")
+        logger.info(f"  Items: {len(items)}")
+        logger.info(f"  Date range: {data[self.time_col].min().date()} to {data[self.time_col].max().date()}")
+        logger.info("="*60)
+        
+        return data, items
 
 # تابع کمکی برای ایجاد loader
 def get_movielens_loader(config: dict = None) -> MovieLensLoader:
