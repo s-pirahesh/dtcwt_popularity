@@ -10,6 +10,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 from pathlib import Path
+from datetime import timedelta
 
 
 @dataclass
@@ -22,9 +23,21 @@ class EvaluationConfig:
     # === پارامترهای زمانی ===
     start_date: Optional[str] = None        # 'YYYY-MM-DD' یا None (از ابتدا)
     end_date: Optional[str] = None          # 'YYYY-MM-DD' یا None (تا انتها)
-    window_size: int = 30                   # اندازه پنجره آموزش (days)
-    prediction_horizon: int = 7             # افق پیش‌بینی (days)
-    step_size: int = 1                      # گام لغزش (همیشه 1 برای true sliding)
+    
+    # Time Granularity (اندازه یک time slot)
+    # مثال:
+    #   MovieLens daily: timedelta(days=1)
+    #   MovieLens weekly: timedelta(days=7)
+    #   Youku (5-min): timedelta(minutes=5)
+    #   Uber (15-min): timedelta(minutes=15)
+    time_granularity: str = 'daily'        # 'daily', 'hourly', 'minute', یا custom
+    slot_duration_minutes: Optional[int] = None  # برای custom granularity
+    
+    # Window Parameters (به تعداد time slots)
+    window_size: int = 30                   # تعداد time slots برای training
+    prediction_horizon: int = 7             # (legacy) فقط برای compatibility
+    step_size: int = 1                      # گام لغزش (همیشه 1 slot)
+    use_pre_range_data: bool = True         # استفاده از داده قبل از start_date
     
     # === پارامترهای آیتم ===
     num_items: Optional[int] = None         # تعداد آیتم‌ها (None = همه)
@@ -250,6 +263,28 @@ class EvaluationConfig:
             f"  Parallel: {self.parallel} (cores: {self.num_cores})\n"
             f")"
         )
+    
+    def get_slot_duration(self) -> timedelta:
+        """
+        محاسبه مدت زمان یک time slot
+        
+        Returns:
+            timedelta object representing one time slot
+        """
+        if self.time_granularity == 'daily':
+            return timedelta(days=1)
+        elif self.time_granularity == 'hourly':
+            return timedelta(hours=1)
+        elif self.time_granularity == 'minute':
+            return timedelta(minutes=1)
+        elif self.time_granularity == 'weekly':
+            return timedelta(days=7)
+        elif self.time_granularity == 'custom':
+            if self.slot_duration_minutes is None:
+                raise ValueError("slot_duration_minutes must be set for custom granularity")
+            return timedelta(minutes=self.slot_duration_minutes)
+        else:
+            raise ValueError(f"Unknown time_granularity: {self.time_granularity}")
 
 
 # پیکربندی‌های پیش‌فرض برای دیتاست‌های مختلف
@@ -281,6 +316,17 @@ def get_youtube_config(**kwargs) -> EvaluationConfig:
 
 
 def get_youku_config(**kwargs) -> EvaluationConfig:
+    """پیکربندی پیش‌فرض برای Youku (5-minute granularity)"""
+    defaults = {
+        'dataset_name': 'youku',
+        'time_granularity': 'custom',
+        'slot_duration_minutes': 5,     # 5-minute slots
+        'window_size': 288,              # 288 slots = 24 hours
+        'strata_thresholds': [100, 1000, 10000],  # views
+        'min_observations': 20,
+    }
+    defaults.update(kwargs)
+    return EvaluationConfig(**defaults)
     """پیکربندی پیش‌فرض برای Youku"""
     defaults = {
         'dataset_name': 'youku',
