@@ -225,6 +225,83 @@ class UberLoader(BaseLoader):
         
         return pattern
 
+    def load_for_temporal_evaluation(self, config):
+        """
+        Load data for incremental temporal evaluation
+        
+        Args:
+            config: EvaluationConfig instance
+            
+        Returns:
+            tuple: (data DataFrame, items numpy array)
+        """
+        import numpy as np
+        
+        # 1. Load full dataset
+        if self.data is None:
+            logger.info("Loading full dataset...")
+            data = self.load_data()
+        else:
+            data = self.data.copy()
+        
+        logger.info(f"Initial data: {len(data):,} records")
+        
+        # 2. Filter by date range
+        if hasattr(config, 'start_date') and config.start_date:
+            start = pd.to_datetime(config.start_date)
+            data = data[data[self.time_col] >= start]
+            logger.info(f"After start_date filter: {len(data):,} records")
+        
+        if hasattr(config, 'end_date') and config.end_date:
+            end = pd.to_datetime(config.end_date)
+            data = data[data[self.time_col] <= end]
+            logger.info(f"After end_date filter: {len(data):,} records")
+        
+        # 3. Select items
+        if config.num_items and config.num_items > 0:
+            # Calculate popularity
+            item_popularity = data.groupby(self.item_col)[self.count_col].sum().sort_values(ascending=False)
+            
+            logger.info(f"Total unique items: {len(item_popularity)}")
+            
+            # Selection strategy
+            selection_strategy = getattr(config, 'item_selection', 'top')
+            
+            if selection_strategy == 'top':
+                selected_items = item_popularity.nlargest(config.num_items).index.values
+            elif selection_strategy == 'random':
+                selected_items = item_popularity.sample(
+                    n=min(config.num_items, len(item_popularity)),
+                    random_state=42
+                ).index.values
+            elif selection_strategy == 'bottom':
+                selected_items = item_popularity.nsmallest(config.num_items).index.values
+            else:
+                selected_items = item_popularity.nlargest(config.num_items).index.values
+            
+            logger.info(f"Selected {len(selected_items)} items")
+            
+            # Filter data
+            data = data[data[self.item_col].isin(selected_items)]
+            items = selected_items
+            
+        else:
+            # All items
+            items = data[self.item_col].unique()
+            logger.info(f"Using all {len(items)} items")
+        
+        # 4. Final sort
+        data = data.sort_values(self.time_col).reset_index(drop=True)
+        
+        # 5. Final log
+        logger.info("="*60)
+        logger.info("DATA LOADED FOR INCREMENTAL EVALUATION")
+        logger.info(f"  Records: {len(data):,}")
+        logger.info(f"  Items: {len(items)}")
+        logger.info(f"  Date range: {data[self.time_col].min()} to {data[self.time_col].max()}")
+        logger.info("="*60)
+        
+        return data, items
 
 # Factory function (like get_movielens_loader)
 def get_uber_loader(config: dict = None) -> UberLoader:
