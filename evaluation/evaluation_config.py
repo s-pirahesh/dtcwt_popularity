@@ -301,6 +301,30 @@ def get_movielens_config(**kwargs) -> EvaluationConfig:
     defaults.update(kwargs)
     return EvaluationConfig(**defaults)
 
+def get_uber_config(**kwargs) -> EvaluationConfig:
+    """
+    Configuration for Uber/NYC Taxi dataset
+    
+    Usage:
+        config = get_uber_config(
+            num_items=500,
+            window_size=30,
+            start_date='2025-01-01',
+            end_date='2025-03-31'
+        )
+    
+    Note: window_size is in TIME SLOTS (not hours!)
+    """
+    defaults = {
+        'dataset_name': 'uber',
+        'window_size': 30,
+        'prediction_horizon': 7,  # legacy parameter, not used
+        'strata_thresholds': [10, 100, 1000],  # trip counts
+        'min_observations': 10,
+    }
+    defaults.update(kwargs)
+    return EvaluationConfig(**defaults)
+
 
 def get_youtube_config(**kwargs) -> EvaluationConfig:
     """پیکربندی پیش‌فرض برای YouTube07"""

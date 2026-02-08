@@ -14,6 +14,7 @@ Date: February 2025
 
 from .base_loader import BaseLoader
 from .movielens_loader import MovieLensLoader, get_movielens_loader
+from .uber_loader import UberLoader
 
 __all__ = [
     'BaseLoader',

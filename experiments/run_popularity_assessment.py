@@ -29,8 +29,10 @@ from evaluation import (
     get_movielens_config,
     get_youtube_config,
     get_youku_config,
+    get_uber_config,  
     TemporalEvaluator
 )
+
 try:
     from evaluation.incremental_evaluator import IncrementalTemporalEvaluator
     INCREMENTAL_AVAILABLE = True
@@ -38,7 +40,7 @@ except ImportError as e:
     print(f"⚠️  Warning: Incremental evaluator not available: {e}")
     IncrementalTemporalEvaluator = None
     INCREMENTAL_AVAILABLE = False
-from data.loaders import MovieLensLoader
+from data.loaders import MovieLensLoader, UberLoader
 # YouTubeLoader و YoukuLoader هنوز پیاده‌سازی نشده‌اند - فعلاً فقط MovieLens پشتیبانی می‌شود
 # Import methods (برخی ممکن است به dependencies اضافی نیاز داشته باشند)
 try:
@@ -131,7 +133,19 @@ def get_data_loader(dataset_name: str, data_path: str = None):
             # اگر کاربر مسیری را در خط فرمان وارد کرده باشد، جایگزین مسیر پیش‌فرض می‌شود
             config['path'] = Path(data_path)
         return MovieLensLoader(config)
-    
+    elif dataset_name == 'uber':
+        # Get default config or create one
+        config = DATASETS.get('uber', {
+            'name': 'uber',
+            'path': data_path or Path('./data/uber/uber.csv'),
+            'time_col': 'timestamp',
+            'item_col': 'item_id',
+            'count_col': 'count'
+        }).copy()
+        if data_path:
+            config['path'] = Path(data_path)
+
+        return UberLoader(config)    
     elif dataset_name == 'youtube07':
         raise NotImplementedError(
             "YouTubeLoader هنوز پیاده‌سازی نشده است.\n"
@@ -207,6 +221,19 @@ def run_temporal_evaluation(dataset_name: str,
             num_cores=num_cores,
             **kwargs
         )
+    elif dataset_name == 'uber':
+        config = get_uber_config(
+            num_items=num_items,
+            start_date=start_date,
+            end_date=end_date,
+            window_size=window_size or 30,  
+            prediction_horizon=prediction_horizon or 7,
+            methods=methods,
+            final_format=final_format,
+            parallel=parallel,
+            num_cores=num_cores,
+            **kwargs
+        )        
     
     elif dataset_name == 'youtube07':
         config = get_youtube_config(
@@ -366,7 +393,7 @@ def main():
     )
     
     # Positional arguments
-    parser.add_argument('dataset', type=str, choices=['movielens', 'youtube07', 'youku'],
+    parser.add_argument('dataset', type=str, choices=['movielens', 'youtube07', 'youku','uber'],
                        help='Dataset name')
     
     # Optional arguments

@@ -4,7 +4,13 @@ Evaluation Module
 Comprehensive temporal evaluation framework
 """
 
-from .evaluation_config import EvaluationConfig, get_movielens_config, get_youtube_config, get_youku_config
+from .evaluation_config import (
+    EvaluationConfig,
+    get_movielens_config,
+    get_youtube_config,
+    get_youku_config,
+    get_uber_config 
+)
 from .stratification import StratificationSystem
 from .metrics import MetricsCalculator
 from .wavelet_validator import WaveletWindowValidator
@@ -18,6 +24,7 @@ __all__ = [
     'get_movielens_config',
     'get_youtube_config',
     'get_youku_config',
+    'get_uber_config',  
     'StratificationSystem',
     'MetricsCalculator',
     'WaveletWindowValidator',

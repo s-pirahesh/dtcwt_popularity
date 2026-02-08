@@ -108,10 +108,17 @@ DATASETS = {
         'count_col': 'retweet_count',
     },
     'uber': {
+        'name': 'uber',
         'path': DATA_DIR / 'uber.csv',
         'time_col': 'timestamp',
-        'item_col': 'location_id',
-        'count_col': 'ride_count',
+        'item_col': 'item_id',
+        'count_col': 'count',
+        'description': 'NYC Yellow Taxi Trip Records',
+        'granularity': 'hourly',  # Granularity from converter
+        'window_size_default': 30,  # 30 time slots (NOT hours!)
+        'num_locations': 263,  # NYC taxi zones
+        'date_range': '2009-present',
+        'source': 'NYC TLC'
     },
     'youku': {
         'path': DATA_DIR / 'youku.csv',
