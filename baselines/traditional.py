@@ -7,121 +7,111 @@ from typing import List, Dict
 from collections import Counter, OrderedDict
 
 
+"""
+Traditional Baseline Methods
+Based on definitions in Baseline_Popularity_methods.docx
+"""
+import numpy as np
+from typing import List, Dict
+
+
 class TraditionalBaselines:
     """
     Traditional caching/popularity prediction methods
-    Used as baselines for comparison
     """
     
     @staticmethod
     def access_frequency(time_series: np.ndarray) -> float:
         """
-        Simple Access Frequency (AF)
-        Score = Total access count
-        
-        Args:
-            time_series: Time series of accesses
-            
-        Returns:
-            Total access count
-        """
-        return float(np.sum(time_series))
-    
-    @staticmethod
-    def lru_score(time_series: np.ndarray) -> float:
-        """
-        Least Recently Used (LRU) score
-        Score = Recency-weighted sum
-        
-        Args:
-            time_series: Time series of accesses
-            
-        Returns:
-            Recency-weighted score
+        Weighted Access Frequency (AF)
+        Ref [34]: Assigns weights 2^-i to history.
+        Recent accesses have higher weight (1, 0.5, 0.25, ...).
         """
         if len(time_series) == 0:
             return 0.0
+            
+        # معکوس کردن برای اینکه اندیس 0 زمان حال باشد
+        reversed_ts = time_series[::-1]
+        score = 0.0
         
-        # Find last non-zero access
-        nonzero_indices = np.nonzero(time_series)[0]
-        
-        if len(nonzero_indices) == 0:
-            return 0.0
-        
-        # Score = 1 / time_since_last_access
-        last_access = nonzero_indices[-1]
-        time_since = len(time_series) - last_access
-        
-        score = 1.0 / (time_since + 1)
-        
+        for i, val in enumerate(reversed_ts):
+            weight = 2.0 ** (-i)
+            score += weight * val
+                
         return float(score)
     
     @staticmethod
     def lfu_score(time_series: np.ndarray) -> float:
         """
-        Least Frequently Used (LFU) score
-        Similar to AF but normalized by time window
-        
-        Args:
-            time_series: Time series of accesses
-            
-        Returns:
-            Average access frequency
+        Least Frequently Used (LFU)
+        Ref [32] Eq(5): Mean request frequency per period.
+        Formula: Sum(Requests) / Num_Periods
         """
         if len(time_series) == 0:
             return 0.0
         
+        # پیاده‌سازی دقیق فرمول میانگین
         return float(np.mean(time_series))
     
     @staticmethod
-    def ewma_score(time_series: np.ndarray, alpha: float = 0.3) -> float:
+    def ewma_score(time_series: np.ndarray, alpha: float = 0.2) -> float:
         """
         Exponentially Weighted Moving Average (EWMA)
-        Recent accesses weighted more heavily
-        
-        Args:
-            time_series: Time series of accesses
-            alpha: Smoothing parameter (0-1), higher = more weight on recent
-            
-        Returns:
-            EWMA score
+        Ref [39] Eq(13): Recurrent formula for popularity.
+        P(t) = alpha * R(t) + (1-alpha) * P(t-1)
         """
         if len(time_series) == 0:
             return 0.0
         
-        # Initialize with first value
-        ewma = time_series[0]
+        # مقدار اولیه
+        ewma = float(time_series[0])
         
-        # Update with exponential weighting
-        for value in time_series[1:]:
-            ewma = alpha * value + (1 - alpha) * ewma
+        # محاسبه بازگشتی
+        for val in time_series[1:]:
+            ewma = alpha * val + (1 - alpha) * ewma
         
         return float(ewma)
     
     @staticmethod
-    def batch_assess_all(time_series_list: List[np.ndarray]) -> Dict[str, np.ndarray]:
+    def lru_score(time_series: np.ndarray) -> float:
         """
-        Compute all baseline scores for a list of time series
+        Least Recently Used (LRU)
+        Ref [33]: Based on time since last access.
+        """
+        if len(time_series) == 0:
+            return 0.0
         
-        Args:
-            time_series_list: List of time series
-            
-        Returns:
-            Dictionary of method_name -> scores array
-        """
+        nonzero_indices = np.nonzero(time_series)[0]
+        
+        if len(nonzero_indices) == 0:
+            return 0.0
+        
+        # فاصله از آخرین بازدید تا زمان حال (آخرین اندیس)
+        last_access_idx = nonzero_indices[-1]
+        current_time_idx = len(time_series) - 1
+        dist = current_time_idx - last_access_idx
+        
+        return 1.0 / (dist + 1.0)
+
+    @staticmethod
+    def batch_assess_all(time_series_list: List[np.ndarray]) -> Dict[str, np.ndarray]:
+        """Compute all baseline scores efficiently"""
+        n = len(time_series_list)
         results = {
-            'AF': np.array([TraditionalBaselines.access_frequency(ts) 
-                           for ts in time_series_list]),
-            'LRU': np.array([TraditionalBaselines.lru_score(ts) 
-                            for ts in time_series_list]),
-            'LFU': np.array([TraditionalBaselines.lfu_score(ts) 
-                            for ts in time_series_list]),
-            'EWMA': np.array([TraditionalBaselines.ewma_score(ts) 
-                             for ts in time_series_list]),
+            'AF': np.zeros(n),
+            'LFU': np.zeros(n),
+            'EWMA': np.zeros(n),
+            'LRU': np.zeros(n)
         }
         
+        for i, ts in enumerate(time_series_list):
+            results['AF'][i] = TraditionalBaselines.access_frequency(ts)
+            results['LFU'][i] = TraditionalBaselines.lfu_score(ts)
+            results['EWMA'][i] = TraditionalBaselines.ewma_score(ts)
+            results['LRU'][i] = TraditionalBaselines.lru_score(ts)
+            
         return results
-
+    
 
 class CacheSimulator:
     """
