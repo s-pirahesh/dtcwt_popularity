@@ -56,6 +56,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from data.converters.base_converter import ConverterFactory
 from data.converters import movielens_converter
 from data.converters import uber_converter
+from data.converters import youtube_converter
 
 # پیکربندی دیتاست‌ها (برای --all و مسیرهای پیش‌فرض)
 DATASET_CONFIGS = {
@@ -68,6 +69,11 @@ DATASET_CONFIGS = {
         'description': 'NYC Yellow Taxi trip data',
         'input': 'data/raw/uber/yellow_*.parquet',
         'output': 'data/datasets/uber_15min.csv'
+    },
+    'youtube': {  
+        'description': 'YouTube hourly video views converter',
+        'input': 'data/raw/youtube/count_observation_upload.csv',
+        'output': 'data/datasets/youtube_hourly.csv'
     }
     # اضافه کردن دیتاست‌های بعدی اینجا
 }
