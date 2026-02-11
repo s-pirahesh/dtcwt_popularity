@@ -481,7 +481,7 @@ class TemporalEvaluator:
             result = {
                 'window_id': window_idx,
                 'timestamp': timestamp_ms,
-                'item_id': int(item_id),
+                'item_id': str(item_id),
                 'stratum': stratum_label,
                 'popularity_score': score,
                 'actual_count': int(actual_count),

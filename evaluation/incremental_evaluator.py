@@ -391,7 +391,7 @@ class IncrementalTemporalEvaluator:
             results['detailed'].append({
                 'window_id': window_idx,
                 'timestamp': timestamp_ms,
-                'item_id': int(item),
+                'item_id': str(item),
                 'stratum': stratum_label,
                 'popularity_score': float(scores[i]),
                 'actual_count': int(actuals[i]),
