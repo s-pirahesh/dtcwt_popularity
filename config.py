@@ -120,6 +120,19 @@ DATASETS = {
         'date_range': '2009-present',
         'source': 'NYC TLC'
     },
+    'youtube': {  
+        'name': 'youtube',
+        'path': DATA_DIR / 'youtube_hourly.csv',  
+        'time_col': 'timestamp',
+        'item_col': 'item_id',
+        'count_col': 'count',
+        'description': 'YouTube hourly video views',
+        'granularity': 'hourly',  
+        'window_size_default': 30,  
+        'num_videos': 1500,  
+        'date_range': '2018-05',
+        'source': 'Kaggle'
+    },
     'youku': {
         'path': DATA_DIR / 'youku.csv',
         'time_col': 'timestamp',

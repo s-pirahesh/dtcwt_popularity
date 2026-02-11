@@ -40,7 +40,7 @@ except ImportError as e:
     print(f"⚠️  Warning: Incremental evaluator not available: {e}")
     IncrementalTemporalEvaluator = None
     INCREMENTAL_AVAILABLE = False
-from data.loaders import MovieLensLoader, UberLoader
+from data.loaders import MovieLensLoader, UberLoader, YouTubeLoader
 # YouTubeLoader و YoukuLoader هنوز پیاده‌سازی نشده‌اند - فعلاً فقط MovieLens پشتیبانی می‌شود
 # Import methods (برخی ممکن است به dependencies اضافی نیاز داشته باشند)
 try:
@@ -145,7 +145,13 @@ def get_data_loader(dataset_name: str, data_path: str = None):
         if data_path:
             config['path'] = Path(data_path)
 
-        return UberLoader(config)    
+        return UberLoader(config)
+    elif dataset_name == 'youtube':
+        config = DATASETS['youtube'].copy()
+        if data_path:
+            # اگر کاربر مسیری را در خط فرمان وارد کرده باشد، جایگزین مسیر پیش‌فرض می‌شود
+            config['path'] = Path(data_path)
+        return YouTubeLoader(config)    
     elif dataset_name == 'youtube07':
         raise NotImplementedError(
             "YouTubeLoader هنوز پیاده‌سازی نشده است.\n"
@@ -234,7 +240,20 @@ def run_temporal_evaluation(dataset_name: str,
             num_cores=num_cores,
             **kwargs
         )        
-    
+    elif dataset_name == 'youtube':  
+        config = get_youtube_config(
+            num_items=num_items,
+            start_date=start_date,
+            end_date=end_date,
+            window_size=window_size,
+            prediction_horizon=prediction_horizon,
+            methods=methods,
+            final_format=final_format,
+            parallel=parallel,
+            num_cores=num_cores,
+            **kwargs
+        )
+        loader = YouTubeLoader(DATASETS['youtube'])    
     elif dataset_name == 'youtube07':
         config = get_youtube_config(
             num_items=num_items,
@@ -393,7 +412,7 @@ def main():
     )
     
     # Positional arguments
-    parser.add_argument('dataset', type=str, choices=['movielens', 'youtube07', 'youku','uber'],
+    parser.add_argument('dataset', type=str, choices=['movielens', 'youtube07', 'youku','uber', 'youtube'],
                        help='Dataset name')
     
     # Optional arguments

@@ -326,18 +326,30 @@ def get_uber_config(**kwargs) -> EvaluationConfig:
     return EvaluationConfig(**defaults)
 
 
+# def get_youtube_config(**kwargs) -> EvaluationConfig:
+#     """پیکربندی پیش‌فرض برای YouTube07"""
+#     defaults = {
+#         'dataset_name': 'youtube07',
+#         'window_size': 14,              # 2 weeks
+#         'prediction_horizon': 3,        # 3 days
+#         'strata_thresholds': [100, 1000, 10000],  # views
+#         'min_observations': 50,
+#     }
+#     defaults.update(kwargs)
+#     return EvaluationConfig(**defaults)
+
 def get_youtube_config(**kwargs) -> EvaluationConfig:
-    """پیکربندی پیش‌فرض برای YouTube07"""
+    """پیکربندی پیش‌فرض برای YouTube"""
     defaults = {
-        'dataset_name': 'youtube07',
-        'window_size': 14,              # 2 weeks
-        'prediction_horizon': 3,        # 3 days
-        'strata_thresholds': [100, 1000, 10000],  # views
+        'dataset_name': 'youtube',
+        'time_granularity': 'hourly',  
+        'window_size': 30,  
+        'prediction_horizon': 3,  
+        'strata_thresholds': [100, 1000, 10000],  
         'min_observations': 50,
     }
     defaults.update(kwargs)
     return EvaluationConfig(**defaults)
-
 
 def get_youku_config(**kwargs) -> EvaluationConfig:
     """پیکربندی پیش‌فرض برای Youku (5-minute granularity)"""
