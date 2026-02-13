@@ -1,319 +1,163 @@
-# -*- coding: utf-8 -*-
 """
-Comprehensive Metrics Calculator V2
-Metrics for scoring/assessment (not prediction)
-Author: Sajjad
-Date: February 2025
+Evaluation Metrics Module
+=========================
+This module implements the core metrics defined in the Frozen Evaluation Protocol.
+
+Metrics included:
+1. Decision Layer: NDCG@K (Log-Relevance), HitRatio@K (Static Placement)
+2. Diagnostic Layer: Kendall's Tau, Spearman's Rho, MAE (Sanity Check)
+3. Stability Layer: RSI (Ranking Stability Index)
+4. Robustness Layer: Rank Distortion (for Noise Injection test)
 """
 
 import numpy as np
-import pandas as pd
-from scipy.stats import spearmanr, kendalltau
-from sklearn.metrics import ndcg_score, mean_absolute_error, mean_squared_error
-from typing import Dict, Tuple
+from scipy import stats
+from typing import List, Dict, Union, Set
 
-
-class MetricsCalculator:
+def calculate_ndcg(predicted_scores: np.ndarray, actual_views: np.ndarray, k: int = 10) -> float:
     """
-    Comprehensive evaluation metrics calculation.
-    For assessment/scoring only (without prediction).
-    """
-
-    @staticmethod
-    def calculate_all_metrics(scores: np.ndarray, actual_counts: np.ndarray) -> Dict:
-        """
-        Calculate all metrics for a set of items.
-
-        Args:
-            scores: Popularity scores calculated by the method
-            actual_counts: Actual access counts
-
-        Returns:
-            Dictionary containing all metrics
-        """
-        # Convert to numpy arrays
-        scores = np.asarray(scores, dtype=np.float64)
-        actual = np.asarray(actual_counts, dtype=np.float64)
-
-        # Remove NaN values
-        valid_idx = ~(np.isnan(scores) | np.isnan(actual))
-        scores = scores[valid_idx]
-        actual = actual[valid_idx]
-
-        if len(scores) == 0:
-            return MetricsCalculator._empty_metrics()
-
-        # Check edge cases before calculating
-        # 1. Small sample size (minimum 3 for kendall)
-        if len(scores) < 3:
-            return MetricsCalculator._empty_metrics()
-
-        # 2. All scores same or all actual same
-        scores_constant = np.std(scores) == 0
-        actual_constant = np.std(actual) == 0
-
-        if scores_constant or actual_constant:
-            # Correlation is undefined, use simple metrics
-            metrics = {
-                'spearman': 0.0,
-                'spearman_pvalue': 1.0,
-                'kendall': 0.0,
-                'kendall_pvalue': 1.0,
-            }
-            rank_predicted = np.arange(len(scores)) + 1
-            rank_actual = np.arange(len(actual)) + 1
-        else:
-            # Normal calculation
-            metrics = {}
-
-            # 1. Ranking Metrics
-            try:
-                import warnings
-                with warnings.catch_warnings():
-                    warnings.filterwarnings('ignore', category=RuntimeWarning)
-                    warnings.filterwarnings('ignore', message='.*constant.*')
-                    warnings.filterwarnings('ignore', message='.*too small.*')
-
-                    rank_predicted = (-scores).argsort().argsort() + 1
-                    rank_actual = (-actual).argsort().argsort() + 1
-
-                    spearman_corr, spearman_p = spearmanr(scores, actual)
-                    kendall_corr, kendall_p = kendalltau(scores, actual)
-
-                    metrics['spearman'] = spearman_corr if not np.isnan(spearman_corr) else 0.0
-                    metrics['spearman_pvalue'] = spearman_p if not np.isnan(spearman_p) else 1.0
-                    metrics['kendall'] = kendall_corr if not np.isnan(kendall_corr) else 0.0
-                    metrics['kendall_pvalue'] = kendall_p if not np.isnan(kendall_p) else 1.0
-
-            except Exception as e:
-                metrics['spearman'] = 0.0
-                metrics['spearman_pvalue'] = 1.0
-                metrics['kendall'] = 0.0
-                metrics['kendall_pvalue'] = 1.0
-                rank_predicted = np.arange(len(scores)) + 1
-                rank_actual = np.arange(len(actual)) + 1
-
-        # 2. Error Metrics
-        mae = mean_absolute_error(actual, scores)
-        rmse = np.sqrt(mean_squared_error(actual, scores))
-
-        # MAPE with divide by zero handling
-        with np.errstate(divide='ignore', invalid='ignore'):
-            mape = np.mean(np.abs((actual - scores) / np.where(actual == 0, 1, actual))) * 100
-            if np.isnan(mape) or np.isinf(mape):
-                mape = 0.0
-
-        metrics['mae'] = mae
-        metrics['rmse'] = rmse
-        metrics['mape'] = mape
-
-        # 3. NDCG
-        try:
-            # Convert to proper format for ndcg_score
-            ndcg = ndcg_score([actual], [scores])
-            if np.isnan(ndcg):
-                ndcg = 0.0
-        except:
-            ndcg = 0.0
-
-        metrics['ndcg'] = ndcg
-
-        # 4. Coverage
-        coverage = (scores > 0).sum() / len(scores) if len(scores) > 0 else 0.0
-        metrics['coverage'] = coverage
-
-        # 5. Rank-based metrics
-        metrics['mean_rank_error'] = np.mean(np.abs(rank_predicted - rank_actual))
-        metrics['median_rank_error'] = np.median(np.abs(rank_predicted - rank_actual))
-
-        # 6. Additional statistics
-        metrics['mean_score'] = np.mean(scores)
-        metrics['std_score'] = np.std(scores)
-        metrics['mean_actual'] = np.mean(actual)
-        metrics['std_actual'] = np.std(actual)
-
-        # 7. Rankings (for detailed analysis)
-        metrics['rank_predicted'] = rank_predicted
-        metrics['rank_actual'] = rank_actual
-
-        return metrics
+    Calculates Normalized Discounted Cumulative Gain (NDCG) at K.
     
-    @staticmethod
-    def _empty_metrics() -> Dict:
-        """Empty metrics for error cases"""
-        return {
-            'spearman': 0.0,
-            'spearman_pvalue': 1.0,
-            'kendall': 0.0,
-            'kendall_pvalue': 1.0,
-            'mae': 0.0,
-            'rmse': 0.0,
-            'mape': 0.0,
-            'ndcg': 0.0,
-            'coverage': 0.0,
-            'mean_rank_error': 0.0,
-            'median_rank_error': 0.0,
-            'mean_score': 0.0,
-            'std_score': 0.0,
-            'mean_actual': 0.0,
-            'std_actual': 0.0,
-            'rank_predicted': np.array([]),
-            'rank_actual': np.array([]),
-        }
+    Protocol Adherence:
+        - Uses log-relevance: rel = log10(1 + actual_views) to handle heavy-tails.
+        - Evaluates top-K recommendations based on predicted scores.
+    
+    Args:
+        predicted_scores: Array of scores output by the model (WSPI/AF).
+        actual_views: Array of ground truth view counts (future window).
+        k: Cut-off rank.
+        
+    Returns:
+        float: NDCG score between 0.0 and 1.0.
+    """
+    if len(predicted_scores) == 0 or k <= 0:
+        return 0.0
+        
+    # 1. Define Relevance (Logarithmic to dampen viral outliers)
+    relevance = np.log10(1 + actual_views)
+    
+    # 2. Get Top-K indices based on Predictions (Model's Ranking)
+    # argsort gives ascending, so we take the last k and reverse them
+    if len(predicted_scores) < k:
+        k = len(predicted_scores)
+    
+    pred_indices = np.argsort(predicted_scores)[-k:][::-1]
+    
+    # 3. Calculate DCG (Discounted Cumulative Gain)
+    # DCG = sum( (2^rel - 1) / log2(i + 2) )
+    pred_rel = relevance[pred_indices]
+    discounts = np.log2(np.arange(len(pred_rel)) + 2)
+    dcg = np.sum((np.power(2, pred_rel) - 1) / discounts)
+    
+    # 4. Calculate IDCG (Ideal DCG)
+    # Sort by actual relevance to get the ideal ranking
+    ideal_indices = np.argsort(relevance)[-k:][::-1]
+    ideal_rel = relevance[ideal_indices]
+    idcg = np.sum((np.power(2, ideal_rel) - 1) / discounts)
+    
+    # 5. Final NDCG
+    if idcg == 0:
+        return 0.0
+    return float(dcg / idcg)
 
-    @staticmethod
-    def calculate_stratum_metrics(scores: np.ndarray, actual_counts: np.ndarray,
-                                  item_ids: np.ndarray, stratum_items: np.ndarray) -> Dict:
-        """
-        Calculate metrics for a specific stratum.
+def calculate_hit_rate(predicted_scores: np.ndarray, actual_views: np.ndarray, k: int = 10) -> float:
+    """
+    Calculates Cache Hit Ratio (CHR) @ K assuming Static Placement.
+    
+    Protocol Adherence:
+        - Assumes Top-K items are placed in cache at the start.
+        - Hit Ratio = (Sum of views of Top-K items) / (Total views of all items)
+    """
+    total_views = np.sum(actual_views)
+    if total_views == 0:
+        return 0.0
+        
+    # Identify Top-K items proposed by the model
+    if len(predicted_scores) < k:
+        k = len(predicted_scores)
+        
+    top_k_indices = np.argsort(predicted_scores)[-k:]
+    
+    # Calculate hits (views captured by these items)
+    hits = np.sum(actual_views[top_k_indices])
+    
+    return float(hits / total_views)
 
-        Args:
-            scores: All scores
-            actual_counts: All access counts
-            item_ids: All item identifiers
-            stratum_items: Items in this stratum
+def calculate_diagnostics(predicted_scores: np.ndarray, actual_views: np.ndarray) -> Dict[str, float]:
+    """
+    Calculates diagnostic metrics (Kendall, Spearman, MAE).
+    
+    Protocol Adherence:
+        - Kendall Tau: For precise inversion counting.
+        - Spearman Rho: For global trend correlation.
+        - MAE: Sanity check only (mainly for baselines).
+    """
+    # Rank Correlation Metrics
+    # Note: Kendall is O(N^2), might be slow for huge arrays, 
+    # but acceptable for standard cache simulation sizes.
+    kendall, _ = stats.kendalltau(predicted_scores, actual_views)
+    spearman, _ = stats.spearmanr(predicted_scores, actual_views)
+    
+    # Error Metric (Sanity Check)
+    # We compare normalized scores to avoid scale issues, or raw values if comparing counts.
+    # Here we perform raw MAE for simplicity as requested for baselines.
+    mae = np.mean(np.abs(predicted_scores - actual_views))
+    
+    return {
+        'kendall_tau': float(kendall) if not np.isnan(kendall) else 0.0,
+        'spearman_rho': float(spearman) if not np.isnan(spearman) else 0.0,
+        'mae': float(mae)
+    }
 
-        Returns:
-            Dictionary containing metrics
-        """
-        # Filter only items in this stratum
-        mask = np.isin(item_ids, stratum_items)
+def calculate_rsi(top_k_t1: List[int], top_k_t2: List[int]) -> float:
+    """
+    Calculates Ranking Stability Index (RSI) using Jaccard Similarity.
+    
+    Args:
+        top_k_t1: List of item indices in Top-K at time t.
+        top_k_t2: List of item indices in Top-K at time t+1.
+        
+    Returns:
+        float: Jaccard similarity (Intersection / Union).
+    """
+    set_t1 = set(top_k_t1)
+    set_t2 = set(top_k_t2)
+    
+    intersection = len(set_t1.intersection(set_t2))
+    union = len(set_t1.union(set_t2))
+    
+    if union == 0:
+        return 0.0
+        
+    return float(intersection / union)
 
-        if not np.any(mask):
-            return MetricsCalculator._empty_metrics()
+def calculate_rank_distortion(predicted_scores_clean: np.ndarray, 
+                              predicted_scores_noisy: np.ndarray, 
+                              target_index: int) -> int:
+    """
+    Calculates Rank Distortion for the Robustness Test.
+    
+    Args:
+        predicted_scores_clean: Model scores before noise injection.
+        predicted_scores_noisy: Model scores after noise injection.
+        target_index: Index of the specific item where noise was injected.
+        
+    Returns:
+        int: Absolute change in rank (Delta R).
+    """
+    # Calculate rank in clean list (Higher score = Better rank, so Rank 1 is top)
+    # We use argsort twice to get ranks. 
+    # Example: scores=[10, 30, 20] -> argsort=[0, 2, 1] -> argsort=[0, 2, 1] -> ranks=[2, 0, 1] (if 0 is best)
+    # Here we want standard rank: 1st, 2nd, 3rd...
+    
+    def get_rank(scores, idx):
+        # Sort descending
+        sorted_indices = np.argsort(scores)[::-1]
+        # Find where idx is in the sorted list
+        rank = np.where(sorted_indices == idx)[0][0] + 1
+        return rank
 
-        stratum_scores = scores[mask]
-        stratum_actual = actual_counts[mask]
-
-        return MetricsCalculator.calculate_all_metrics(stratum_scores, stratum_actual)
-
-    @staticmethod
-    def calculate_temporal_stability(scores_t: np.ndarray, scores_t_prev: np.ndarray) -> Dict:
-        """
-        Calculate temporal stability of scores.
-
-        Args:
-            scores_t: Scores at time t
-            scores_t_prev: Scores at time t-1
-
-        Returns:
-            Dictionary containing stability metrics
-        """
-        if len(scores_t) != len(scores_t_prev):
-            raise ValueError("Score arrays must have same length")
-
-        # Remove NaN values
-        valid_idx = ~(np.isnan(scores_t) | np.isnan(scores_t_prev))
-        scores_t = scores_t[valid_idx]
-        scores_t_prev = scores_t_prev[valid_idx]
-
-        if len(scores_t) == 0:
-            return {'stability': 0.0, 'volatility': 0.0}
-
-        # 1. Score stability (1 - normalized absolute change)
-        score_changes = np.abs(scores_t - scores_t_prev)
-        mean_change = np.mean(score_changes)
-        max_possible_change = np.max([np.max(np.abs(scores_t)), np.max(np.abs(scores_t_prev))])
-
-        if max_possible_change > 0:
-            stability = 1.0 - (mean_change / max_possible_change)
-        else:
-            stability = 1.0
-
-        # 2. Rank volatility
-        rank_t = (-scores_t).argsort().argsort() + 1
-        rank_t_prev = (-scores_t_prev).argsort().argsort() + 1
-        rank_changes = np.abs(rank_t - rank_t_prev)
-        volatility = np.mean(rank_changes)
-
-        return {
-            'stability': stability,
-            'volatility': volatility,
-            'mean_score_change': mean_change,
-            'max_score_change': np.max(score_changes),
-        }
-
-    @staticmethod
-    def compare_methods(method_scores: Dict[str, np.ndarray],
-                       actual_counts: np.ndarray) -> pd.DataFrame:
-        """
-        Compare multiple methods with each other.
-
-        Args:
-            method_scores: {method_name: scores array}
-            actual_counts: Actual access counts
-
-        Returns:
-            DataFrame containing comparison
-        """
-        results = []
-
-        for method_name, scores in method_scores.items():
-            metrics = MetricsCalculator.calculate_all_metrics(scores, actual_counts)
-
-            # Only main metrics
-            result = {
-                'method': method_name,
-                'spearman': metrics['spearman'],
-                'kendall': metrics['kendall'],
-                'mae': metrics['mae'],
-                'rmse': metrics['rmse'],
-                'mape': metrics['mape'],
-                'ndcg': metrics['ndcg'],
-                'coverage': metrics['coverage'],
-            }
-
-            results.append(result)
-
-        df = pd.DataFrame(results)
-
-        # Sort by spearman (higher is better)
-        df = df.sort_values('spearman', ascending=False)
-
-        return df
-
-    @staticmethod
-    def calculate_improvement(baseline_metrics: Dict, method_metrics: Dict) -> Dict:
-        """
-        Calculate improvement over baseline.
-
-        Args:
-            baseline_metrics: Baseline metrics
-            method_metrics: Method metrics
-
-        Returns:
-            Dictionary containing improvement percentages
-        """
-        improvements = {}
-
-        # Metrics where higher is better
-        higher_better = ['spearman', 'kendall', 'ndcg', 'coverage']
-
-        # Metrics where lower is better
-        lower_better = ['mae', 'rmse', 'mape', 'mean_rank_error']
-
-        for metric in higher_better:
-            if metric in baseline_metrics and metric in method_metrics:
-                baseline_val = baseline_metrics[metric]
-                method_val = method_metrics[metric]
-
-                if baseline_val != 0:
-                    improvement = ((method_val - baseline_val) / abs(baseline_val)) * 100
-                else:
-                    improvement = 0.0
-
-                improvements[f'{metric}_improvement'] = improvement
-
-        for metric in lower_better:
-            if metric in baseline_metrics and metric in method_metrics:
-                baseline_val = baseline_metrics[metric]
-                method_val = method_metrics[metric]
-
-                if baseline_val != 0:
-                    improvement = ((baseline_val - method_val) / abs(baseline_val)) * 100
-                else:
-                    improvement = 0.0
-
-                improvements[f'{metric}_improvement'] = improvement
-
-        return improvements
+    rank_clean = get_rank(predicted_scores_clean, target_index)
+    rank_noisy = get_rank(predicted_scores_noisy, target_index)
+    
+    return abs(rank_noisy - rank_clean)
