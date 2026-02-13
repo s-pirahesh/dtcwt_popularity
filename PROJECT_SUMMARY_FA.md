@@ -1,122 +1,122 @@
-# 🎯 پروژه DTCWT Popularity Assessment - نسخه پایتون
+# DTCWT Popularity Assessment Project - Python Version
 
-## 📦 خلاصه پروژه
+## Project Summary
 
-این پروژه یک پیاده‌سازی کامل، ساختیافته و ماژولار از سیستم ارزیابی و پیش‌بینی محبوبیت داده‌ها با استفاده از DTCWT است که بر اساس دستورالعمل IMPLEMENTATION_PROMPT_V3.1_COMPLETE.md ساخته شده است.
+This is a complete, structured, and modular implementation of a popularity assessment and prediction system using DTCWT, built according to IMPLEMENTATION_PROMPT_V3.1_COMPLETE.md specifications.
 
-## ✅ اجزای پیاده‌سازی شده
+## ✅ Implementation Components
 
-### 1. ساختار پایه (Core Structure)
-- ✅ `config.py` - تنظیمات کلی پروژه با پارامترهای قابل تنظیم
-- ✅ `requirements.txt` - تمام وابستگی‌های مورد نیاز
-- ✅ `setup.py` - اسکریپت نصب پکیج
+### 1. Core Structure (Core Structure)
+- ✅ `config.py` - Global project settings with adjustable parameters
+- ✅ `requirements.txt` - All required dependencies
+- ✅ `setup.py` - Package installation script
 
-### 2. بارگذاری و پیش‌پردازش داده (Data Layer)
-- ✅ `data/loaders/__init__.py` - کلاس پایه BaseDataLoader
-- ✅ `data/loaders/youtube07.py` - لودرهای YouTube07, MovieLens, Foursquare
-- ✅ `data/preprocessors/time_series.py` - پیش‌پردازش سری‌های زمانی
+### 2. Data Loading and Preprocessing (Data Layer)
+- ✅ `data/loaders/__init__.py` - Base class BaseDataLoader
+- ✅ `data/loaders/youtube07.py` - Loaders for YouTube07, MovieLens, Foursquare
+- ✅ `data/preprocessors/time_series.py` - Time series preprocessing
   - Normalization (zscore, minmax, log)
   - Smoothing (moving average, Savitzky-Golay)
   - Outlier removal
   - Detrending
   - Padding to power of 2
 
-### 3. روش‌های ارزیابی محبوبیت (Assessment Methods)
-- ✅ `methods/dwt_assessment.py` - روش DWT + AF
+### 3. Popularity Assessment Methods (Assessment Methods)
+- ✅ `methods/dwt_assessment.py` - DWT + AF Method
   - Multi-level decomposition
   - 2^-i weighted combination
-  
-- ✅ `methods/dtcwt_assessment.py` - روش DTCWT + AF
+
+- ✅ `methods/dtcwt_assessment.py` - DTCWT + AF Method
   - Dual-tree complex wavelet transform
   - Shift invariance improvement
   - Complex coefficient handling
-  
-- ✅ `methods/statistical_assessment.py` - روش آماری
+
+- ✅ `methods/statistical_assessment.py` - Statistical Method
   - Skewness + Kurtosis formula
   - Extended statistical features
   - Autocorrelation and trend analysis
-  
-- ✅ `methods/advanced_features.py` - ویژگی‌های پیشرفته (V3.1)
+
+- ✅ `methods/advanced_features.py` - Advanced Features (V3.1)
   - Shannon Entropy
   - Hurst Exponent (R/S analysis)
   - Sample Entropy
   - Permutation Entropy
   - Trend features
-  
-- ✅ `methods/hybrid_assessment.py` - روش ترکیبی (بهترین)
-  - ترکیب DTCWT + Statistical + Advanced
-  - Feature caching با LRU
-  - V3.0 و V3.1 versions
+
+- ✅ `methods/hybrid_assessment.py` - Hybrid Method (Best)
+  - Combine DTCWT + Statistical + Advanced
+  - LRU feature caching
+  - V3.0 and V3.1 versions
   - ML feature extraction
 
-### 4. روش‌های پایه (Baselines)
-- ✅ `baselines/traditional.py` - روش‌های سنتی
+### 4. Baseline Methods (Baselines)
+- ✅ `baselines/traditional.py` - Traditional Methods
   - Access Frequency (AF)
   - LRU (Least Recently Used)
   - LFU (Least Frequently Used)
   - EWMA (Exponentially Weighted Moving Average)
   - Adaptive methods
-  
-- ✅ `baselines/advanced.py` - روش‌های پیشرفته
+
+- ✅ `baselines/advanced.py` - Advanced Methods
   - ARMA/ARIMA predictor
   - LSTM predictor
   - Simple predictors (naive, MA, linear)
 
-### 5. ارزیابی و متریک‌ها (Evaluation)
+### 5. Evaluation and Metrics (Evaluation)
 - ✅ `evaluation/metrics.py`
   - Assessment metrics: Hit Rate, Precision, Recall, F1, FP Rate, NDCG, Spearman
   - Prediction metrics: MAE, RMSE, MAPE, SMAPE, R²
 
-### 6. آزمایش‌ها (Experiments)
+### 6. Experiments (Experiments)
 - ✅ `experiments/exp1_assessment_comparison.py`
-  - مقایسه کامل تمام روش‌ها
-  - ارزیابی روی داده‌های واقعی
-  - تولید جداول و نمودارها
-  - ذخیره نتایج در CSV
+  - Complete comparison of all methods
+  - Evaluation on real data
+  - Generate tables and plots
+  - Save results in CSV
 
-### 7. ابزارهای کمکی
-- ✅ `demo.py` - نمایش تعاملی تمام روش‌ها
-- ✅ `generate_sample_data.py` - تولید داده‌های نمونه
-- ✅ `test_installation.py` - تست نصب و عملکرد
+### 7. Helper Tools
+- ✅ `demo.py` - Interactive demonstration of all methods
+- ✅ `generate_sample_data.py` - Generate sample data
+- ✅ `test_installation.py` - Test installation and functionality
 
-### 8. مستندات
-- ✅ `README.md` - راهنمای کامل پروژه (بیش از 400 خط)
-- ✅ `QUICKSTART.md` - راهنمای شروع سریع
-- ✅ `CHANGELOG.md` - تاریخچه نسخه‌ها
-- ✅ `.gitignore` - فایل‌های ignore شده
+### 8. Documentation
+- ✅ `README.md` - Complete project guide (over 400 lines)
+- ✅ `QUICKSTART.md` - Quick start guide
+- ✅ `CHANGELOG.md` - Version history
+- ✅ `.gitignore` - Ignored files
 
-## 🎯 ویژگی‌های کلیدی
+## 🎯 Key Features
 
-### ماژولار بودن
-- هر بخش در ماژول جداگانه
-- وراثت از کلاس‌های پایه
-- رابط‌های واضح و مستند
-- آسانی در افزودن روش‌ها و دیتاست‌های جدید
+### Modularity
+- Each section in separate module
+- Inheritance from base classes
+- Clear and documented interfaces
+- Easy to add new methods and datasets
 
-### قابلیت پیکربندی
-- تمام پارامترها در `config.py`
-- وزن‌های قابل تنظیم برای هر روش
-- فعال/غیرفعال کردن ویژگی‌ها
-- MLflow اختیاری برای tracking
+### Configurability
+- All parameters in `config.py`
+- Adjustable weights for each method
+- Enable/disable features
+- Optional MLflow for tracking
 
-### کارایی
-- Feature caching برای سرعت بالاتر
+### Efficiency
+- Feature caching for faster execution
 - Batch processing
 - Vectorized operations
 - Memory-efficient implementations
 
-### قابلیت توسعه
-- کامنت‌های جامع در کدها
+### Extensibility
+- Comprehensive comments in code
 - Type hints
-- Docstrings کامل
-- مثال‌های کاربردی
+- Complete docstrings
+- Practical examples
 
-## 📊 نتایج مورد انتظار
+## 📊 Expected Results
 
-### جدول مقایسه (Hit Rate @ 10%)
+### Comparison Table (Hit Rate @ 10%)
 
-| روش | YouTube07 | MovieLens | Foursquare | Higgs | Uber | میانگین |
-|-----|-----------|-----------|------------|-------|------|---------|
+| Method | YouTube07 | MovieLens | Foursquare | Higgs | Uber | Average |
+|--------|-----------|-----------|------------|-------|------|---------|
 | AF (Baseline) | 45.2 | 42.1 | 38.9 | 40.3 | 43.7 | 42.0 |
 | EWMA | 47.6 | 44.2 | 41.3 | 43.1 | 45.9 | 44.4 |
 | DWT+AF | 52.1 | 48.9 | 45.2 | 46.8 | 50.3 | 48.7 |
@@ -125,127 +125,127 @@
 | Hybrid V3.0 | 62.1 | 58.4 | 54.9 | 56.7 | 60.3 | 58.5 |
 | **Hybrid V3.1** | **64.8** | **60.9** | **57.3** | **59.2** | **62.9** | **61.0** |
 
-**بهبود:** +19% نسبت به baseline، +2.5% نسبت به V3.0
+**Improvement:** +19% over baseline, +2.5% over V3.0
 
-## 🚀 نحوه استفاده
+## 🚀 How to Use
 
-### نصب سریع
+### Quick Installation
 ```bash
 cd dtcwt_popularity
 pip install -r requirements.txt
 python test_installation.py
 ```
 
-### تولید داده نمونه
+### Generate Sample Data
 ```bash
 python generate_sample_data.py
 ```
 
-### اجرای Demo
+### Run Demo
 ```bash
 python demo.py
 ```
 
-### اجرای آزمایش کامل
+### Run Full Experiment
 ```bash
 python experiments/exp1_assessment_comparison.py
 ```
 
-## 📁 ساختار پوشه‌ها
+## 📁 Folder Structure
 
 ```
 dtcwt_popularity/
-├── config.py                          # تنظیمات
-├── requirements.txt                   # وابستگی‌ها
-├── setup.py                          # نصب
-├── README.md                         # راهنما
-├── QUICKSTART.md                     # شروع سریع
-├── CHANGELOG.md                      # تاریخچه
+├── config.py                          # Settings
+├── requirements.txt                   # Dependencies
+├── setup.py                          # Installation
+├── README.md                         # Guide
+├── QUICKSTART.md                     # Quick start
+├── CHANGELOG.md                      # History
 │
 ├── data/
-│   ├── datasets/                     # دیتاست‌ها
-│   ├── loaders/                      # بارگذارکننده‌ها
-│   └── preprocessors/                # پیش‌پردازشگرها
+│   ├── datasets/                     # Datasets
+│   ├── loaders/                      # Loaders
+│   └── preprocessors/                # Preprocessors
 │
-├── methods/                          # روش‌های ارزیابی
+├── methods/                          # Assessment methods
 │   ├── dwt_assessment.py
 │   ├── dtcwt_assessment.py
 │   ├── statistical_assessment.py
 │   ├── hybrid_assessment.py
 │   └── advanced_features.py
 │
-├── baselines/                        # روش‌های پایه
+├── baselines/                        # Baseline methods
 │   ├── traditional.py
 │   └── advanced.py
 │
-├── evaluation/                       # ارزیابی
+├── evaluation/                       # Evaluation
 │   └── metrics.py
 │
-├── experiments/                      # آزمایش‌ها
+├── experiments/                      # Experiments
 │   └── exp1_assessment_comparison.py
 │
-├── utils/                           # ابزارها (آماده برای توسعه)
+├── utils/                           # Tools (ready for development)
 │
-└── results/                         # نتایج
+└── results/                         # Results
     ├── tables/
     ├── figures/
     ├── raw_data/
     └── feature_cache/
 ```
 
-## 🔄 افزودن دیتاست جدید
+## 🔄 Adding New Dataset
 
-1. کلاس loader جدید در `data/loaders/` بسازید
-2. از `BaseDataLoader` ارث‌بری کنید
-3. متدهای `load()`, `get_all_items()`, `create_time_series()` را پیاده‌سازی کنید
-4. تنظیمات را به `config.py` اضافه کنید
+1. Create new loader class in `data/loaders/`
+2. Inherit from `BaseDataLoader`
+3. Implement `load()`, `get_all_items()`, `create_time_series()` methods
+4. Add settings to `config.py`
 
-## 🎓 کاربرد در تحقیق
+## 🎓 Research Application
 
-این پیاده‌سازی برای استفاده در:
-- مقالات Q1
-- رساله دکتری
-- ارزیابی روش‌های جدید
-- مقایسه با baseline ها
+This implementation is suitable for:
+- Q1 papers
+- PhD thesis
+- New method evaluation
+- Baseline comparison
 
-## 📝 نکات مهم
+## 📝 Important Notes
 
-1. **DTCWT اختیاری است**: اگر نصب نشود، از DWT fallback استفاده می‌شود
-2. **TensorFlow/statsmodels اختیاری**: فقط برای baseline های پیشرفته لازم است
-3. **داده‌های نمونه**: می‌توانید با `generate_sample_data.py` داده تولید کنید
-4. **Feature caching**: برای سرعت بیشتر، در `config.py` فعال کنید
-5. **MLflow**: برای tracking آزمایش‌ها اختیاری است
+1. **DTCWT is Optional**: Falls back to DWT if not installed
+2. **TensorFlow/statsmodels Optional**: Only needed for advanced baselines
+3. **Sample Data**: Can generate with `generate_sample_data.py`
+4. **Feature Caching**: Enable in `config.py` for better performance
+5. **MLflow**: Optional for experiment tracking
 
-## 🐛 رفع مشکلات
+## 🐛 Troubleshooting
 
-### خطای import dtcwt
+### DTCWT Import Error
 ```bash
 pip install dtcwt
 ```
 
-### خطای dataset not found
-- دیتاست را در `data/datasets/` قرار دهید
-- یا با `generate_sample_data.py` داده نمونه بسازید
+### Dataset Not Found
+- Place dataset in `data/datasets/`
+- Or generate sample data with `generate_sample_data.py`
 
-### خطای memory
-- تعداد items را در آزمایش کاهش دهید
-- disk caching را فعال کنید
+### Memory Error
+- Reduce number of items in experiment
+- Enable disk caching
 
-## ✨ نکات پیشرفته
+## ✨ Advanced Features
 
-### تنظیم وزن‌ها
-در `config.py`:
+### Adjust Weights
+In `config.py`:
 ```python
 ASSESSMENT_CONFIG = {
-    'hybrid_alpha': 1.0,           # وزن DTCWT
-    'hybrid_beta': 0.5,            # وزن Skewness
-    'hybrid_gamma': 0.3,           # وزن Kurtosis
-    'hybrid_entropy_weight': 0.2,  # وزن Entropy
-    'hybrid_hurst_weight': 0.3,    # وزن Hurst
+    'hybrid_alpha': 1.0,           # DTCWT weight
+    'hybrid_beta': 0.5,            # Skewness weight
+    'hybrid_gamma': 0.3,           # Kurtosis weight
+    'hybrid_entropy_weight': 0.2,  # Entropy weight
+    'hybrid_hurst_weight': 0.3,    # Hurst weight
 }
 ```
 
-### استخراج ویژگی برای ML
+### Extract ML Features
 ```python
 from methods.hybrid_assessment import HybridAssessment
 
@@ -254,25 +254,25 @@ features = hybrid.extract_ml_features(time_series)
 # features: [dtcwt, mean, std, skew, kurt, noise, entropy, hurst, trend, mono]
 ```
 
-## 🎉 پروژه آماده است!
+## 🎉 Project Ready!
 
-این پروژه شامل:
-- ✅ 24 فایل Python کامل و مستند
-- ✅ 4 فایل Markdown راهنما
-- ✅ تمام روش‌های مورد نیاز پیاده‌سازی شده
-- ✅ کد ساختیافته و ماژولار
-- ✅ آماده برای توسعه و تحقیق
+This project includes:
+- ✅ 24 complete and documented Python files
+- ✅ 4 markdown guide files
+- ✅ All required methods implemented
+- ✅ Structured and modular code
+- ✅ Ready for development and research
 
-می‌توانید:
-1. آزمایش‌های خود را اجرا کنید
-2. روش‌های جدید اضافه کنید
-3. دیتاست‌های جدید را تست کنید
-4. نتایج را برای مقاله استفاده کنید
+You can:
+1. Run your own experiments
+2. Add new methods
+3. Test new datasets
+4. Use results for papers
 
-**موفق باشید! 🚀**
+**Good luck! 🚀**
 
 ---
 
-**نسخه:** 3.1.0  
-**تاریخ:** 24 ژانویه 2025  
-**وضعیت:** ✅ آماده برای استفاده
+**Version:** 3.1.0
+**Date:** January 24, 2025
+**Status:** ✅ Ready for use

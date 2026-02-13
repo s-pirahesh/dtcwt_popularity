@@ -29,15 +29,15 @@ class TraditionalBaselines:
         """
         if len(time_series) == 0:
             return 0.0
-            
-        # معکوس کردن برای اینکه اندیس 0 زمان حال باشد
+
+        # Reverse to make index 0 the present time
         reversed_ts = time_series[::-1]
         score = 0.0
-        
+
         for i, val in enumerate(reversed_ts):
             weight = 2.0 ** (-i)
             score += weight * val
-                
+
         return float(score)
     
     @staticmethod
@@ -49,8 +49,8 @@ class TraditionalBaselines:
         """
         if len(time_series) == 0:
             return 0.0
-        
-        # پیاده‌سازی دقیق فرمول میانگین
+
+        # Precise implementation of average formula
         return float(np.mean(time_series))
     
     @staticmethod
@@ -62,14 +62,14 @@ class TraditionalBaselines:
         """
         if len(time_series) == 0:
             return 0.0
-        
-        # مقدار اولیه
+
+        # Initial value
         ewma = float(time_series[0])
-        
-        # محاسبه بازگشتی
+
+        # Recursive calculation
         for val in time_series[1:]:
             ewma = alpha * val + (1 - alpha) * ewma
-        
+
         return float(ewma)
     
     @staticmethod
@@ -80,17 +80,17 @@ class TraditionalBaselines:
         """
         if len(time_series) == 0:
             return 0.0
-        
+
         nonzero_indices = np.nonzero(time_series)[0]
-        
+
         if len(nonzero_indices) == 0:
             return 0.0
-        
-        # فاصله از آخرین بازدید تا زمان حال (آخرین اندیس)
+
+        # Distance from last access to present time (last index)
         last_access_idx = nonzero_indices[-1]
         current_time_idx = len(time_series) - 1
         dist = current_time_idx - last_access_idx
-        
+
         return 1.0 / (dist + 1.0)
 
     @staticmethod
