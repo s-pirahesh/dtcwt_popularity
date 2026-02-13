@@ -1,174 +1,164 @@
 """
 DWT-based Popularity Assessment (Contribution 1)
-Uses Discrete Wavelet Transform with AF formula
-
-Author: Sajjad
-Date: February 2025
+Strategy: Trend + Viral Shock Detection
+Combines Approximation (Trend) with Level 1 Details (Viral Spikes).
 """
 import numpy as np
 import pywt
-from typing import List, Optional, Dict
+from typing import List, Dict, Optional
 from config import WAVELET_CONFIG
 from .base_method import BaseMethod
 
-
 class DWTAssessment(BaseMethod):
     """
-    DWT-based popularity assessment method
-    
-    Innovation: Apply AF formula on wavelet coefficients instead of raw signal
-    Claim: Better trend/noise separation than direct AF
+    Popularity assessment method based on DWT with a combined approach (Trend + Shock).
+
+    This class calculates and combines popularity based on two separate components:
+
+    1. Trend Component:
+       - Extracted from approximation coefficients at the lowest decomposition level ($cA_L$).
+       - Represents stable, long-term popularity and overall user behavior.
+       - High-frequency noise in this component is removed.
+
+    2. Shock Component:
+       - Extracted from detail coefficients at level 1 ($cD_1$).
+       - Level 1 wavelet is most sensitive to rapid changes.
+       - Represents sudden changes, trending news, and viral content.
+
+    Final score formula:
+        Score = AF(Trend) + β * AF(Shock)
+
+    Where AF is a time-weighted access frequency function.
     """
-    
-    def __init__(self, wavelet: str = None, level: int = None, mode: str = 'symmetric'):
+
+    def __init__(self, wavelet: str = None, level: int = None,
+                 detail_weight: float = 0.1, mode: str = 'symmetric'):
         """
-        Initialize DWT assessment
-        
+        Initialize the DWT assessment class.
+
         Args:
-            wavelet: Wavelet family (default: db4)
-            level: Decomposition level (default: 3)
-            mode: Signal extension mode (default: 'symmetric')
+            wavelet (str): Name of the mother wavelet (e.g., 'db4', 'sym4').
+                           If None, it is read from config.py.
+            level (int): Decomposition level.
+                         Level 3 is usually suitable for daily/weekly data.
+            detail_weight (float): Beta coefficient (β) that determines the weight of
+                                   sudden shock impacts. Default is 0.1 (10% impact).
+            mode (str): Padding method for signal edges (default: 'symmetric').
         """
-        super().__init__(name="DWT+AF")
-        
+        super().__init__(name="DWT+AF (Trend+Shock)")
         self.wavelet = wavelet or WAVELET_CONFIG['dwt_wavelet']
         self.level = level or WAVELET_CONFIG['decomposition_level']
+        self.detail_weight = detail_weight
         self.mode = mode
     
+    def _apply_weighted_af(self, coeffs_array: np.ndarray) -> float:
+        """
+        Apply Access Frequency (AF) logic with temporal weighting on wavelet coefficients.
+
+        This method calculates signal energy with higher weight for newer coefficients.
+
+        Formula:
+            Score = Σ (|Coeff[t-i]| * 2^-i)
+
+        Args:
+            coeffs_array (np.ndarray): Array of wavelet coefficients (from old to new).
+
+        Returns:
+            float: Calculated score (weighted energy).
+        """
+        if len(coeffs_array) == 0:
+            return 0.0
+
+        # Reverse the array so index 0 represents "present time" (t)
+        reversed_coeffs = coeffs_array[::-1]
+        score = 0.0
+
+        for i, val in enumerate(reversed_coeffs):
+            # Calculate energy (absolute value) with exponential weight decay in the past
+            weight = 2.0 ** (-i)
+            score += weight * abs(val)
+
+        return float(score)
+
     def assess_single(self, time_series: np.ndarray) -> float:
         """
-        Assess popularity of a single item
-        
+        Calculate the final popularity score for a time series.
+
+        Execution steps:
+        1. Padding: Increase data length if needed for wavelet transform stability.
+        2. Decomposition: Decompose time series into approximation and detail coefficients.
+        3. Extraction: Separate trend ($cA_L$) and shock ($cD_1$) components.
+        4. Scoring: Calculate AF for each component.
+        5. Fusion: Combine two scores with specified weights.
+
         Args:
-            time_series: 1D array of access counts
-            
+            time_series (np.ndarray): Time series of visits (visit count per interval).
+
         Returns:
-            Popularity score
+            float: Final popularity score.
         """
         if len(time_series) == 0:
             return 0.0
-        
-        # Ensure minimum length for decomposition
-        min_length = 2 ** self.level
-        if len(time_series) < min_length:
-            padded = np.zeros(min_length)
-            padded[-len(time_series):] = time_series
-            time_series = padded
-        
+
+        # 1. Data length management (Padding)
+        # Wavelet requires minimum length of 2^level
+        min_len = 2 ** self.level
+        if len(time_series) < min_len:
+            pad_width = min_len - len(time_series)
+            # Use edge padding for minimal distortion of the trend
+            ts_to_process = np.pad(time_series, (pad_width, 0), mode='edge')
+        else:
+            ts_to_process = time_series
+
         try:
-            # Perform DWT decomposition
-            coeffs = pywt.wavedec(time_series, self.wavelet, level=self.level, mode=self.mode)
-            
-            # Apply AF formula: Score = sum(2^-i * mean(|coeffs_i|))
-            score = 0.0
-            for i, coeff in enumerate(coeffs):
-                weight = 2 ** (-i)
-                level_contribution = weight * np.mean(np.abs(coeff))
-                score += level_contribution
-            
-            return float(score)
-            
+            # 2. Wavelet Decomposition
+            # Output: [cA_n, cD_n, cD_n-1, ..., cD_1]
+            coeffs = pywt.wavedec(ts_to_process, self.wavelet, level=self.level, mode=self.mode)
+
+            # 3. Extract components
+            # Trend component: lowest frequency (first list member)
+            approx_coeffs = coeffs[0]
+
+            # Shock component: highest frequency (last list member = level 1)
+            detail_l1 = coeffs[-1]
+
+            # 4. Calculate scores
+            trend_score = self._apply_weighted_af(approx_coeffs)
+            shock_score = self._apply_weighted_af(detail_l1)
+
+            # 5. Final fusion
+            final_score = trend_score + (self.detail_weight * shock_score)
+
+            return float(final_score)
+
         except Exception as e:
-            print(f"Warning: DWT failed for series length {len(time_series)}: {e}")
-            return float(np.mean(time_series))
-    
+            # Error handling: fall back to simple method if wavelet fails
+            print(f"Warning: DWT failed, using raw sum. Error: {e}")
+            return float(np.sum(time_series))
+
     def assess_batch(self, time_series_list: List[np.ndarray]) -> np.ndarray:
         """
-        Assess popularity for multiple items
-        
+        Evaluate a batch of time series.
+
         Args:
-            time_series_list: List of 1D arrays
-            
+            time_series_list: List of time series arrays.
+
         Returns:
-            Array of popularity scores
+            np.ndarray: Array of calculated scores.
         """
         return np.array([self.assess_single(ts) for ts in time_series_list])
-    
-    def decompose(self, time_series: np.ndarray) -> Dict:
-        """
-        Perform DWT decomposition and return detailed results
-        
-        Args:
-            time_series: Input time series
-            
-        Returns:
-            Dictionary with decomposition results
-        """
-        min_length = 2 ** self.level
-        if len(time_series) < min_length:
-            padded = np.zeros(min_length)
-            padded[-len(time_series):] = time_series
-            time_series = padded
-        
-        coeffs = pywt.wavedec(time_series, self.wavelet, level=self.level, mode=self.mode)
-        
-        return {
-            'approximation': coeffs[0],
-            'details': coeffs[1:],
-            'levels': len(coeffs) - 1,
-            'wavelet': self.wavelet,
-            'mode': self.mode
-        }
-    
-    def get_feature_vector(self, time_series: np.ndarray) -> np.ndarray:
-        """
-        Extract feature vector from DWT coefficients
-        
-        Args:
-            time_series: Input time series
-            
-        Returns:
-            Feature vector
-        """
-        decomp = self.decompose(time_series)
-        
-        features = []
-        
-        # Approximation coefficient statistics
-        approx = decomp['approximation']
-        features.extend([
-            np.mean(approx),
-            np.std(approx),
-            np.max(approx),
-            np.min(approx),
-        ])
-        
-        # Detail coefficient statistics for each level
-        for detail in decomp['details']:
-            features.extend([
-                np.mean(np.abs(detail)),
-                np.std(detail),
-                np.max(np.abs(detail)),
-            ])
-        
-        return np.array(features)
-    
+
     def get_metadata(self) -> Dict:
-        """Get method metadata"""
+        """
+        Get method metadata information for saving in log files.
+
+        Returns:
+            Dict: Dictionary containing set parameters (wavelet name, level, beta coefficient).
+        """
         return {
             'name': self.name,
-            'class': self.__class__.__name__,
             'wavelet': self.wavelet,
             'level': self.level,
-            'mode': self.mode,
-            'min_signal_length': 2 ** self.level,
+            'detail_weight': self.detail_weight,
+            'strategy': 'Trend (cA_L) + Weighted Shock (cD_1)'
         }
-
-
-def compute_af_formula(coeffs: List[np.ndarray]) -> float:
-    """
-    Compute Access Frequency formula on wavelet coefficients
-    
-    Args:
-        coeffs: List of coefficient arrays from wavelet decomposition
-        
-    Returns:
-        AF score
-    """
-    score = 0.0
-    for i, coeff in enumerate(coeffs):
-        weight = 2 ** (-i)
-        level_score = np.mean(np.abs(coeff))
-        score += weight * level_score
-    
-    return score

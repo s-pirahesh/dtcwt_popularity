@@ -1,6 +1,6 @@
 """
 DTCWT-based Popularity Assessment (Contribution 2)
-Main Innovation: Dual-Tree Complex Wavelet Transform for popularity measurement
+Strategy: Stable Trend + Shock Detection using Dual-Tree Complex Wavelet Transform
 """
 import numpy as np
 import dtcwt
@@ -8,298 +8,175 @@ from typing import List, Dict, Optional
 from config import WAVELET_CONFIG
 from .base_method import BaseMethod
 
-
 class DTCWTAssessment(BaseMethod):
     """
-    DTCWT-based popularity assessment method
-    
-    Innovation: Replace DWT with DTCWT for better shift invariance
-    Claim: 10-15% improvement over DWT due to stability and directional selectivity
-    
-    Key Advantages of DTCWT:
-    1. Approximate shift invariance
-    2. Better directional selectivity
-    3. Reduced aliasing
-    4. Perfect reconstruction
+    Popularity assessment method based on Dual-Tree Complex Wavelet Transform (DTCWT).
+
+    This method is proposed as the main contribution in this research to overcome
+    the limitations of conventional DWT.
+
+    Key advantages over DWT:
+    1. Shift Invariance:
+       Minor changes in data arrival time (e.g., short time delay) do not cause
+       drastic changes in coefficient energy. This property produces "stable"
+       popularity scores without flickering.
+
+    2. Richer Information (Magnitude & Phase):
+       Using complex numbers ($z = x + iy$) allows us to calculate the "true energy"
+       of oscillations using magnitude ($|z|$), without the direction of oscillation
+       (positive/negative) having a negative impact.
+
+    Combined Strategy (Stable Trend + Shock):
+    This class calculates the score based on the combination of two components:
+    1. Stable Trend Component: magnitude of approximation coefficients at final level ($|Lowpass|$).
+    2. Precise Shock Component: magnitude of detail coefficients at level 1 ($|Highpass_1|$).
+
+    Final Formula:
+        Score = AF(|Trend|) + β * AF(|Shock|)
     """
     
-    def __init__(self, biort: str = None, qshift: str = None, level: int = None):
+    def __init__(self, biort: str = None, qshift: str = None, level: int = None,
+                 detail_weight: float = 0.1):
         """
-        Initialize DTCWT assessment
-        
+        Initialize DTCWT transform and strategy parameters.
+
         Args:
-            biort: Biorthogonal filters for level 1 (default: near_sym_a)
-            qshift: Q-shift filters for levels >= 2 (default: qshift_a)
-            level: Decomposition level (default: 3)
+            biort (str): Name of biorthogonal filters for the first stage (default: 'near_sym_a').
+            qshift (str): Name of q-shift filters for higher stages (default: 'qshift_a').
+            level (int): Decomposition level. Usually 3 or 4.
+            detail_weight (float): Beta coefficient (β) that determines the weight of the
+                                   impact of instantaneous shocks (Highpass). Default is 0.1.
         """
-        # Initialize parent class
-        super().__init__(name="DTCWT+AF")
+        super().__init__(name="DTCWT+AF (Stable Trend)")
         
         self.biort = biort or WAVELET_CONFIG['dtcwt_biort']
         self.qshift = qshift or WAVELET_CONFIG['dtcwt_qshift']
         self.level = level or WAVELET_CONFIG['decomposition_level']
-        
-        # Initialize DTCWT transform
+        self.detail_weight = detail_weight
+
+        # Create 1D transform object from dtcwt library
         self.transform = dtcwt.Transform1d(biort=self.biort, qshift=self.qshift)
     
+    def _apply_weighted_af_magnitude(self, complex_coeffs: np.ndarray) -> float:
+        """
+        Calculate AF score (Access Frequency) on the magnitude of complex coefficients.
+
+        This method first calculates the magnitude of coefficients ($|z|$) and then
+        applies temporal weighting.
+
+        Formula:
+            Mag[t] = sqrt(Re[t]^2 + Im[t]^2)
+            Score = Σ (Mag[t-i] * 2^-i)
+
+        Args:
+            complex_coeffs (np.ndarray): Array of complex coefficients (Complex64 or Complex128).
+
+        Returns:
+            float: Weighted energy score.
+        """
+        if len(complex_coeffs) == 0:
+            return 0.0
+
+        # 1. Calculate magnitude for each complex coefficient
+        # This removes phase information and keeps only the signal "intensity"
+        magnitudes = np.abs(complex_coeffs)
+
+        # 2. Reverse the array (index 0 = most recent time)
+        reversed_mags = magnitudes[::-1]
+
+        score = 0.0
+        # 3. Apply temporal weighting (Time Decay)
+        for i, val in enumerate(reversed_mags):
+            weight = 2.0 ** (-i)
+            score += weight * val
+
+        return float(score)
+
     def assess_single(self, time_series: np.ndarray) -> float:
         """
-        Assess popularity using DTCWT coefficients
-        
+        Calculate final DTCWT popularity score for a time series.
+
+        Execution steps:
+        1. Precise Padding: DTCWT requires specific data lengths (power of 2).
+        2. Transform: Apply complex wavelet transform up to specified level.
+        3. Extraction: Extract Trend (Lowpass) and Shock (Highpass L1) coefficients.
+        4. Calculation: Calculate magnitude and apply AF on each component.
+        5. Fusion: Combine scores with beta coefficient.
+
         Args:
-            time_series: 1D array of access counts
-            
+            time_series (np.ndarray): Time series of visits.
+
         Returns:
-            Popularity score
+            float: Popularity score.
         """
-        # Handle edge cases
         if len(time_series) == 0:
             return 0.0
-        
-        # DTCWT requires length to be multiple of 2^(level+1)
-        min_length = 2 ** (self.level + 1)
-        
-        # Pad to next power of 2 for better transform
-        if len(time_series) < min_length:
-            # Pad to min_length
-            target_length = min_length
+
+        # 1. Data length management (Strict Padding for DTCWT)
+        # dtcwt library requires input length to be a power of 2 for optimal performance.
+        # Also, for decomposition up to level L, length must be at least 2^(L+1).
+        min_len = 2 ** (self.level + 1)
+        curr_len = len(time_series)
+
+        # Find the nearest power of 2 that is >= current length
+        target_len = max(min_len, 2 ** int(np.ceil(np.log2(curr_len))))
+
+        if curr_len < target_len:
+            # Padding is done by repeating edge values on the left (past).
+            # This ensures actual data stays on the right (present time) without index confusion.
+            pad_width = target_len - curr_len
+            ts_to_process = np.pad(time_series, (pad_width, 0), mode='edge')
         else:
-            # Pad to next power of 2
-            target_length = 2 ** int(np.ceil(np.log2(len(time_series))))
-            # But ensure it's at least min_length
-            target_length = max(target_length, min_length)
-        
-        if len(time_series) < target_length:
-            # Pad with reflection to preserve signal characteristics
-            pad_width = target_length - len(time_series)
-            # Use symmetric padding (better than zero padding)
-            if len(time_series) > 1:
-                time_series = np.pad(time_series, (0, pad_width), mode='edge')
-            else:
-                time_series = np.pad(time_series, (0, pad_width), mode='constant')
-        
+            ts_to_process = time_series
+
         try:
-            # Perform DTCWT forward transform
-            pyramid = self.transform.forward(time_series, nlevels=self.level)
-            
-            # Verify pyramid structure
-            if not hasattr(pyramid, 'lowpass'):
-                # Transform failed, use fallback
-                return float(np.mean(time_series))
-            
-            score = 0.0
-            
-            # 1. Score from approximation coefficients (lowpass)
-            approx = pyramid.lowpass
-            if approx is not None and len(approx) > 0:
-                weight_approx = 2 ** 0
-                score += weight_approx * np.mean(np.abs(approx))
-            
-            # 2. Score from detail coefficients (highpass)
-            if hasattr(pyramid, 'highpass') and pyramid.highpass is not None:
-                for i, detail_level in enumerate(pyramid.highpass):
-                    if detail_level is not None and len(detail_level) > 0:
-                        weight = 2 ** (-(i + 1))
-                        magnitude = np.abs(detail_level)
-                        level_score = np.mean(magnitude)
-                        score += weight * level_score
-            
-            # If score is still 0, use mean as fallback
-            if score == 0.0:
-                score = float(np.mean(time_series))
-            
-            return float(score)
-        
+            # 2. DTCWT Transform (Forward Transform)
+            # Output pyramid contains:
+            # - pyramid.lowpass: array of final approximation coefficients
+            # - pyramid.highpasses: list of detail coefficient tuples (from level 1 to Level)
+            pyramid = self.transform.forward(ts_to_process, nlevels=self.level)
+
+            # 3. Extract Trend score (Lowpass)
+            # These coefficients represent the main and smoothed trend.
+            trend_score = 0.0
+            if pyramid.lowpass is not None:
+                trend_score = self._apply_weighted_af_magnitude(pyramid.lowpass)
+
+            # 4. Extract Shock score (Highpass Level 1)
+            # pyramid.highpasses[0] corresponds to level 1 (high frequency).
+            # This level is most sensitive to sudden changes (spikes).
+            shock_score = 0.0
+            if pyramid.highpasses and len(pyramid.highpasses) > 0:
+                # Note: In DTCWT 1D, highpass coefficients are an array (not tuple like 2D)
+                shock_coeffs = pyramid.highpasses[0]
+                shock_score = self._apply_weighted_af_magnitude(shock_coeffs)
+
+            # 5. Final fusion
+            # Shock score with small coefficient (e.g., 0.1) is added to only affect critical moments.
+            final_score = trend_score + (self.detail_weight * shock_score)
+
+            return float(final_score)
+
         except Exception as e:
-            # Fallback to simple mean if transform fails
-            # Don't print warning here to avoid spam
-            return float(np.mean(time_series))
-    
-    def batch_assess(self, time_series_list: List[np.ndarray]) -> np.ndarray:
+            # Fallback mechanism if complex calculations fail
+            print(f"Warning: DTCWT failed, fallback to raw sum. Error: {e}")
+            return float(np.sum(time_series))
+
+    def assess_batch(self, time_series_list: List[np.ndarray]) -> np.ndarray:
         """
-        Assess popularity for multiple items
-        
-        Args:
-            time_series_list: List of time series
-            
-        Returns:
-            Array of popularity scores
+        Evaluate a batch of time series.
         """
-        scores = np.array([self.assess_single(ts) for ts in time_series_list])
-        return scores
-    
-    def decompose(self, time_series: np.ndarray) -> Dict:
+        return np.array([self.assess_single(ts) for ts in time_series_list])
+
+    def get_metadata(self) -> Dict:
         """
-        Get detailed DTCWT decomposition
-        
-        Args:
-            time_series: Input time series
-            
-        Returns:
-            Dictionary with lowpass and highpass coefficients
+        Get method metadata information for logging.
         """
-        # Ensure minimum length
-        min_length = 2 ** (self.level + 1)
-        if len(time_series) < min_length:
-            padded = np.zeros(min_length)
-            padded[-len(time_series):] = time_series
-            time_series = padded
-        
-        pyramid = self.transform.forward(time_series, nlevels=self.level)
-        
-        result = {
-            'lowpass': pyramid.lowpass,  # Approximation coefficients
-            'highpass': pyramid.highpasses,  # Detail coefficients (complex)
-            'levels': len(pyramid.highpasses),
+        return {
+            'name': self.name,
             'biort': self.biort,
             'qshift': self.qshift,
+            'level': self.level,
+            'detail_weight': self.detail_weight,
+            'strategy': 'Stable Trend (|Lowpass|) + Weighted Shock (|Highpass_1|)'
         }
-        
-        # Add magnitude and phase information for complex coefficients
-        result['magnitudes'] = [np.abs(h) for h in pyramid.highpasses]
-        result['phases'] = [np.angle(h) for h in pyramid.highpasses]
-        
-        return result
-    
-    def get_feature_vector(self, time_series: np.ndarray) -> np.ndarray:
-        """
-        Extract comprehensive feature vector from DTCWT
-        
-        Features include:
-        - Approximation statistics
-        - Magnitude statistics at each level
-        - Phase statistics (optional)
-        
-        Args:
-            time_series: Input time series
-            
-        Returns:
-            Feature vector
-        """
-        decomp = self.decompose(time_series)
-        
-        features = []
-        
-        # Approximation (lowpass) features
-        approx = decomp['lowpass']
-        features.extend([
-            np.mean(approx),
-            np.std(approx),
-            np.max(approx),
-            np.min(approx),
-        ])
-        
-        # Detail (highpass) features - magnitude based
-        for magnitude in decomp['magnitudes']:
-            features.extend([
-                np.mean(magnitude),
-                np.std(magnitude),
-                np.max(magnitude),
-                np.median(magnitude),
-            ])
-        
-        # Optional: Phase-based features (for temporal pattern detection)
-        # Uncomment if phase information is important
-        # for phase in decomp['phases']:
-        #     features.extend([
-        #         np.mean(np.cos(phase)),  # Real part of exp(i*phase)
-        #         np.mean(np.sin(phase)),  # Imaginary part
-        #     ])
-        
-        return np.array(features)
-    
-    def get_directional_features(self, time_series: np.ndarray) -> Dict[str, float]:
-        """
-        Extract directional features from DTCWT
-        
-        DTCWT provides 6 directional subbands (unlike DWT)
-        This can capture trend direction and patterns
-        
-        Args:
-            time_series: Input time series
-            
-        Returns:
-            Dictionary of directional statistics
-        """
-        decomp = self.decompose(time_series)
-        
-        directional_features = {}
-        
-        # Analyze each level's directionality using complex coefficients
-        for i, highpass in enumerate(decomp['highpass']):
-            # Real and imaginary parts represent different directions
-            real_energy = np.sum(np.real(highpass) ** 2)
-            imag_energy = np.sum(np.imag(highpass) ** 2)
-            total_energy = real_energy + imag_energy
-            
-            if total_energy > 0:
-                directional_features[f'level_{i+1}_real_ratio'] = real_energy / total_energy
-                directional_features[f'level_{i+1}_imag_ratio'] = imag_energy / total_energy
-            else:
-                directional_features[f'level_{i+1}_real_ratio'] = 0.5
-                directional_features[f'level_{i+1}_imag_ratio'] = 0.5
-        
-        return directional_features
-    
-    def compare_with_dwt(self, time_series: np.ndarray) -> Dict:
-        """
-        Compare DTCWT vs DWT for analysis
-        
-        Args:
-            time_series: Input time series
-            
-        Returns:
-            Comparison statistics
-        """
-        from .dwt_assessment import DWTAssessment
-        
-        # Get DTCWT score
-        dtcwt_score = self.assess_single(time_series)
-        
-        # Get DWT score
-        dwt = DWTAssessment()
-        dwt_score = dwt.assess_single(time_series)
-        
-        # Analyze shift invariance
-        # Shift the signal and compute scores again
-        shifted = np.roll(time_series, 1)
-        dtcwt_shifted = self.assess_single(shifted)
-        dwt_shifted = dwt.assess_single(shifted)
-        
-        # Compute stability (smaller change = better shift invariance)
-        dtcwt_stability = abs(dtcwt_score - dtcwt_shifted) / (dtcwt_score + 1e-10)
-        dwt_stability = abs(dwt_score - dwt_shifted) / (dwt_score + 1e-10)
-        
-        return {
-            'dtcwt_score': dtcwt_score,
-            'dwt_score': dwt_score,
-            'dtcwt_stability': dtcwt_stability,
-            'dwt_stability': dwt_stability,
-            'improvement': (dtcwt_score - dwt_score) / (dwt_score + 1e-10),
-        }
-
-
-def compute_dtcwt_af_formula(lowpass: np.ndarray, 
-                             highpass: List[np.ndarray]) -> float:
-    """
-    Compute AF formula adapted for DTCWT coefficients
-    
-    Args:
-        lowpass: Approximation coefficients
-        highpass: List of detail coefficients (complex)
-        
-    Returns:
-        DTCWT-AF score
-    """
-    score = 0.0
-    
-    # Approximation contribution
-    score += np.mean(np.abs(lowpass))
-    
-    # Detail contributions (weighted by level)
-    for i, detail in enumerate(highpass):
-        weight = 2 ** (-(i + 1))
-        magnitude = np.abs(detail)
-        score += weight * np.mean(magnitude)
-    
-    return score
