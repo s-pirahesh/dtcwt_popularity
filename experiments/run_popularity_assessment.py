@@ -317,18 +317,18 @@ def run_temporal_evaluation(dataset_name: str,
         print("  Crash-safe (continuous saving)")
         print("  Method-specific window sizes\n")
 
-        data, items = data_loader.load_for_temporal_evaluation(config)
+        # Load FULL dataset (no item filtering) — incremental evaluator
+        # will select items itself using the same logic as TemporalEvaluator,
+        # so both modes always work with identical item sets.
+        full_data = data_loader.load_data()
 
-        # config.__post_init__ already created output_dir with the correct
-        # structured name: results/<dataset>/w<W>_h<H>_n<N>_<sel>_<TIMESTAMP>/
-        # Use it directly so the directory naming is identical to temporal mode.
         storage_path = config.output_dir
 
         evaluator = IncrementalTemporalEvaluator(
             config=config,
             methods=methods_dict,
-            data=data,
-            items=items,
+            data=full_data,
+            items=None,          # ignored; evaluator re-selects internally
             storage_path=storage_path
         )
     else:

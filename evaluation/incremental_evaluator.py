@@ -59,28 +59,47 @@ class IncrementalTemporalEvaluator:
                  config: EvaluationConfig,
                  methods: Dict,
                  data: pd.DataFrame,
-                 items: np.ndarray,
+                 items,                   # ignored — evaluator re-selects internally
                  storage_path: Path):
         """
         Args:
-            config: EvaluationConfig instance
-            methods: {method_name: method_instance}
-            data: Full dataset (may include pre-range rows)
-            items: Array of item_ids to evaluate
+            config:       EvaluationConfig instance
+            methods:      {method_name: method_instance}
+            data:         FULL dataset — all items, all dates (including pre-range).
+                          Pass data_loader.load_data() directly, NOT the filtered
+                          output of load_for_temporal_evaluation().
+            items:        Ignored. Items are always re-derived here using the same
+                          logic as TemporalEvaluator so both modes are identical.
             storage_path: Root path for all output files
         """
         self.config = config
         self.methods = methods
         self.data = data
-        self.items = items
         self.storage_path = Path(storage_path)
 
-        # --- Incremental storage (UNCHANGED) ----------------------------------
-        self.storage = IncrementalStorage(self.storage_path, buffer_size=1000)
+        # --- Temporal range (must come FIRST — used by item selection) --------
+        self.data_start = (pd.to_datetime(config.start_date)
+                           if config.start_date else self.data['timestamp'].min())
+        self.data_end   = (pd.to_datetime(config.end_date)
+                           if config.end_date else self.data['timestamp'].max())
 
-        # --- Stratification (MUST NOT be deleted) -----------------------------
+        # --- Stratification (must come BEFORE item selection) -----------------
         self.stratification = StratificationSystem(config)
         self._initialize_stratification()
+
+        # --- Item selection: EXACT copy of temporal_evaluator logic -----------
+        # The 'items' argument is kept for API compatibility but NOT used.
+        # We always re-derive items here so both modes select identically.
+        self.items = self._select_items_from_data()
+
+        # --- Trim data to selected items (mirrors temporal_evaluator.prepare_data) ---
+        # This is critical for performance: keeps only rows for the 10 selected items
+        # instead of filtering the full dataset on every window iteration.
+        # Also ensures self.data is IDENTICAL to what temporal_evaluator uses.
+        self.data = self.data[self.data['item_id'].isin(self.items)].copy()
+
+        # --- Incremental storage ----------------------------------------------
+        self.storage = IncrementalStorage(self.storage_path, buffer_size=1000)
 
         # --- Frozen Evaluation Protocol additions -----------------------------
         # Layer 4: Robustness scenario
@@ -89,12 +108,6 @@ class IncrementalTemporalEvaluator:
         # Layer 3: per-method top-K state for RSI computation
         #   prev_top_k[method_name][k] -> List[int] of item-position indices
         self.prev_top_k: Dict[str, Dict[int, List[int]]] = defaultdict(dict)
-
-        # --- Temporal range ---------------------------------------------------
-        self.data_start = (pd.to_datetime(config.start_date)
-                           if config.start_date else self.data['timestamp'].min())
-        self.data_end   = (pd.to_datetime(config.end_date)
-                           if config.end_date else self.data['timestamp'].max())
 
         # --- Time-slot helper (granularity-aware window sizing) --------------
         # This is the same helper used by temporal_evaluator.  Without it,
@@ -341,10 +354,12 @@ class IncrementalTemporalEvaluator:
                                     try:
                                         if hasattr(method, 'assess_single'):
                                             ns = float(method.assess_single(noisy_ts))
-                                        elif hasattr(method, 'assess'):
-                                            ns = float(method.assess(noisy_ts))
+                                        elif hasattr(method, 'calculate'):
+                                            ns = float(method.calculate(noisy_ts))
                                         else:
-                                            ns = float(np.mean(noisy_ts))
+                                            ns = float(method.predict(
+                                                pd.DataFrame({'count': noisy_ts})
+                                            ))
                                     except Exception:
                                         continue
 
@@ -606,17 +621,88 @@ class IncrementalTemporalEvaluator:
     # Stratification initialisation (UNCHANGED)
     # ==========================================================================
 
-    def _initialize_stratification(self):
-        """Compute stratification thresholds from the full dataset."""
-        item_counts = self.data.groupby('item_id')['count'].sum()
+    # ==========================================================================
+    # Item selection — EXACT copy of temporal_evaluator._select_items_from_data
+    # ==========================================================================
 
-        if self.config.strata_thresholds is None:
+    def _select_items_from_data(self) -> np.ndarray:
+        """
+        Select items using the same logic as TemporalEvaluator._select_items_from_data.
+        Uses eval_range data only for item counting, then keeps all dates for selected items.
+        """
+        # Step 1: filter to eval range only (for counting, same as temporal)
+        eval_data = self.data[
+            (self.data['timestamp'] >= self.data_start) &
+            (self.data['timestamp'] <= self.data_end)
+        ]
+
+        # Step 2: sum counts per item in eval range, apply min_observations filter
+        item_counts = eval_data.groupby('item_id')['count'].sum()
+        item_counts = item_counts[item_counts >= self.config.min_observations]
+
+        if self.config.num_items is None:
+            return item_counts.index.values
+        elif self.config.item_selection == 'top':
+            return item_counts.nlargest(self.config.num_items).index.values
+        elif self.config.item_selection == 'random':
+            n = min(self.config.num_items, len(item_counts))
+            rng = np.random.RandomState(42)
+            return rng.choice(item_counts.index.values, size=n, replace=False)
+        elif self.config.item_selection == 'stratified':
+            return self._stratified_sampling(item_counts, self.config.num_items)
+        else:
+            raise ValueError(f"Invalid item_selection: {self.config.item_selection}")
+
+    def _stratified_sampling(self, item_counts: pd.Series, n: int) -> np.ndarray:
+        """
+        EXACT copy of temporal_evaluator._stratified_sampling.
+        Proportional stratified sampling with fixed seed=42.
+        """
+        rng = np.random.RandomState(42)
+
+        strata = self.stratification.stratify_items(
+            pd.DataFrame({'item_id': item_counts.index, 'count': item_counts.values})
+        )
+        total_items = sum(len(items) for items in strata.values())
+        selected = []
+        for _, stratum_items in strata.items():
+            if len(stratum_items) == 0:
+                continue
+            ratio    = len(stratum_items) / total_items
+            n_sample = min(int(n * ratio), len(stratum_items))
+            chosen   = rng.choice(stratum_items, size=n_sample, replace=False)
+            selected.extend(chosen.tolist())
+
+        # Fill up to n if rounding left gaps
+        all_items = [item for items in strata.values() for item in items]
+        remaining = [i for i in all_items if i not in set(selected)]
+        if len(selected) < n and remaining:
+            extra = rng.choice(remaining,
+                               size=min(n - len(selected), len(remaining)),
+                               replace=False)
+            selected.extend(extra.tolist())
+
+        return np.array(selected[:n])
+
+    def _initialize_stratification(self):
+        """
+        Compute stratification thresholds — mirrors temporal_evaluator:
+        - If strata_thresholds in config: use fixed values
+        - Otherwise: auto-compute from EVAL RANGE (not full dataset)
+        """
+        if self.config.strata_thresholds is not None:
+            self.stratification.thresholds = list(self.config.strata_thresholds)
+        else:
+            # Use eval range only — same as temporal which calls stratify_items(eval_data)
+            eval_data = self.data[
+                (self.data['timestamp'] >= self.data_start) &
+                (self.data['timestamp'] <= self.data_end)
+            ]
+            item_counts = eval_data.groupby('item_id')['count'].sum()
             q1 = item_counts.quantile(0.25)
             q2 = item_counts.quantile(0.50)
             q3 = item_counts.quantile(0.75)
             self.stratification.thresholds = [q1, q2, q3]
-        else:
-            self.stratification.thresholds = self.config.strata_thresholds
 
         print(f"Stratification thresholds initialized:")
         print(f"  Cold-start : < {self.stratification.thresholds[0]:.0f}")
@@ -632,20 +718,23 @@ class IncrementalTemporalEvaluator:
     # ==========================================================================
 
     def _save_config_json(self):
+        # Use same field names as temporal_evaluator (config.save_config) for
+        # consistent metadata in compare_experiments.py reports.
         config_dict = {
-            'dataset_name':       self.config.dataset_name if hasattr(self.config, 'dataset_name') else 'unknown',
+            'dataset_name':       getattr(self.config, 'dataset_name', 'unknown'),
             'window_size':        self.config.window_size,
             'prediction_horizon': self.config.prediction_horizon,
-            'time_granularity':   self.config.time_granularity if hasattr(self.config, 'time_granularity') else 'daily',
+            'time_granularity':   getattr(self.config, 'time_granularity', 'daily'),
             'num_items':          len(self.items),
-            'item_selection':     self.config.item_selection if hasattr(self.config, 'item_selection') else 'top',
+            'item_selection':     getattr(self.config, 'item_selection', 'top'),
             'min_observations':   self.config.min_observations,
             'start_date':         str(self.data_start.date()),
             'end_date':           str(self.data_end.date()),
-            'use_pre_range_data': self.config.use_pre_range_data if hasattr(self.config, 'use_pre_range_data') else True,
-            'methods':            list(self.methods.keys()),
+            'use_pre_range_data': getattr(self.config, 'use_pre_range_data', True),
+            'methods':            list(self.methods.keys()),   # now populated
             'strata_names':       self.config.strata_names,
-            'k_values':           self.K_VALUES,
+            'strata_thresholds':  getattr(self.config, 'strata_thresholds', None),
+            'k_values':           self.K_VALUES,              # same key as temporal
         }
         config_path = self.storage_path / 'metadata' / 'config.json'
         with open(config_path, 'w', encoding='utf-8') as f:

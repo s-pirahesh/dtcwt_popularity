@@ -193,13 +193,22 @@ class TemporalEvaluator:
             return item_counts.nlargest(self.config.num_items).index.values
         elif self.config.item_selection == 'random':
             n = min(self.config.num_items, len(item_counts))
-            return np.random.choice(item_counts.index.values, size=n, replace=False)
+            rng = np.random.RandomState(42)   # fixed seed = reproducible across runs
+            return rng.choice(item_counts.index.values, size=n, replace=False)
         elif self.config.item_selection == 'stratified':
             return self._stratified_sampling(item_counts, self.config.num_items)
         else:
             raise ValueError(f"Invalid item_selection: {self.config.item_selection}")
 
     def _stratified_sampling(self, item_counts: pd.Series, n: int) -> np.ndarray:
+        """
+        Proportional stratified sampling with a fixed seed (42) so that
+        temporal and incremental modes always select the same items.
+        Uses 4 popularity quartiles (cold_start / low / medium / high).
+        """
+        rng = np.random.RandomState(42)   # deterministic — matches loader random_state=42
+
+        # Re-use stratification thresholds already set on self.stratification
         strata = self.stratification.stratify_items(
             pd.DataFrame({'item_id': item_counts.index, 'count': item_counts.values})
         )
@@ -210,8 +219,19 @@ class TemporalEvaluator:
                 continue
             ratio = len(stratum_items) / total_items
             n_sample = min(int(n * ratio), len(stratum_items))
-            selected.extend(np.random.choice(stratum_items, size=n_sample, replace=False))
-        return np.array(selected)
+            chosen = rng.choice(stratum_items, size=n_sample, replace=False)
+            selected.extend(chosen.tolist())
+
+        # Fill up to n if rounding left gaps
+        all_items = [item for items in strata.values() for item in items]
+        remaining = [i for i in all_items if i not in set(selected)]
+        if len(selected) < n and remaining:
+            extra = rng.choice(remaining,
+                               size=min(n - len(selected), len(remaining)),
+                               replace=False)
+            selected.extend(extra.tolist())
+
+        return np.array(selected[:n])
 
     # ==========================================================================
     # Top-level evaluate()
