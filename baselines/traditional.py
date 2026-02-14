@@ -75,8 +75,21 @@ class TraditionalBaselines:
     @staticmethod
     def lru_score(time_series: np.ndarray) -> float:
         """
-        Least Recently Used (LRU)
+        Least Recently Used (LRU) — volume-weighted recency score.
         Ref [33]: Based on time since last access.
+
+        The original formulation 1/(dist+1) is recency-only.  When every
+        item was active in the most recent slot (dist=0 for all), every
+        score equals 1.0 — a constant array — making Spearman/Kendall
+        undefined (ConstantInputWarning).
+
+        Fix: multiply the recency weight by the mean non-zero count in the
+        window.  This preserves the LRU semantic (recent access counts more)
+        while adding enough differentiation via volume to avoid ties.
+
+        Formula:  score = mean_nonzero_volume * 1/(dist+1)
+          - dist         = slots since last non-zero observation
+          - mean_nonzero = mean of count values where count > 0
         """
         if len(time_series) == 0:
             return 0.0
@@ -86,12 +99,16 @@ class TraditionalBaselines:
         if len(nonzero_indices) == 0:
             return 0.0
 
-        # Distance from last access to present time (last index)
-        last_access_idx = nonzero_indices[-1]
+        # Recency component: 1/(distance_from_last_access + 1)
+        last_access_idx  = nonzero_indices[-1]
         current_time_idx = len(time_series) - 1
-        dist = current_time_idx - last_access_idx
+        dist             = current_time_idx - last_access_idx
+        recency_weight   = 1.0 / (dist + 1.0)
 
-        return 1.0 / (dist + 1.0)
+        # Volume component: mean of active (non-zero) slots
+        mean_volume = float(np.mean(time_series[nonzero_indices]))
+
+        return mean_volume * recency_weight
 
     @staticmethod
     def batch_assess_all(time_series_list: List[np.ndarray]) -> Dict[str, np.ndarray]:
