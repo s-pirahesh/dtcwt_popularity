@@ -1,86 +1,161 @@
-# Quick Reference - وحدت رویه نهایی
+# Quick Reference — Frozen 4-Layer Evaluation Protocol
 
-## 🎯 قوانین ذخیره‌سازی (یک نگاه)
+## 🎯 ساختار ذخیره‌سازی
 
-| نوع | فرمت | تغییرپذیری | حجم |
-|-----|------|-----------|-----|
-| **detailed** | Parquet | ❌ نه | 70 MB |
-| **summary** | Parquet | ❌ نه | 1 MB |
-| **comparison** | CSV/Parquet | ✅ بله | 10 KB |
-| **metadata** | JSON | ❌ نه | 5 KB |
+| دایرکتوری | فرمت | محتوا | حجم تقریبی |
+|-----------|------|-------|------------|
+| `detailed/` | Parquet | امتیازهای تفصیلی per-item | ~70 MB/method |
+| `summary/` | Parquet | خلاصه per-stratum | ~1 MB/method |
+| `protocol/` | CSV/Parquet | **متریک‌های 4-Layer per-window** | ~5 MB/method |
+| `comparison/` | CSV | مقایسه نهایی روش‌ها | ~10 KB |
+| `metadata/` | JSON | پیکربندی و آمار اجرا | ~5 KB |
 
 ---
 
 ## 🚀 دستورات اصلی
 
+### ۱. اجرای ارزیابی
 ```bash
-# شبیه‌سازی (CSV - پیش‌فرض)
-python run_popularity_assessment.py movielens --num-items 100
-
-# شبیه‌سازی (Parquet)
-python run_popularity_assessment.py movielens --num-items 100 --format parquet
-
-# با فیلتر تاریخ (1 سال)
-python run_popularity_assessment.py movielens \
-    --num-items 1000 \
-    --start-date 2023-01-01 \
-    --end-date 2023-12-31
-
-# تحلیل (خودکار)
-python analyze_results.py --list movielens
-python analyze_results.py RESULTS_PATH
-
-# نمایش
-python show_results.py RESULTS_PATH --both
-
-# تست
-python experiments/test_unified_storage.py
-```
-
----
-
-## 🗓️ فیلتر تاریخ (جدید!)
-
-```bash
-# تست سریع (1 ماه - 30 دقیقه)
-python run_popularity_assessment.py movielens \
+# تست سریع (100 آیتم، حافظه‌کارآمد)
+python experiments/run_popularity_assessment.py movielens \
     --num-items 100 \
     --start-date 2023-08-01 \
-    --end-date 2023-08-31
+    --end-date 2023-08-31 \
+    --incremental
 
-# یک سه‌ماهه (2 ساعت)
-python run_popularity_assessment.py movielens \
+# اجرای کامل
+python experiments/run_popularity_assessment.py movielens \
+    --num-items 1000 \
+    --start-date 2023-01-01 \
+    --end-date 2023-12-31 \
+    --incremental
+
+# K values سفارشی (پیش‌فرض: 5 10 20)
+python experiments/run_popularity_assessment.py movielens \
     --num-items 500 \
-    --start-date 2023-01-01 \
-    --end-date 2023-03-31
+    --k-list 5 10 20 50
 
-# یک سال کامل (8 ساعت)
-python run_popularity_assessment.py movielens \
-    --num-items 1000 \
-    --start-date 2023-01-01 \
-    --end-date 2023-12-31
-
-# بدون فیلتر (همه داده‌ها)
-python run_popularity_assessment.py movielens \
-    --num-items 1000
+# فقط روش‌های خاص
+python experiments/run_popularity_assessment.py movielens \
+    --num-items 500 \
+    --methods WSPI AF DTCWT+AF
 ```
 
-### محاسبه تعداد Windows:
+### ۲. تحلیل نتایج
+```bash
+# لیست run های موجود
+python experiments/analyze_results.py --list movielens
+
+# نمایش متریک‌های از پیش محاسبه‌شده (پیش‌فرض، سریع)
+python experiments/analyze_results.py RESULTS_PATH
+
+# بازمحاسبه کامل 4-Layer از raw scores
+python experiments/analyze_results.py RESULTS_PATH --recompute
+
+# بازمحاسبه + ذخیره در protocol/
+python experiments/analyze_results.py RESULTS_PATH --recompute --save-recomputed
+
+# با فیلتر stratum
+python experiments/analyze_results.py RESULTS_PATH \
+    --recompute --stratum high --mode detailed
+
+# نمایش با فیلتر تاریخ
+python experiments/analyze_results.py RESULTS_PATH \
+    --recompute \
+    --start-date 2023-03-01 \
+    --end-date 2023-06-30
 ```
-num_windows = (end_date - start_date) - window_size - horizon + 1
+
+### ۳. نمایش نتایج
+```bash
+# نمایش متنی (فقط از protocol files)
+python experiments/show_results.py RESULTS_PATH
+
+# نمودارها
+python experiments/show_results.py RESULTS_PATH --graphical --show
+
+# هر دو + آمار تفصیلی
+python experiments/show_results.py RESULTS_PATH --both --detailed
 ```
 
 ---
 
-## 📁 ساختار خروجی
+## 📊 متریک‌های 4-Layer Protocol
+
+### Layer 1 — Decision (کیفیت رتبه‌بندی)
+| متریک | توضیح | بهتر |
+|-------|-------|------|
+| `ndcg@5/10/20` | Normalized DCG با log-relevance | بالاتر |
+| `chr@5/10/20` | Cache Hit Ratio (static placement) | بالاتر |
+
+### Layer 2 — Diagnostic (آمار کلی)
+| متریک | توضیح | بهتر |
+|-------|-------|------|
+| `spearman_rho` | همبستگی رتبه‌ای یکنواخت | بالاتر |
+| `kendall_tau` | همبستگی جفت‌های مرتب | بالاتر |
+| `mae` | میانگین خطای مطلق (برای baselineها) | پایین‌تر |
+
+### Layer 3 — Stability (پایداری زمانی)
+| متریک | توضیح | بهتر |
+|-------|-------|------|
+| `rsi@5/10/20` | Ranking Stability Index (Jaccard) | بالاتر |
+
+### Layer 4 — Robustness (مقاومت در برابر نویز)
+| متریک | توضیح | بهتر |
+|-------|-------|------|
+| `robustness_distortion` | میانگین ΔRank پس از تزریق 10× نویز | پایین‌تر |
+
+---
+
+## 🔬 Assessment Methods (Chapter 3)
+
+| Name | Section | Category | Window | min_obs | Formula |
+|------|---------|----------|--------|---------|---------|
+| `AF` | — | Baseline | 7 days | 3 | count sum |
+| `LFU` | — | Baseline | 7 days | 3 | frequency rank |
+| `LRU` | — | Baseline | 7 days | 3 | recency score |
+| `EWMA` | — | Baseline | 7 days | 3 | α=0.3 exponential smooth |
+| `DWT+AF` | 3-2 | Trend-Shock Model | 64 days | 32 | WAF(cA_L) + β·WAF(cD_1) |
+| `DTCWT+AF` | 3-3 | Stable DTCWT Model | 64 days | 32 | WAF(M_trend) + β·WAF(M_shock) |
+| **`WSPI`** | **3-4** | **Proposed** | 64 days | 32 | μ_L·exp(clip(α·S_L + β·R − γ·WE, −3, 3)) |
+
+**WSPI Frozen Parameters (Section 3-4):**
+```python
+HybridAssessment(alpha_slope=1.0, beta_ratio=0.5, gamma_entropy=0.5)
+# alpha=1.0  (trend slope weight)
+# beta=0.5   (energy-ratio weight)
+# gamma=0.5  (wavelet entropy penalty — disorder)
+```
+
+> `Statistical` (skewness/kurtosis) removed — not part of Chapter 3 framework.
+
+---
+
+## 📁 ساختار خروجی کامل
 
 ```
 results/movielens/RUN_NAME/
-├── detailed/*.parquet          [Parquet Only - 70 MB each]
-├── summary/*.parquet           [Parquet Only - 1 MB each]
-├── comparison/*.{csv|parquet}  [Configurable - 10 KB]
-├── metadata/*.json             [JSON Only - 5 KB]
-└── visualization/*.png         [PNG - 1 MB each]
+├── detailed/
+│   ├── AF_scores.parquet
+│   ├── DTCWT+AF_scores.parquet
+│   ├── WSPI_scores.parquet
+│   └── ...
+├── summary/
+│   ├── AF_stratum_summary.parquet
+│   └── ...
+├── protocol/                       ← جدید: 4-Layer per-window
+│   ├── AF_protocol.csv
+│   ├── DTCWT+AF_protocol.csv
+│   ├── WSPI_protocol.csv
+│   └── ...
+├── comparison/
+│   └── method_comparison.csv
+├── metadata/
+│   ├── config.json                 ← شامل k_list, robustness_*
+│   ├── thresholds.json
+│   └── runtime_stats.json
+└── visualization/
+    └── *.png
 ```
 
 ---
@@ -88,244 +163,81 @@ results/movielens/RUN_NAME/
 ## 💻 Python API
 
 ```python
-from evaluation import ResultsAnalyzer
+from evaluation import (
+    ResultsAnalyzer,
+    calculate_ndcg, calculate_hit_rate, calculate_rsi,
+    calculate_rank_distortion, calculate_diagnostics,
+    RobustnessScenario
+)
 
-# بارگذاری
-analyzer = ResultsAnalyzer('results/movielens/...')
+# بارگذاری analyzer
+analyzer = ResultsAnalyzer('results/movielens/RUN_NAME')
 
-# نتایج میانی (Parquet)
-detailed = analyzer.load_detailed_scores('DTCWT+AF')
-summary = analyzer.load_stratum_summary('DTCWT+AF')
+# خواندن protocol metrics از پیش محاسبه‌شده
+proto_df = analyzer.load_protocol_metrics('WSPI')
 
-# نتایج نهایی (خودکار CSV یا Parquet)
-comparison = analyzer.load_method_comparison()
+# بازمحاسبه 4-Layer از raw scores
+recomp_df = analyzer.recompute_protocol_metrics('WSPI',
+    filter_stratum='high', start_date='2023-01-01')
 
-# تحلیل
-metrics = analyzer.calculate_overall_metrics('DTCWT+AF', filter_top_percent=20)
-comp = analyzer.compare_methods(filter_stratum='cold_start')
+# مقایسه همه روش‌ها
+comparison = analyzer.compare_methods(recompute=True)
+
+# تکامل زمانی NDCG@10
+evo = analyzer.get_temporal_evolution('WSPI', metric='ndcg@10')
+
+# مستقیم از توابع metrics
+import numpy as np
+scores  = np.array([...])
+actuals = np.array([...])
+
+ndcg   = calculate_ndcg(scores, actuals, k=10)
+chr10  = calculate_hit_rate(scores, actuals, k=10)
+diag   = calculate_diagnostics(scores, actuals)
+# diag = {'kendall_tau': ..., 'spearman_rho': ..., 'mae': ...}
 ```
 
 ---
 
-## ✅ تست‌ها
-
-```bash
-# تست سیستم اصلی
-python experiments/test_exp2_system.py          # 7/7 PASS ✅
-
-# تست وحدت رویه
-python experiments/test_unified_storage.py      # 3/3 PASS ✅
-
-# تست تحلیل
-python experiments/test_analysis_system.py      # 3/3 PASS ✅
-```
-
----
-
-## 🎨 مثال کامل
-
-```bash
-# 1. شبیه‌سازی با فیلتر تاریخ
-python run_popularity_assessment.py movielens \
-    --num-items 1000 \
-    --start-date 2023-01-01 \
-    --end-date 2023-12-31 \
-    --format csv
-
-# نتیجه:
-# results/movielens/w30_h7_n1000_top_20250202_143052/
-
-# 2. لیست
-python analyze_results.py --list movielens
-
-# 3. تحلیل کامل
-python analyze_results.py results/movielens/w30_h7_n1000_top_20250202_143052/ \
-    --mode detailed \
-    --visualize
-
-# 4. تحلیل با فیلتر
-python analyze_results.py results/movielens/w30_h7_n1000_top_20250202_143052/ \
-    --top-percent 20 \
-    --stratum cold_start
-
-# 5. نمایش
-python show_results.py results/movielens/w30_h7_n1000_top_20250202_143052/ \
-    --both --show
-```
-
----
-
-## 📊 فشرده‌سازی
-
-| داده | CSV | Parquet | صرفه‌جویی |
-|------|-----|---------|----------|
-| 10M records | 1.5 GB | 200 MB | **85%** ✅ |
-| 100 records | 10 KB | 8 KB | 20% |
-
----
-
-## 🔍 عیب‌یابی
-
-### خطا: "pyarrow not found"
-```bash
-pip install pyarrow --break-system-packages
-```
-
-### خطا: "Invalid final_format"
-```bash
-# فقط مجاز: csv, parquet
---format csv     ✅
---format parquet ✅
---format hdf5    ❌
-```
-
-### خطا: "بازه زمانی کافی نیست"
-```bash
-# بازه باید بزرگتر از window_size + horizon باشد
-# مثال خطا:
---start-date 2023-01-01 --end-date 2023-01-20  # 20 روز
---window-size 30                                # نیاز به حداقل 30+7=37 روز
-
-# درست:
---start-date 2023-01-01 --end-date 2023-02-15  # 45 روز ✅
-```
-
----
-
-## 📚 مستندات
-
-1. **UNIFIED_FINAL_SUMMARY.md** - خلاصه تغییرات
-2. **STORAGE_STRATEGY_UNIFIED.md** - استراتژی کامل
-3. **ANALYSIS_GUIDE.md** - راهنمای تحلیل
-4. **DATE_FILTERING_GUIDE.md** - راهنمای فیلتر تاریخ (جدید!)
-5. **WORKFLOW_DIAGRAM.md** - نمودارهای جریان کار
-6. این فایل - Quick Reference
-
----
-
-**همه چیز آماده! وحدت رویه کامل! فیلتر تاریخ کامل!** ✅🎉
-
----
-
-## 📁 ساختار خروجی
-
-```
-results/movielens/RUN_NAME/
-├── detailed/*.parquet          [Parquet Only - 70 MB each]
-├── summary/*.parquet           [Parquet Only - 1 MB each]
-├── comparison/*.{csv|parquet}  [Configurable - 10 KB]
-├── metadata/*.json             [JSON Only - 5 KB]
-└── visualization/*.png         [PNG - 1 MB each]
-```
-
----
-
-## 💻 Python API
+## ⚙️ پیکربندی (EvaluationConfig)
 
 ```python
-from evaluation import ResultsAnalyzer
+from evaluation import get_movielens_config
 
-# بارگذاری
-analyzer = ResultsAnalyzer('results/movielens/...')
-
-# نتایج میانی (Parquet)
-detailed = analyzer.load_detailed_scores('DTCWT+AF')
-summary = analyzer.load_stratum_summary('DTCWT+AF')
-
-# نتایج نهایی (خودکار CSV یا Parquet)
-comparison = analyzer.load_method_comparison()
-
-# تحلیل
-metrics = analyzer.calculate_overall_metrics('DTCWT+AF', filter_top_percent=20)
-comp = analyzer.compare_methods(filter_stratum='cold_start')
+config = get_movielens_config(
+    num_items=1000,
+    window_size=30,
+    # Frozen Evaluation Protocol parameters:
+    k_list=[5, 10, 20],          # K برای NDCG/CHR/RSI
+    robustness_sample_size=50,   # تعداد آیتم‌های تست robustness
+    spike_multiplier=10.0,       # بزرگی نویز (10× میانگین)
+)
 ```
 
 ---
 
-## ✅ تست‌ها
+## 🔄 جریان کار (workflow)
 
-```bash
-# تست سیستم اصلی
-python experiments/test_exp2_system.py          # 7/7 PASS ✅
-
-# تست وحدت رویه
-python experiments/test_unified_storage.py      # 3/3 PASS ✅
-
-# تست تحلیل
-python experiments/test_analysis_system.py      # 3/3 PASS ✅
+```
+1. [run_popularity_assessment.py]  →  detailed/ + summary/ + protocol/
+         ↓ (یک بار، زمان‌بر)
+2. [analyze_results.py]
+   --recompute  →  بازمحاسبه 4-Layer از raw  →  نمایش متنی
+   (default)    →  خواندن protocol/ مستقیم  →  نمایش متنی
+         ↓ (چندبار، سریع)
+3. [show_results.py]              →  نمایش متنی + نمودار
+         ↓ (فقط display)
 ```
 
 ---
 
-## 🎨 مثال کامل
+## ⏱️ زمان اجرای تقریبی
 
-```bash
-# 1. شبیه‌سازی
-python exp2_temporal_evaluation.py movielens \
-    --num-items 1000 \
-    --start-date 2022-01-01 \
-    --end-date 2023-12-31 \
-    --format csv
+| مرحله | برنامه | زمان |
+|-------|--------|------|
+| ارزیابی ۱۰۰۰ آیتم، ۱ سال | `run_popularity_assessment.py` | ~10 ساعت |
+| تحلیل (display-only) | `analyze_results.py` | ~3 ثانیه |
+| تحلیل (recompute) | `analyze_results.py --recompute` | ~30 ثانیه |
+| نمایش | `show_results.py` | ~5 ثانیه |
 
-# نتیجه:
-# results/movielens/w30_h7_n1000_top_20250202_143052/
-
-# 2. لیست
-python analyze_results.py --list movielens
-
-# 3. تحلیل کامل
-python analyze_results.py results/movielens/w30_h7_n1000_top_20250202_143052/ \
-    --mode detailed \
-    --visualize
-
-# 4. تحلیل با فیلتر
-python analyze_results.py results/movielens/w30_h7_n1000_top_20250202_143052/ \
-    --top-percent 20 \
-    --stratum cold_start
-```
-
----
-
-## 📊 فشرده‌سازی
-
-| داده | CSV | Parquet | صرفه‌جویی |
-|------|-----|---------|----------|
-| 10M records | 1.5 GB | 200 MB | **85%** ✅ |
-| 100 records | 10 KB | 8 KB | 20% |
-
----
-
-## 🔍 عیب‌یابی
-
-### خطا: "pyarrow not found"
-```bash
-pip install pyarrow --break-system-packages
-```
-
-### خطا: "Invalid final_format"
-```bash
-# فقط مجاز: csv, parquet
---format csv     ✅
---format parquet ✅
---format hdf5    ❌
-```
-
-### خطا: "File not found"
-```bash
-# چک کنید:
-ls results/movielens/RUN_NAME/detailed/       # باید *.parquet باشد
-ls results/movielens/RUN_NAME/comparison/     # باید *.csv یا *.parquet باشد
-```
-
----
-
-## 📚 مستندات
-
-1. **UNIFIED_FINAL_SUMMARY.md** - خلاصه تغییرات
-2. **STORAGE_STRATEGY_UNIFIED.md** - استراتژی کامل
-3. **ANALYSIS_GUIDE.md** - راهنمای تحلیل
-4. این فایل - Quick Reference
-
----
-
-**همه چیز آماده! وحدت رویه کامل! ✅🎉**
+**یک بار محاسبه، بارها تحلیل!** 🎯

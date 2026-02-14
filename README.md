@@ -1,25 +1,31 @@
-# Content Popularity Prediction using Multi-scale Frequency Decomposition
+# Content Popularity Assessment using Multi-scale Frequency Decomposition
 
 A comprehensive framework for measuring and predicting content popularity in distributed systems using wavelet-based signal processing and graph analysis.
 
 ## Overview
 
-This project implements advanced popularity assessment methods combining:
-- **Wavelet Transforms**: DWT and Dual-Tree Complex Wavelet Transform (DTCWT)  
+This project implements **WSPI** (Wavelet Structural Popularity Index), a novel content popularity assessment method combining:
+- **Dual-Tree Complex Wavelet Transform (DTCWT)**: Shift-invariant multi-scale decomposition
+- **Structural Features**: Energy ratio, temporal slope, wavelet entropy
 - **Graph Signal Processing**: Content relationship graphs with spectral analysis
-- **Statistical Methods**: ARMA, EWMA, and traditional caching policies (LRU, LFU)
-- **Hybrid Approaches**: Combining multiple methods for enhanced prediction
+- **Frozen 4-Layer Evaluation Protocol**: Rigorous comparison across Decision, Diagnostic, Stability, and Robustness dimensions
 
 ## Features
 
-- **Multiple Datasets**: MovieLens, Youku, YouTube
+- **Multiple Datasets**: MovieLens 25M, Uber/NYC Taxi, YouTube, Youku
 - **Flexible Time Granularity**: Daily, hourly, minute-level, or custom intervals
 - **Two Evaluation Modes**:
-  - Standard: Full in-memory evaluation
-  - Incremental: Memory-efficient, crash-safe evaluation
-- **Comprehensive Metrics**: Spearman correlation, Kendall tau, stratified analysis
-- **Parallel Processing**: Multi-core support for faster evaluation
-- **Rich Visualization**: Performance comparison charts and statistics
+  - Standard: Full in-memory evaluation (`TemporalEvaluator`)
+  - Incremental: Memory-efficient (<200MB), crash-safe (`IncrementalTemporalEvaluator`)
+- **4-Layer Frozen Evaluation Protocol**:
+  - Layer 1 — Decision: NDCG@K, Cache Hit Ratio@K (K ∈ {5, 10, 20})
+  - Layer 2 — Diagnostic: Spearman ρ, Kendall τ, MAE
+  - Layer 3 — Stability: Ranking Stability Index (RSI@K, Jaccard)
+  - Layer 4 — Robustness: Rank Distortion under 10× noise injection
+- **Proposed Method**: `WSPI` with frozen parameters (α=1.0, β=0.5, γ=0.5)
+- **Comparison Baselines**: AF, LFU, LRU, EWMA, DWT+AF, DTCWT+AF
+- **Dual Analysis Path**: Display pre-computed results or recompute from raw scores
+- **Rich Visualization**: Multi-K performance charts and temporal evolution plots
 
 ## Installation
 
@@ -52,18 +58,9 @@ python data/convert_movielens.py \
   --granularity daily
 ```
 
-### 2. Run Evaluation
+### 2. Run Evaluation (Frozen Protocol)
 
-Standard mode (all methods):
-
-```bash
-python experiments/run_popularity_assessment.py movielens \
-  --num-items 500 \
-  --start-date 2023-06-01 \
-  --end-date 2023-08-31
-```
-
-Incremental mode (memory efficient):
+Incremental mode — memory efficient, crash-safe, produces 4-Layer metrics:
 
 ```bash
 python experiments/run_popularity_assessment.py movielens \
@@ -73,10 +70,40 @@ python experiments/run_popularity_assessment.py movielens \
   --incremental
 ```
 
+Standard mode (full in-memory):
+
+```bash
+python experiments/run_popularity_assessment.py movielens \
+  --num-items 500 \
+  --start-date 2023-06-01 \
+  --end-date 2023-08-31
+```
+
 ### 3. Analyze Results
 
 ```bash
-python experiments/analyze_results.py results/movielens/w30_h7_n500_top_20260207_140000
+# Display pre-computed protocol metrics (fast)
+python experiments/analyze_results.py results/movielens/RUN_NAME
+
+# Recompute all metrics from raw scores
+python experiments/analyze_results.py results/movielens/RUN_NAME --recompute
+
+# Save recomputed metrics for future fast display
+python experiments/analyze_results.py results/movielens/RUN_NAME \
+  --recompute --save-recomputed
+```
+
+### 4. Show Results
+
+```bash
+# Textual table (multi-K metrics)
+python experiments/show_results.py results/movielens/RUN_NAME
+
+# Graphical plots
+python experiments/show_results.py results/movielens/RUN_NAME --graphical --show
+
+# Both + per-method detail
+python experiments/show_results.py results/movielens/RUN_NAME --both --detailed
 ```
 
 ## Data Preparation
@@ -153,16 +180,31 @@ python experiments/run_popularity_assessment.py DATASET [OPTIONS]
 - `--data-path PATH`: Custom data file path
 - `--quiet`: Suppress verbose output
 
-**Available Methods:**
-- `AF`: Access Frequency (baseline)
-- `LRU`: Least Recently Used
-- `LFU`: Least Frequently Used
-- `EWMA`: Exponentially Weighted Moving Average
-- `Statistical`: ARMA-based statistical model
-- `DWT+AF`: Discrete Wavelet Transform + Access Frequency
-- `DTCWT+AF`: Dual-Tree Complex Wavelet Transform + Access Frequency
-- `Hybrid V3.0`: Wavelet-Statistical hybrid
-- `Hybrid V3.1`: Advanced hybrid with graph features
+**Available Methods (Chapter 3):**
+
+| Name | Section | Category | Window | min_obs |
+|------|---------|----------|--------|---------|
+| `AF` | — | Baseline | 7 days | 3 |
+| `LRU` | — | Baseline | 7 days | 3 |
+| `LFU` | — | Baseline | 7 days | 3 |
+| `EWMA` | — | Baseline | 7 days | 3 |
+| `DWT+AF` | 3-2 | Trend-Shock Model | 64 days | 32 |
+| `DTCWT+AF` | 3-3 | Stable DTCWT Model | 64 days | 32 |
+| **`WSPI`** | **3-4** | **Proposed** | 64 days | 32 |
+
+**WSPI** (Wavelet Structural Popularity Index) is the primary proposed method (Section 3-4), initialised with frozen parameters:
+```python
+HybridAssessment(alpha_slope=1.0, beta_ratio=0.5, gamma_entropy=0.5)
+# P_WSPI = mu_L * exp( clip( alpha*S_L + beta*R - gamma*WE, -3, 3 ) )
+```
+
+> `Statistical` (skewness/kurtosis) removed — not part of the Chapter 3 framework.
+
+**Additional CLI arguments (v4.0):**
+- `--k-list K1 K2 ...`: K values for NDCG/CHR/RSI (default: `5 10 20`)
+- `--incremental`: Use incremental evaluation mode
+- `--data-path PATH`: Custom data file path
+- `--quiet`: Suppress verbose output
 
 **Examples:**
 
@@ -322,67 +364,68 @@ dtcwt_popularity/
 │   └── raw/                 # Raw datasets (not included)
 │
 ├── evaluation/
-│   ├── temporal_evaluator.py      # Standard evaluation engine
-│   ├── incremental_evaluator.py  # Incremental evaluation engine
-│   ├── evaluation_config.py      # Configuration classes
-│   ├── metrics.py                 # Evaluation metrics
+│   ├── temporal_evaluator.py      # Standard evaluation (4-Layer Protocol)
+│   ├── incremental_evaluator.py   # Incremental evaluation (4-Layer Protocol)
+│   ├── evaluation_config.py       # Config: k_list, robustness_sample_size, spike_multiplier
+│   ├── metrics.py                 # calculate_ndcg, calculate_hit_rate, calculate_rsi,
+│   │                              # calculate_rank_distortion, calculate_diagnostics
+│   ├── scenarios.py               # RobustnessScenario (noise injection)
+│   ├── results_analyzer.py        # Dual-path: display-only or recompute
 │   ├── stratification.py          # Stratification system
 │   ├── time_utils.py              # Time slot utilities
-│   └── method_configs.py          # Method-specific configurations
+│   └── method_configs.py          # Method-specific window/obs configurations
 │
 ├── methods/
-│   ├── base_method.py           # Base assessment method
-│   ├── dtcwt_assessment.py      # DTCWT-based method
-│   ├── dwt_assessment.py        # DWT-based method
-│   ├── statistical_assessment.py # Statistical methods
-│   ├── hybrid_assessment.py     # Hybrid methods
+│   ├── base_method.py             # Base assessment method
+│   ├── dtcwt_assessment.py        # DTCWT+AF method
+│   ├── dwt_assessment.py          # DWT+AF method
+│   ├── statistical_assessment.py  # Statistical methods
+│   ├── hybrid_assessment.py       # WSPI (HybridAssessment) — proposed method
 │   └── baselines/
-│       └── __init__.py          # Traditional baselines (LRU, LFU, etc.)
+│       └── __init__.py            # LRU, LFU, AF, EWMA
 │
 ├── experiments/
-│   ├── run_popularity_assessment.py  # Main evaluation script
-│   ├── analyze_results.py            # Results analysis
-│   ├── compare_experiments.py        # Multi-experiment comparison
-│   └── visualize_results.py          # Visualization
+│   ├── run_popularity_assessment.py  # Main runner (WSPI + Frozen Protocol)
+│   ├── analyze_results.py            # Analysis: display-only or --recompute
+│   ├── show_results.py               # Display-only (no computation)
+│   └── compare_experiments.py        # Multi-experiment comparison
 │
 ├── results/                    # Evaluation results (auto-generated)
 │
-├── README.md                   # This file
-├── راهنما.md                   # Persian guide
-└── requirements.txt            # Python dependencies
+├── docs/
+│   ├── QUICK_REFERENCE.md         # Commands, metrics, API reference
+│   ├── WORKFLOW_DIAGRAM.md        # Mermaid diagrams of full pipeline
+│   └── ...
+│
+├── README.md
+└── requirements.txt
 ```
 
 ## Output Structure
 
-### Standard Mode
+All evaluation modes produce the same unified directory structure:
 
 ```
-results/movielens/w30_h7_n500_top_20260207_140000/
-├── config.json              # Experiment configuration
-├── thresholds.json          # Stratification thresholds
-├── runtime_stats.json       # Runtime statistics
-├── metadata/
-│   ├── config.json
-│   ├── thresholds.json
-│   └── run_metadata.json
-└── results/
-    ├── AF_results.csv
-    ├── LRU_results.csv
-    ├── DTCWT+AF_results.csv
-    └── ...
-```
-
-### Incremental Mode
-
-```
-results/w30_h7_n5000_inc_20260207_140000/
-├── config.json              # Experiment configuration
-├── thresholds.json          # Stratification thresholds
-├── runtime_stats.json       # Runtime statistics
-├── metadata/
-│   └── run_metadata.json
-└── results.db               # SQLite database with all results
-```
+results/movielens/RUN_NAME/
+├── detailed/
+│   ├── AF_scores.parquet          # Per-item scores (popularity_score, actual_count, stratum)
+│   ├── DTCWT+AF_scores.parquet
+│   ├── WSPI_scores.parquet
+│   └── ...
+├── summary/
+│   ├── AF_stratum_summary.parquet # Per-stratum aggregates per window
+│   └── ...
+├── protocol/                      ← 4-Layer Frozen Protocol metrics (NEW)
+│   ├── AF_protocol.csv            # ndcg@K, chr@K, rsi@K, kendall, spearman, ΔRank
+│   ├── DTCWT+AF_protocol.csv
+│   ├── WSPI_protocol.csv
+│   └── ...
+├── comparison/
+│   └── method_comparison.csv      # Final method comparison table
+└── metadata/
+    ├── config.json                # k_list, robustness_sample_size, spike_multiplier
+    ├── thresholds.json            # Stratification thresholds (Q1/Q2/Q3)
+    └── runtime_stats.json         # Duration per method
 
 ## Troubleshooting
 
@@ -462,5 +505,5 @@ For questions or issues, please open an issue on GitHub.
 
 ---
 
-**Last Updated:** February 2025  
+**Last Updated:** February 2026  
 **Version:** 1.0.0

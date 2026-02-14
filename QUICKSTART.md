@@ -1,6 +1,6 @@
-# ⚡ Quick Start Guide
+# ⚡ Quick Start Guide — Frozen 4-Layer Evaluation Protocol
 
-Get up and running with DTCWT Popularity Assessment in 5 minutes!
+Get up and running with WSPI Popularity Assessment in 5 minutes!
 
 ---
 
@@ -29,7 +29,7 @@ python demo.py
 
 This will:
 - Show different popularity patterns
-- Compare all assessment methods
+- Compare all assessment methods including WSPI
 - Display advanced features
 - Save visualization to `results/figures/`
 
@@ -37,44 +37,44 @@ This will:
 ```
 Pattern: Increasing Trend
 AF (Baseline):            365.000
-DTCWT + AF:              1234.567
-Hybrid V3.1:             1456.789
+DTCWT+AF:               1234.567
+WSPI (Proposed):         1456.789
 ```
 
 ---
 
 ## 📊 Test on Sample Data (2 minutes)
 
-Create a simple test:
-
 ```python
 # test_basic.py
 import numpy as np
 from methods.hybrid_assessment import HybridAssessment
+from evaluation.metrics import calculate_ndcg, calculate_hit_rate, calculate_diagnostics
 
-# Create sample time series (30 days of access data)
+# Create sample time series (64 days — WSPI requires min 32 observations)
 time_series = np.array([
     10, 15, 22, 35, 55, 85, 130, 195, 280, 385,
     510, 650, 810, 985, 1175, 1380, 1600, 1835, 2085, 2350,
-    2630, 2925, 3235, 3560, 3900, 4255, 4625, 5010, 5410, 5825
+    2630, 2925, 3235, 3560, 3900, 4255, 4625, 5010, 5410, 5825,
+    6255, 6700, 7160, 7635, 8125, 8630, 9150, 9685, 10235, 10800,
+    11380, 11975, 12585, 13210, 13850, 14505, 15175, 15860, 16560, 17275,
+    18005, 18750, 19510, 20285, 21075, 21880, 22700, 23535, 24385, 25250,
+    26130, 27025, 27935, 28860
 ])
 
-# Assess popularity
-hybrid = HybridAssessment()
-score = hybrid.assess(time_series)
-features = hybrid.get_comprehensive_features(time_series)
+# WSPI (Proposed Method — Frozen Parameters)
+wspi = HybridAssessment(alpha_slope=1.0, beta_ratio=0.5, gamma_entropy=0.5)
+score = wspi.assess(time_series)
+print(f"WSPI Score: {score:.4f}")
 
-print(f"Popularity Score: {score:.2f}")
-print(f"\nKey Features:")
-print(f"  Mean: {features['mean']:.2f}")
-print(f"  Skewness: {features['skewness']:.2f}")
-print(f"  Hurst Exponent: {features['hurst_exponent']:.2f}")
-print(f"  Shannon Entropy: {features['shannon_entropy']:.2f}")
-```
+# Evaluate metrics (example with random actuals)
+scores_all  = np.array([score, score*0.8, score*0.6, score*0.4, score*0.2])
+actuals_all = np.array([1000, 800, 500, 200, 100])
 
-Run it:
-```bash
-python test_basic.py
+print(f"NDCG@3:      {calculate_ndcg(scores_all, actuals_all, k=3):.4f}")
+print(f"CHR@3:       {calculate_hit_rate(scores_all, actuals_all, k=3):.4f}")
+diag = calculate_diagnostics(scores_all, actuals_all)
+print(f"Spearman ρ:  {diag['spearman_rho']:.4f}")
 ```
 
 ---
@@ -84,26 +84,26 @@ python test_basic.py
 ```python
 # compare.py
 import numpy as np
-from methods import *
-from baselines.traditional import TraditionalBaselines
+from methods.hybrid_assessment import HybridAssessment
+from methods.dtcwt_assessment import DTCWTAssessment
+from methods.dwt_assessment import DWTAssessment
+from baselines import AccessFrequency, EWMA
 
-# Sample data
-ts = np.array([50, 65, 80, 95, 110, 125, 140, 155, 170, 185,
-               200, 215, 230, 245, 260, 275, 290, 305, 320, 335,
-               350, 365, 380, 395, 410, 425, 440, 455, 470, 485])
+ts = np.random.randint(10, 500, size=64).astype(float)
 
-# Compare all methods
 methods = {
-    'AF': TraditionalBaselines.access_frequency(ts),
-    'EWMA': TraditionalBaselines.ewma_score(ts),
-    'DWT': DWTAssessment().assess(ts),
-    'DTCWT': DTCWTAssessment().assess(ts),
-    'Statistical': StatisticalAssessment().assess(ts),
-    'Hybrid': HybridAssessment().assess(ts),
+    'AF':       AccessFrequency().assess_single(ts),
+    'EWMA':     EWMA(alpha=0.3).assess_single(ts),
+    'DWT+AF':   DWTAssessment().assess_single(ts),
+    'DTCWT+AF': DTCWTAssessment().assess_single(ts),
+    'WSPI':     HybridAssessment(alpha_slope=1.0, beta_ratio=0.5,
+                                  gamma_entropy=0.5).assess_single(ts),
 }
 
+print(f"{'Method':<15} {'Score':>10}")
+print("-"*25)
 for name, score in methods.items():
-    print(f"{name:15} {score:10.2f}")
+    print(f"{name:<15} {score:>10.4f}")
 ```
 
 ---
@@ -198,27 +198,43 @@ data = loader.load()
 
 ## 🎯 Next Steps
 
-1. **Understand the Methods**
-   - Read `README.md` for detailed explanations
-   - Check method docstrings in `methods/`
+1. **Run evaluation on MovieLens**
+   ```bash
+   python experiments/run_popularity_assessment.py movielens \
+       --num-items 100 --start-date 2023-08-01 --end-date 2023-08-31 \
+       --incremental
+   ```
 
-2. **Customize Configuration**
-   - Edit `config.py` to adjust weights and parameters
-   - Try different wavelet families
+2. **Analyze results**
+   ```bash
+   # Display pre-computed metrics
+   python experiments/analyze_results.py results/movielens/RUN_NAME
+   
+   # Recompute and save for future fast display
+   python experiments/analyze_results.py results/movielens/RUN_NAME \
+       --recompute --save-recomputed
+   ```
 
-3. **Add Your Dataset**
-   - Create a custom loader in `data/loaders/`
-   - Follow the `BaseDataLoader` interface
+3. **Show results graphically**
+   ```bash
+   python experiments/show_results.py results/movielens/RUN_NAME --both --show
+   ```
 
-4. **Run Experiments**
-   - `exp1_assessment_comparison.py` - Compare methods
-   - `exp2_ablation_study.py` - Feature importance (if implemented)
-   - `exp3_prediction_comparison.py` - Prediction task (if implemented)
+4. **Read documentation**
+   - `docs/QUICK_REFERENCE.md` — commands, metrics table, API reference
+   - `docs/WORKFLOW_DIAGRAM.md` — pipeline architecture diagrams
+   - `CHANGELOG.md` — full history of changes
 
-5. **Analyze Results**
-   - Check `results/tables/` for CSV files
-   - View `results/figures/` for plots
-   - Use pandas for custom analysis
+5. **Customize configuration**
+   ```python
+   from evaluation import get_movielens_config
+   config = get_movielens_config(
+       num_items=500,
+       k_list=[5, 10, 20, 50],        # custom K values
+       robustness_sample_size=100,     # more noise injection samples
+       spike_multiplier=5.0,           # smaller spike
+   )
+   ```
 
 ---
 
