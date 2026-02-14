@@ -1,9 +1,16 @@
 """
-Method-specific configurations
-تنظیمات خاص هر method برای evaluation
+Method-specific configurations for the Frozen Evaluation Protocol.
+
+Three assessment models from Chapter 3:
+  Group 1 — Baselines:    AF, LRU, LFU, EWMA        (7-day window)
+  Group 2 — DWT Model:    DWT+AF                     (64-day window, Section 3-2)
+  Group 3 — DTCWT Model:  DTCWT+AF                   (64-day window, Section 3-3)
+  Group 4 — WSPI:         Proposed method             (64-day window, Section 3-4)
+
+Note: 'Statistical' (skewness/kurtosis) has been removed.
+      'Hybrid V3.0' and 'Hybrid V3.1' have been replaced by 'WSPI'.
 
 Author: Sajjad
-Date: February 2025
 """
 
 from dataclasses import dataclass
@@ -13,126 +20,144 @@ import math
 
 @dataclass
 class MethodConfig:
-    """تنظیمات یک method"""
+    """Configuration for a single assessment method."""
     name: str
-    window_days: int       # تعداد روزهای window (باید توان 2 باشد یا 7)
-    min_observations: int  # حداقل تعداد مشاهدات لازم
+    window_days: int        # training window length in days (must be 7 or power of 2)
+    min_observations: int   # minimum time-series length required
     description: str
 
 
-# تنظیمات همه methods
+# All method configurations aligned with Chapter 3 methodology
 METHOD_CONFIGS: Dict[str, MethodConfig] = {
-    # =====================================
-    # گروه 1: Baselines (7 روز)
-    # سریع، responsive، نیاز به data کم
-    # =====================================
+
+    # =========================================================================
+    # Group 1: Baselines (7-day window)
+    # Fast, responsive, low data requirement.
+    # =========================================================================
     'AF': MethodConfig(
         name='AF',
         window_days=7,
         min_observations=3,
-        description='Access Frequency - simple baseline'
+        description='Access Frequency — count-based baseline'
     ),
-    
+
     'LRU': MethodConfig(
         name='LRU',
         window_days=7,
         min_observations=3,
-        description='Least Recently Used'
+        description='Least Recently Used — recency-based baseline'
     ),
-    
+
     'LFU': MethodConfig(
         name='LFU',
         window_days=7,
         min_observations=3,
-        description='Least Frequently Used'
+        description='Least Frequently Used — frequency-based baseline'
     ),
-    
+
     'EWMA': MethodConfig(
         name='EWMA',
         window_days=7,
         min_observations=3,
-        description='Exponentially Weighted Moving Average'
+        description='Exponentially Weighted Moving Average (alpha=0.3)'
     ),
-    
-    # =====================================
-    # گروه 2: Statistical (32 روز = 2^5)
-    # نیاز به data متوسط برای skewness/kurtosis
-    # =====================================
-    'Statistical': MethodConfig(
-        name='Statistical',
-        window_days=32,
-        min_observations=10,
-        description='Skewness + Kurtosis based assessment'
-    ),
-    
-    # =====================================
-    # گروه 3: Wavelet (64 روز = 2^6)
-    # نیاز به signal بلند برای decomposition مناسب
-    # =====================================
+
+    # =========================================================================
+    # Group 2: Trend-Shock Model — DWT  (Chapter 3, Section 3-2)
+    #
+    # Motivation: popularity signals have two distinct components —
+    #   cA_L : smooth long-term trend (gradual adoption)
+    #   cD_1 : high-frequency burst   (viral shock)
+    # Formula:
+    #   Score_DWT = WAF(cA_L) + beta * WAF(cD_1)
+    #   WAF(X)    = sum |X[t-i]| * 2^{-i}   (exponential decay weighting)
+    #
+    # Limitation: DWT is shift-sensitive — a small shift in the window
+    # boundary changes coefficients noticeably (motivates DTCWT below).
+    # =========================================================================
     'DWT+AF': MethodConfig(
         name='DWT+AF',
         window_days=64,
         min_observations=32,
-        description='Discrete Wavelet Transform + AF formula'
+        description=(
+            'Trend-Shock Model (Section 3-2): '
+            'Score = WAF(cA_L) + beta*WAF(cD_1), shift-sensitive baseline'
+        )
     ),
-    
+
+    # =========================================================================
+    # Group 3: Stable DTCWT Model  (Chapter 3, Section 3-3)
+    #
+    # Dual-Tree Complex Wavelet Transform produces approximately
+    # shift-invariant complex coefficients:
+    #   psi_c(t) = psi_r(t) + j*psi_i(t)
+    # Feature extraction:
+    #   M_trend = |Low|    (magnitude of low-band complex coefficients)
+    #   M_shock = |High_1| (magnitude of first high-band)
+    # Formula:
+    #   Score_DTCWT = WAF(M_trend) + beta * WAF(M_shock)
+    #
+    # Improvement over DWT: stable ranking under window shifts.
+    # Remaining gap: energy-only, ignores relative growth and entropy
+    # (motivates WSPI).
+    # =========================================================================
     'DTCWT+AF': MethodConfig(
         name='DTCWT+AF',
         window_days=64,
         min_observations=32,
-        description='Dual-Tree Complex Wavelet Transform + AF'
+        description=(
+            'Stable DTCWT Model (Section 3-3): '
+            'Score = WAF(M_trend) + beta*WAF(M_shock), shift-invariant'
+        )
     ),
-    
-    # =====================================
-    # گروه 4: Hybrid (64 روز = 2^6)
-    # ترکیبی از wavelet و statistical
-    # =====================================
-    'Hybrid V3.0': MethodConfig(
-        name='Hybrid V3.0',
+
+    # =========================================================================
+    # Group 4: WSPI — Proposed Method  (Chapter 3, Section 3-4)
+    #
+    # Redefines popularity as a structural, multi-scale property:
+    #   mu_L — trend volume   : WeightedMean(|Low|)  with 2^{-i} weights
+    #   S_L  — normalised slope: Slope(|Low|) / (Mean(|Low|) + eps)
+    #   R    — energy ratio   : E_low / (E_low + sum E_high)  [stability]
+    #   WE   — wavelet entropy : -sum p_i*log2(p_i)            [disorder]
+    #
+    # Final formula:
+    #   P_WSPI = mu_L * exp( clip( alpha*S_L + beta*R - gamma*WE, -3, 3 ) )
+    #
+    # Frozen parameters (Chapter 3 specification):
+    #   alpha = 1.0   (trend slope weight)
+    #   beta  = 0.5   (energy-ratio weight)
+    #   gamma = 0.5   (wavelet entropy penalty)
+    #
+    # Clamp range [-3, 3] → multiplier in [exp(-3)~0.05, exp(3)~20]
+    # Complexity: O(N) — linear in signal length.
+    # =========================================================================
+    'WSPI': MethodConfig(
+        name='WSPI',
         window_days=64,
         min_observations=32,
-        description='DTCWT + Statistical (V3.0)'
-    ),
-    
-    'Hybrid V3.1': MethodConfig(
-        name='Hybrid V3.1',
-        window_days=64,
-        min_observations=32,
-        description='DTCWT + Statistical + Advanced Features (V3.1)'
+        description=(
+            'Wavelet Structural Popularity Index (Section 3-4): '
+            'P = mu_L * exp(clip(alpha*S_L + beta*R - gamma*WE, -3, 3)), '
+            'alpha=1.0, beta=0.5, gamma=0.5'
+        )
     ),
 }
 
 
 def get_method_config(method_name: str) -> MethodConfig:
     """
-    دریافت config یک method
-    
-    Args:
-        method_name: نام method
-        
-    Returns:
-        MethodConfig
-        
+    Return the MethodConfig for a given method name.
+
     Raises:
-        KeyError: اگر method وجود نداشته باشد
+        KeyError: if method_name is not registered.
     """
     if method_name not in METHOD_CONFIGS:
         raise KeyError(f"No config found for method: {method_name}")
-    
     return METHOD_CONFIGS[method_name]
 
 
 def get_window_size(method_name: str, default: int = 30) -> int:
-    """
-    دریافت window size یک method
-    
-    Args:
-        method_name: نام method
-        default: مقدار پیش‌فرض اگر method وجود نداشت
-        
-    Returns:
-        تعداد روزهای window
-    """
+    """Return window_days for method_name, or default if not registered."""
     try:
         return get_method_config(method_name).window_days
     except KeyError:
@@ -140,16 +165,7 @@ def get_window_size(method_name: str, default: int = 30) -> int:
 
 
 def get_min_observations(method_name: str, default: int = 10) -> int:
-    """
-    دریافت حداقل تعداد مشاهدات لازم
-    
-    Args:
-        method_name: نام method
-        default: مقدار پیش‌فرض
-        
-    Returns:
-        حداقل تعداد مشاهدات
-    """
+    """Return min_observations for method_name, or default if not registered."""
     try:
         return get_method_config(method_name).min_observations
     except KeyError:
@@ -157,97 +173,60 @@ def get_min_observations(method_name: str, default: int = 10) -> int:
 
 
 def list_methods_by_window_size() -> Dict[int, list]:
-    """
-    دسته‌بندی methods بر اساس window size
-    
-    Returns:
-        Dict: {window_size: [method_names]}
-    """
-    grouped = {}
-    
+    """Return {window_size: [method_names]} grouped by window_days."""
+    grouped: Dict[int, list] = {}
     for name, config in METHOD_CONFIGS.items():
-        window = config.window_days
-        if window not in grouped:
-            grouped[window] = []
-        grouped[window].append(name)
-    
+        grouped.setdefault(config.window_days, []).append(name)
     return grouped
 
 
 def validate_configs():
     """
-    اعتبارسنجی configs
-    بررسی می‌کند که همه window_days توان 2 یا 7 باشند
+    Validate all METHOD_CONFIGS entries.
+    window_days must be 7 or a power of 2 (8..512).
+    min_observations must be >= 1 and <= window_days.
     """
     errors = []
-    
-    # مقادیر مجاز: 7 و توان‌های 2
-    allowed_values = [7] + [2**i for i in range(3, 10)]  # 7, 8, 16, 32, 64, 128, 256, 512
-    
+    allowed_values = [7] + [2 ** i for i in range(3, 10)]  # 7, 8, 16, 32, 64, 128, 256, 512
+
     for name, config in METHOD_CONFIGS.items():
-        # بررسی window_days
         if config.window_days not in allowed_values:
             errors.append(
-                f"{name}: window_days={config.window_days} "
-                f"باید 7 یا توان 2 باشد (مثلاً 8, 16, 32, 64, 128)"
+                f"{name}: window_days={config.window_days} must be 7 or a power of 2"
             )
-        
-        # بررسی min_observations
         if config.min_observations < 1:
-            errors.append(
-                f"{name}: min_observations={config.min_observations} "
-                f"باید >= 1 باشد"
-            )
-        
-        # بررسی منطقی: min_observations نباید بیشتر از window_days باشد
+            errors.append(f"{name}: min_observations must be >= 1")
         if config.min_observations > config.window_days:
             errors.append(
                 f"{name}: min_observations={config.min_observations} "
-                f"بیشتر از window_days={config.window_days}!"
+                f"> window_days={config.window_days}"
             )
-    
+
     if errors:
         raise ValueError("Config validation failed:\n" + "\n".join(errors))
-    
-    # چاپ آمار
+
     print("=" * 70)
     print("METHOD CONFIGS VALIDATION")
     print("=" * 70)
-    
+
     grouped = list_methods_by_window_size()
     for window_size in sorted(grouped.keys()):
         methods = grouped[window_size]
         print(f"\nWindow {window_size} days ({len(methods)} methods):")
         for method in methods:
-            config = METHOD_CONFIGS[method]
-            print(f"  • {method:<20} min_obs={config.min_observations:>3}")
-    
+            cfg = METHOD_CONFIGS[method]
+            print(f"  • {method:<20} min_obs={cfg.min_observations:>3}")
+
     print("\n" + "=" * 70)
-    print(f"✓ All {len(METHOD_CONFIGS)} method configs validated successfully")
+    print(f"All {len(METHOD_CONFIGS)} method configs validated successfully")
     print("=" * 70 + "\n")
 
 
-# اجرای validation هنگام import
+# Run validation on import
 validate_configs()
 
 
 if __name__ == '__main__':
-    # تست
-    print("\nTesting method_configs...\n")
-    
-    # تست get_window_size
-    print("Window sizes:")
-    print(f"  AF: {get_window_size('AF')} days")
-    print(f"  Statistical: {get_window_size('Statistical')} days")
-    print(f"  DWT+AF: {get_window_size('DWT+AF')} days")
-    print(f"  DTCWT+AF: {get_window_size('DTCWT+AF')} days")
-    
-    # تست get_method_config
-    print("\nMethod config for DWT+AF:")
-    config = get_method_config('DWT+AF')
-    print(f"  Name: {config.name}")
-    print(f"  Window: {config.window_days} days")
-    print(f"  Min obs: {config.min_observations}")
-    print(f"  Description: {config.description}")
-    
-    print("\n✓ Tests passed!")
+    print("\nMethod configs (Chapter 3 alignment):\n")
+    for name, cfg in METHOD_CONFIGS.items():
+        print(f"  {name:<15} window={cfg.window_days:>3}d  min_obs={cfg.min_observations:>3}  |  {cfg.description}")
