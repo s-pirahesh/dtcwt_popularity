@@ -98,6 +98,11 @@ class IncrementalTemporalEvaluator:
         # Also ensures self.data is IDENTICAL to what temporal_evaluator uses.
         self.data = self.data[self.data['item_id'].isin(self.items)].copy()
 
+        # --- Populate config.methods so config.json shows the method list -----
+        # config.to_dict() includes 'methods' field; set it here so it is
+        # non-None when _save_config_json() is called at end of evaluate().
+        self.config.methods = list(methods.keys())
+
         # --- Incremental storage ----------------------------------------------
         self.storage = IncrementalStorage(self.storage_path, buffer_size=1000)
 
@@ -718,27 +723,14 @@ class IncrementalTemporalEvaluator:
     # ==========================================================================
 
     def _save_config_json(self):
-        # Use same field names as temporal_evaluator (config.save_config) for
-        # consistent metadata in compare_experiments.py reports.
-        config_dict = {
-            'dataset_name':       getattr(self.config, 'dataset_name', 'unknown'),
-            'window_size':        self.config.window_size,
-            'prediction_horizon': self.config.prediction_horizon,
-            'time_granularity':   getattr(self.config, 'time_granularity', 'daily'),
-            'num_items':          len(self.items),
-            'item_selection':     getattr(self.config, 'item_selection', 'top'),
-            'min_observations':   self.config.min_observations,
-            'start_date':         str(self.data_start.date()),
-            'end_date':           str(self.data_end.date()),
-            'use_pre_range_data': getattr(self.config, 'use_pre_range_data', True),
-            'methods':            list(self.methods.keys()),   # now populated
-            'strata_names':       self.config.strata_names,
-            'strata_thresholds':  getattr(self.config, 'strata_thresholds', None),
-            'k_values':           self.K_VALUES,              # same key as temporal
-        }
+        # Use EXACTLY the same config.save_config() as temporal_evaluator.
+        # This guarantees both modes produce identical config.json files.
+        # config.to_dict() contains ALL fields: start_date, end_date,
+        # time_granularity, use_pre_range_data, strata_thresholds, wavelet_config,
+        # k_list, robustness_sample_size, spike_multiplier, etc.
         config_path = self.storage_path / 'metadata' / 'config.json'
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(config_dict, f, indent=2, ensure_ascii=False)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        self.config.save_config(config_path)
         if self.config.verbose:
             print("  ✓ Saved config.json")
 

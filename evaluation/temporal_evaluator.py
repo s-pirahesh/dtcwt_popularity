@@ -294,16 +294,21 @@ class TemporalEvaluator:
         """
         # -- Method-level config --
         try:
-            method_config    = get_method_config(method_name)
-            method_window_size = method_config.window_days
-            method_min_obs   = method_config.min_observations
+            method_config      = get_method_config(method_name)
+            method_window_days = method_config.window_days
+            method_min_obs     = method_config.min_observations
         except KeyError:
-            method_window_size = self.config.window_size
-            method_min_obs   = self.config.min_observations
+            method_window_days = self.config.window_size
+            method_min_obs     = self.config.min_observations
+
+        # Convert window from DAYS to TIME-SLOTS so hourly datasets get the
+        # correct number of slots (e.g. 7 days → 168 hours, not 7 hours).
+        # This mirrors _calculate_windows() in incremental_evaluator.
+        method_window_size = self.time_helper.days_to_slots(method_window_days)
 
         if self.config.verbose:
-            window_desc = self.time_helper.format_window_size(method_window_size)
-            print(f"  Window size:      {window_desc}")
+            window_desc = self.time_helper.format_window_size(method_window_days)
+            print(f"  Window size:      {window_desc} ({method_window_size} slots)")
             print(f"  Min observations: {method_min_obs}")
             print(f"  Use pre-range:    {self.config.use_pre_range_data}")
 
