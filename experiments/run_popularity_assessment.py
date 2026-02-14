@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Popularity Assessment - تخمین و ارزیابی محبوبیت محتوا
-Main Pipeline for Content Popularity Assessment and Prediction
+Popularity Assessment — Main Evaluation Pipeline
+=================================================
+Evaluates content popularity using the Frozen 4-Layer Protocol.
 
-این برنامه محاسبات اصلی تخمین محبوبیت را انجام می‌دهد:
-- روش‌های مختلف را ارزیابی می‌کند (AF, DTCWT+AF, DWT+AF, etc.)
-- نتایج را با timestamp منحصر به فرد ذخیره می‌کند
-- خروجی برای تحلیل و نمایش آماده می‌کند
+Three assessment models from Chapter 3:
+  Baselines : AF, LFU, LRU, EWMA            (7-day window)
+  Section 3-2: DWT+AF   — Trend-Shock Model  (64-day window)
+  Section 3-3: DTCWT+AF — Stable DTCWT Model (64-day window)
+  Section 3-4: WSPI     — Proposed Method     (64-day window, frozen params)
 
-جریان کار:
-  1. این برنامه → محاسبات و ذخیره
-  2. analyze_results.py → تحلیل و مقایسه
-  3. show_results.py → نمایش متنی و گرافیکی
+Workflow:
+  1. This script  → compute scores + 4-Layer metrics → results/
+  2. analyze_results.py → display or --recompute metrics
+  3. show_results.py    → textual + graphical display
 
 Author: Sajjad
 Date: February 2026
@@ -21,7 +23,7 @@ import sys
 import argparse
 from pathlib import Path
 
-# اضافه کردن parent directory به path
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from evaluation import (
@@ -41,23 +43,21 @@ except ImportError as e:
     IncrementalTemporalEvaluator = None
     INCREMENTAL_AVAILABLE = False
 from data.loaders import MovieLensLoader, UberLoader, YouTubeLoader
-# YouTubeLoader و YoukuLoader هنوز پیاده‌سازی نشده‌اند - فعلاً فقط MovieLens پشتیبانی می‌شود
-# Import methods (برخی ممکن است به dependencies اضافی نیاز داشته باشند)
+# YouTubeLoader and YoukuLoader are not yet fully implemented — MovieLens and Uber are the primary datasets
+# Import assessment methods (may require optional dependencies: pywt, dtcwt)
 try:
     from methods import (
         DTCWTAssessment,
         DWTAssessment,
         HybridAssessment,
-        StatisticalAssessment
     )
     METHODS_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  Warning: Some methods not available: {e}")
-    print("⚠️  Install dependencies: pip install pywt dtcwt")
+    print(f"Warning: Some methods not available: {e}")
+    print("Install dependencies: pip install pywt dtcwt")
     DTCWTAssessment = None
     DWTAssessment = None
     HybridAssessment = None
-    StatisticalAssessment = None
     METHODS_AVAILABLE = False
 
 # Import baselines
@@ -65,7 +65,7 @@ try:
     from baselines import AccessFrequency, LFU, LRU, EWMA
     BASELINES_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  Warning: Baselines not available: {e}")
+    print(f"Warning: Baselines not available: {e}")
     AccessFrequency = LFU = LRU = EWMA = None
     BASELINES_AVAILABLE = False
 from config import WAVELET_CONFIG, DATASETS
@@ -73,68 +73,87 @@ from config import WAVELET_CONFIG, DATASETS
 
 def create_methods_dict(config: EvaluationConfig) -> dict:
     """
-    ایجاد dictionary روش‌ها
-    
+    Build the methods dictionary for the Frozen Evaluation Protocol.
+
+    Chapter 3 method lineup:
+      Baselines   — AF, LFU, LRU, EWMA          (7-day window)
+      Section 3-2 — DWT+AF   (Trend-Shock Model) (64-day window)
+      Section 3-3 — DTCWT+AF (Stable Model)      (64-day window)
+      Section 3-4 — WSPI     (Proposed, frozen)  (64-day window)
+
+    Note: 'Statistical' (skewness/kurtosis) has been removed from the
+    evaluation lineup as it does not belong to the Chapter 3 framework.
+
     Args:
         config: EvaluationConfig instance
-    
+
     Returns:
         dict: {method_name: method_instance}
     """
     methods = {}
-    
-    # Baselines
-    methods['AF'] = AccessFrequency()
-    methods['LFU'] = LFU()
-    methods['LRU'] = LRU()
-    methods['EWMA'] = EWMA(alpha=0.3)
-    
-    # Wavelet methods
-    dwt_level = config.wavelet_config['dwt']['level']
-    dtcwt_level = config.wavelet_config['dtcwt']['level']
-    
-    methods['DWT+AF'] = DWTAssessment(
-        wavelet=config.wavelet_config['dwt']['wavelet'],
-        level=dwt_level,
-        mode=config.wavelet_config['dwt']['mode']
-    )
-    
-    methods['DTCWT+AF'] = DTCWTAssessment(
-        level=dtcwt_level,
-        biort=config.wavelet_config['dtcwt']['biort'],
-        qshift=config.wavelet_config['dtcwt']['qshift']
-    )
-    
-    # Advanced methods
-    methods['Statistical'] = StatisticalAssessment()
-    methods['Hybrid V3.0'] = HybridAssessment(version='3.0')
-    methods['Hybrid V3.1'] = HybridAssessment(version='3.1')
-    
-    # فیلتر بر اساس config.methods
+
+    # --- Group 1: Baselines (Section 3-1 context) ----------------------------
+    if BASELINES_AVAILABLE:
+        methods['AF']   = AccessFrequency()
+        methods['LFU']  = LFU()
+        methods['LRU']  = LRU()
+        methods['EWMA'] = EWMA(alpha=0.3)
+
+    # --- Group 2 & 3 & 4: Chapter 3 models -----------------------------------
+    if METHODS_AVAILABLE:
+        dwt_level   = config.wavelet_config['dwt']['level']
+        dtcwt_level = config.wavelet_config['dtcwt']['level']
+
+        # Section 3-2: Trend-Shock Model (DWT)
+        # Score_DWT = WAF(cA_L) + beta * WAF(cD_1)
+        methods['DWT+AF'] = DWTAssessment(
+            wavelet=config.wavelet_config['dwt']['wavelet'],
+            level=dwt_level,
+            mode=config.wavelet_config['dwt']['mode']
+        )
+
+        # Section 3-3: Stable DTCWT Model
+        # Score_DTCWT = WAF(M_trend) + beta * WAF(M_shock)
+        methods['DTCWT+AF'] = DTCWTAssessment(
+            level=dtcwt_level,
+            biort=config.wavelet_config['dtcwt']['biort'],
+            qshift=config.wavelet_config['dtcwt']['qshift']
+        )
+
+        # Section 3-4: WSPI — Proposed Method (Frozen Parameters)
+        # P_WSPI = mu_L * exp(clip(alpha*S_L + beta*R - gamma*WE, -3, 3))
+        # alpha=1.0 (trend slope), beta=0.5 (energy ratio), gamma=0.5 (entropy)
+        if HybridAssessment is not None:
+            methods['WSPI'] = HybridAssessment(
+                alpha_slope=1.0,
+                beta_ratio=0.5,
+                gamma_entropy=0.5
+            )
+
+    # --- Filter by --methods CLI flag ----------------------------------------
     if config.methods is not None:
         methods = {k: v for k, v in methods.items() if k in config.methods}
-    
+
     return methods
 
 
 def get_data_loader(dataset_name: str, data_path: str = None):
     """
-    ایجاد data loader مناسب
-    
+    Create the appropriate data loader for the given dataset.
+
     Args:
-        dataset_name: نام دیتاست
-    
+        dataset_name: one of 'movielens', 'uber', 'youtube'
+        data_path:    optional override for the file path in config
+
     Returns:
         DataLoader instance
     """
     if dataset_name == 'movielens':
         config = DATASETS['movielens'].copy()
         if data_path:
-            # اگر کاربر مسیری را در خط فرمان وارد کرده باشد، جایگزین مسیر پیش‌فرض می‌شود
             config['path'] = Path(data_path)
         return MovieLensLoader(config)
     elif dataset_name == 'uber':
-        # Get default config or create one
         config = DATASETS.get('uber', {
             'name': 'uber',
             'path': data_path or Path('./data/uber/uber.csv'),
@@ -144,28 +163,17 @@ def get_data_loader(dataset_name: str, data_path: str = None):
         }).copy()
         if data_path:
             config['path'] = Path(data_path)
-
         return UberLoader(config)
     elif dataset_name == 'youtube':
         config = DATASETS['youtube'].copy()
         if data_path:
-            # اگر کاربر مسیری را در خط فرمان وارد کرده باشد، جایگزین مسیر پیش‌فرض می‌شود
             config['path'] = Path(data_path)
-        return YouTubeLoader(config)    
-    elif dataset_name == 'youtube07':
+        return YouTubeLoader(config)
+    elif dataset_name in ('youtube07', 'youku'):
         raise NotImplementedError(
-            "YouTubeLoader هنوز پیاده‌سازی نشده است.\n"
-            "فعلاً فقط MovieLens پشتیبانی می‌شود.\n"
-            "استفاده کنید: --dataset movielens"
+            f"Loader for '{dataset_name}' is not yet implemented. "
+            "Use: --dataset movielens"
         )
-    
-    elif dataset_name == 'youku':
-        raise NotImplementedError(
-            "YoukuLoader هنوز پیاده‌سازی نشده است.\n"
-            "فعلاً فقط MovieLens پشتیبانی می‌شود.\n"
-            "استفاده کنید: --dataset movielens"
-        )
-    
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
@@ -185,24 +193,26 @@ def run_temporal_evaluation(dataset_name: str,
                            incremental: bool = False,
                            **kwargs):
     """
-    اجرای ارزیابی زمانی کامل
-    
+    Run a full temporal evaluation with the Frozen 4-Layer Protocol.
+
     Args:
-        dataset_name: نام دیتاست ('movielens', 'youtube07', 'youku')
-        num_items: تعداد آیتم‌ها (None = همه)
-        start_date: تاریخ شروع ('YYYY-MM-DD' یا None)
-        end_date: تاریخ پایان ('YYYY-MM-DD' یا None)
-        window_size: اندازه پنجره آموزش (days)
-        prediction_horizon: افق پیش‌بینی (days)
-        methods: لیست نام روش‌ها (None = همه)
-        final_format: فرمت نتایج نهایی ('csv' or 'parquet')
-        parallel: استفاده از پردازش موازی
-        num_cores: تعداد هسته‌ها (-1 = همه)
-        **kwargs: سایر پارامترها
+        dataset_name:       'movielens', 'uber', 'youtube'
+        num_items:          number of items (None = all)
+        start_date:         'YYYY-MM-DD' or None (dataset start)
+        end_date:           'YYYY-MM-DD' or None (dataset end)
+        window_size:        training window in days (default 30)
+        prediction_horizon: assessment horizon in days (default 7)
+        methods:            list of method names (None = all)
+        final_format:       'csv' or 'parquet' for comparison output
+        parallel:           enable parallel window processing
+        num_cores:          CPU cores (-1 = all available)
+        data_path:          override dataset file path
+        incremental:        use IncrementalTemporalEvaluator (crash-safe)
+        **kwargs:           forwarded to get_*_config (k_list, etc.)
     """
     
     print("="*70)
-    print("EXPERIMENT 2: TEMPORAL EVALUATION WITH SLIDING WINDOW")
+    print("EXPERIMENT: TEMPORAL EVALUATION — FROZEN 4-LAYER PROTOCOL")
     print("="*70)
     print(f"Dataset:         {dataset_name}")
     print(f"Items:           {num_items or 'all'}")
@@ -211,9 +221,10 @@ def run_temporal_evaluation(dataset_name: str,
     print(f"Horizon:         {prediction_horizon} days")
     print(f"Final Format:    {final_format.upper()}")
     print(f"Parallel:        {parallel}")
+    print(f"Protocol:        Frozen 4-Layer (Decision, Diagnostic, Stability, Robustness)")
     print("="*70 + "\n")
-    
-    # 1. ایجاد پیکربندی
+
+    # 1. Build config
     if dataset_name == 'movielens':
         config = get_movielens_config(
             num_items=num_items,
@@ -232,15 +243,15 @@ def run_temporal_evaluation(dataset_name: str,
             num_items=num_items,
             start_date=start_date,
             end_date=end_date,
-            window_size=window_size or 30,  
+            window_size=window_size or 30,
             prediction_horizon=prediction_horizon or 7,
             methods=methods,
             final_format=final_format,
             parallel=parallel,
             num_cores=num_cores,
             **kwargs
-        )        
-    elif dataset_name == 'youtube':  
+        )
+    elif dataset_name == 'youtube':
         config = get_youtube_config(
             num_items=num_items,
             start_date=start_date,
@@ -253,7 +264,7 @@ def run_temporal_evaluation(dataset_name: str,
             num_cores=num_cores,
             **kwargs
         )
-        loader = YouTubeLoader(DATASETS['youtube'])    
+        loader = YouTubeLoader(DATASETS['youtube'])
     elif dataset_name == 'youtube07':
         config = get_youtube_config(
             num_items=num_items,
@@ -267,7 +278,6 @@ def run_temporal_evaluation(dataset_name: str,
             num_cores=num_cores,
             **kwargs
         )
-    
     elif dataset_name == 'youku':
         config = get_youku_config(
             num_items=num_items,
@@ -281,47 +291,38 @@ def run_temporal_evaluation(dataset_name: str,
             num_cores=num_cores,
             **kwargs
         )
-    
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
-    
-    # چاپ پیکربندی
+
     if config.verbose:
         print(config)
-    
-    # 2. بارگذاری داده
+
+    print(f"Protocol:        Frozen 4-Layer (Decision, Diagnostic, Stability, Robustness)")
+    print(f"Metrics:         NDCG@{config.k_list}, CHR, RSI")
+    print(f"Robustness:      {config.robustness_sample_size} items, {config.spike_multiplier}x spike")
+    print()
+
+    # 2. Load data
     data_loader = get_data_loader(dataset_name, data_path=data_path)
-    
-    # 3. ایجاد روش‌ها
+
+    # 3. Build methods dict
     methods_dict = create_methods_dict(config)
-    
-    print(f"\nMethods to evaluate: {list(methods_dict.keys())}\n")
-    
-    # 4. ایجاد evaluator
+
+    print(f"Methods to evaluate: {list(methods_dict.keys())}\n")
+
+    # 4. Create evaluator
     if incremental and INCREMENTAL_AVAILABLE:
         print("Using INCREMENTAL evaluation mode")
-        print("  ✓ Memory efficient (<200 MB)")
-        print("  ✓ Crash-safe (continuous saving)")
-        print("  ✓ Method-specific window sizes\n")
+        print("  Memory efficient (<200 MB)")
+        print("  Crash-safe (continuous saving)")
+        print("  Method-specific window sizes\n")
 
-        # Load data once for incremental mode
         data, items = data_loader.load_for_temporal_evaluation(config)
 
-        # Build storage path
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # storage_path = Path(config.results_dir) / config.dataset_name / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
-        # تعیین output directory
-        if config.output_dir is None:
-            # output_base = Path('results') 
-            # output_base = Path('results') / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
-            output_base = Path('results') / config.dataset_name
-        else:
-            output_base = Path(config.output_dir)
-
-        # storage_path = output_base / config.dataset_name / f"w{config.window_size}_h{config.prediction_horizon}_n{len(items)}_inc_{timestamp}"
-        storage_path = output_base 
-
+        # config.__post_init__ already created output_dir with the correct
+        # structured name: results/<dataset>/w<W>_h<H>_n<N>_<sel>_<TIMESTAMP>/
+        # Use it directly so the directory naming is identical to temporal mode.
+        storage_path = config.output_dir
 
         evaluator = IncrementalTemporalEvaluator(
             config=config,
@@ -332,7 +333,7 @@ def run_temporal_evaluation(dataset_name: str,
         )
     else:
         if incremental and not INCREMENTAL_AVAILABLE:
-            print("⚠️  Incremental mode requested but not available, using standard mode")
+            print("Warning: Incremental mode requested but not available, using standard mode")
 
         print("Using STANDARD evaluation mode\n")
 
@@ -341,125 +342,125 @@ def run_temporal_evaluation(dataset_name: str,
             methods=methods_dict,
             config=config
         )
-    
-    # 5. اجرای ارزیابی
+
+    # 5. Run evaluation
     evaluator.evaluate()
-    
-    # 6. نتیجه
+
+    # 6. Summary
     print("\n" + "="*70)
-    print("EVALUATION COMPLETED SUCCESSFULLY!")
+    print("EVALUATION COMPLETED SUCCESSFULLY")
     print("="*70)
     print(f"Results saved to: {config.output_dir}")
     print("\nOutput structure:")
     print(f"  {config.output_dir}/")
-    print(f"    ├── detailed/          # Detailed scores per window/item")
-    print(f"    ├── summary/           # Stratum summaries")
+    print(f"    ├── detailed/          # Detailed scores per window/item (Parquet)")
+    print(f"    ├── summary/           # Stratum summaries (Parquet)")
+    print(f"    ├── protocol/          # 4-Layer Protocol metrics per window (Parquet/CSV)")
     print(f"    ├── comparison/        # Method comparison")
-    print(f"    ├── metadata/          # Config and statistics")
-    print(f"    └── visualization/     # (for future plots)")
+    print(f"    ├── metadata/          # Config and runtime statistics")
+    print(f"    └── visualization/     # (reserved for plots)")
     print("="*70 + "\n")
-    
+
     return evaluator
 
 
 def main():
-    """تابع اصلی با argument parsing"""
-    
+    """Entry point — parse CLI arguments and run evaluation."""
+
     parser = argparse.ArgumentParser(
-        description='تخمین و ارزیابی محبوبیت محتوا - Popularity Assessment',
+        description='Content Popularity Assessment — Frozen 4-Layer Evaluation Protocol',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-مثال‌های استفاده:
+Chapter 3 methods:
+  Baselines   : AF, LFU, LRU, EWMA             (7-day window)
+  Section 3-2 : DWT+AF   — Trend-Shock Model   (64-day window)
+  Section 3-3 : DTCWT+AF — Stable DTCWT Model  (64-day window)
+  Section 3-4 : WSPI     — Proposed Method      (64-day window)
 
-  # تست سریع (100 آیتم، 1 ماه)
-  python run_popularity_assessment.py movielens \
-      --num-items 100 \
-      --start-date 2023-08-01 \
-      --end-date 2023-08-31
+Examples:
 
-  # آزمایش متوسط (500 آیتم، 3 ماه)
-  python run_popularity_assessment.py movielens \
-      --num-items 500 \
-      --start-date 2023-01-01 \
-      --end-date 2023-03-31
+  # Quick test (100 items, 1 month)
+  python run_popularity_assessment.py movielens \\
+      --num-items 100 \\
+      --start-date 2023-08-01 --end-date 2023-08-31 \\
+      --incremental
 
-  # ارزیابی کامل (1000 آیتم، 1 سال)
-  python run_popularity_assessment.py movielens \
-      --num-items 1000 \
-      --start-date 2023-01-01 \
-      --end-date 2023-12-31
+  # Medium run (500 items, 3 months)
+  python run_popularity_assessment.py movielens \\
+      --num-items 500 \\
+      --start-date 2023-01-01 --end-date 2023-03-31
 
-  # همه داده‌ها (بدون فیلتر تاریخ)
-  python run_popularity_assessment.py movielens \
-      --num-items 1000
+  # Full evaluation (1000 items, 1 year)
+  python run_popularity_assessment.py movielens \\
+      --num-items 1000 \\
+      --start-date 2023-01-01 --end-date 2023-12-31
 
-  # دیتاست YouTube
-  python run_popularity_assessment.py youtube07 \
-      --num-items 200 \
-      --window-size 14 \
-      --horizon 3
+  # Custom K values for NDCG/CHR/RSI
+  python run_popularity_assessment.py movielens \\
+      --num-items 500 --k-list 5 10 20 50
 
-  # فرمت نهایی Parquet
-  python run_popularity_assessment.py movielens \
-      --num-items 1000 \
-      --start-date 2023-01-01 \
-      --end-date 2023-12-31 \
-      --format parquet
+  # Proposed method only
+  python run_popularity_assessment.py movielens \\
+      --num-items 500 --methods WSPI DTCWT+AF AF
 
-نکته: برای محاسبه تعداد windows:
+Window formula:
   num_windows = (end_date - start_date) - window_size - horizon + 1
         """
     )
-    
-    # Positional arguments
-    parser.add_argument('dataset', type=str, choices=['movielens', 'youtube07', 'youku','uber', 'youtube'],
-                       help='Dataset name')
-    
-    # Optional arguments
+
+    parser.add_argument('dataset', type=str,
+                        choices=['movielens', 'youtube07', 'youku', 'uber', 'youtube'],
+                        help='Dataset name')
+
     parser.add_argument('--num-items', type=int, default=None,
-                       help='Number of items to evaluate (default: all)')
-    
+                        help='Number of items to evaluate (default: all)')
+
     parser.add_argument('--start-date', type=str, default=None,
-                       help='تاریخ شروع (فرمت: YYYY-MM-DD، پیش‌فرض: از ابتدای دیتاست)')
-    
+                        help='Start date YYYY-MM-DD (default: dataset start)')
+
     parser.add_argument('--end-date', type=str, default=None,
-                       help='تاریخ پایان (فرمت: YYYY-MM-DD، پیش‌فرض: تا انتهای دیتاست)')
-    
+                        help='End date YYYY-MM-DD (default: dataset end)')
+
     parser.add_argument('--window-size', type=int, default=30,
-                       help='Training window size in days (default: 30)')
-    
+                        help='Training window size in days (default: 30)')
+
     parser.add_argument('--horizon', type=int, default=7,
-                       help='Prediction horizon in days (default: 7)')
-    
+                        help='Assessment horizon in days (default: 7)')
+
     parser.add_argument('--methods', type=str, nargs='+', default=None,
-                       help='Methods to evaluate (default: all)')
-    
+                        help='Methods to evaluate (default: all). '
+                             'Choices: AF LFU LRU EWMA DWT+AF DTCWT+AF WSPI')
+
     parser.add_argument('--format', type=str, default='csv',
-                       choices=['csv', 'parquet'],
-                       help='Final results format (default: csv). Intermediate always Parquet.')
-    
+                        choices=['csv', 'parquet'],
+                        help='Comparison output format (default: csv). Intermediate always Parquet.')
+
     parser.add_argument('--no-parallel', action='store_true',
-                       help='Disable parallel processing')
-    
+                        help='Disable parallel processing')
+
     parser.add_argument('--cores', type=int, default=-1,
-                       help='Number of CPU cores to use (default: all)')
-    
+                        help='CPU cores to use (default: all, -1)')
+
     parser.add_argument('--item-selection', type=str, default='top',
-                       choices=['top', 'random', 'stratified'],
-                       help='Item selection strategy (default: top)')
+                        choices=['top', 'random', 'stratified'],
+                        help='Item selection strategy (default: top)')
 
     parser.add_argument('--data-path', type=str, default=None,
-                       help='مسیر فایل داده (override مسیر config.py)')
+                        help='Override dataset file path from config')
 
     parser.add_argument('--incremental', action='store_true',
-                       help='Use incremental evaluation (saves memory, crash-safe)')
-    
+                        help='Use incremental evaluation (memory-efficient, crash-safe)')
+
     parser.add_argument('--quiet', action='store_true',
-                       help='Suppress verbose output')
-    
+                        help='Suppress verbose config output')
+
+    parser.add_argument('--k-list', type=int, nargs='+', default=None,
+                        metavar='K',
+                        help='K values for NDCG/CHR/RSI (default: 5 10 20). '
+                             'Example: --k-list 5 10 20 50')
+
     args = parser.parse_args()
-    
-    # اجرای ارزیابی
+
     run_temporal_evaluation(
         dataset_name=args.dataset,
         num_items=args.num_items,
@@ -474,7 +475,8 @@ def main():
         data_path=args.data_path,
         incremental=args.incremental,
         item_selection=args.item_selection,
-        verbose=not args.quiet
+        verbose=not args.quiet,
+        **(({'k_list': args.k_list} if args.k_list else {}))
     )
 
 
