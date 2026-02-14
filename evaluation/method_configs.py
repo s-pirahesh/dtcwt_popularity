@@ -22,7 +22,7 @@ import math
 class MethodConfig:
     """Configuration for a single assessment method."""
     name: str
-    window_days: int        # training window length in days (must be 7 or power of 2)
+    window_slots: int       # training window length in SLOTS (dataset-agnostic: 7 for baselines, 64 for wavelet methods)
     min_observations: int   # minimum time-series length required
     description: str
 
@@ -36,28 +36,28 @@ METHOD_CONFIGS: Dict[str, MethodConfig] = {
     # =========================================================================
     'AF': MethodConfig(
         name='AF',
-        window_days=7,
+        window_slots=7,
         min_observations=3,
         description='Access Frequency — count-based baseline'
     ),
 
     'LRU': MethodConfig(
         name='LRU',
-        window_days=7,
+        window_slots=7,
         min_observations=3,
         description='Least Recently Used — recency-based baseline'
     ),
 
     'LFU': MethodConfig(
         name='LFU',
-        window_days=7,
+        window_slots=7,
         min_observations=3,
         description='Least Frequently Used — frequency-based baseline'
     ),
 
     'EWMA': MethodConfig(
         name='EWMA',
-        window_days=7,
+        window_slots=7,
         min_observations=3,
         description='Exponentially Weighted Moving Average (alpha=0.3)'
     ),
@@ -77,7 +77,7 @@ METHOD_CONFIGS: Dict[str, MethodConfig] = {
     # =========================================================================
     'DWT+AF': MethodConfig(
         name='DWT+AF',
-        window_days=64,
+        window_slots=64,
         min_observations=32,
         description=(
             'Trend-Shock Model (Section 3-2): '
@@ -103,7 +103,7 @@ METHOD_CONFIGS: Dict[str, MethodConfig] = {
     # =========================================================================
     'DTCWT+AF': MethodConfig(
         name='DTCWT+AF',
-        window_days=64,
+        window_slots=64,
         min_observations=32,
         description=(
             'Stable DTCWT Model (Section 3-3): '
@@ -133,7 +133,7 @@ METHOD_CONFIGS: Dict[str, MethodConfig] = {
     # =========================================================================
     'WSPI': MethodConfig(
         name='WSPI',
-        window_days=64,
+        window_slots=64,
         min_observations=32,
         description=(
             'Wavelet Structural Popularity Index (Section 3-4): '
@@ -157,9 +157,9 @@ def get_method_config(method_name: str) -> MethodConfig:
 
 
 def get_window_size(method_name: str, default: int = 30) -> int:
-    """Return window_days for method_name, or default if not registered."""
+    """Return window_slots for method_name, or default if not registered."""
     try:
-        return get_method_config(method_name).window_days
+        return get_method_config(method_name).window_slots
     except KeyError:
         return default
 
@@ -173,33 +173,33 @@ def get_min_observations(method_name: str, default: int = 10) -> int:
 
 
 def list_methods_by_window_size() -> Dict[int, list]:
-    """Return {window_size: [method_names]} grouped by window_days."""
+    """Return {window_size: [method_names]} grouped by window_slots."""
     grouped: Dict[int, list] = {}
     for name, config in METHOD_CONFIGS.items():
-        grouped.setdefault(config.window_days, []).append(name)
+        grouped.setdefault(config.window_slots, []).append(name)
     return grouped
 
 
 def validate_configs():
     """
     Validate all METHOD_CONFIGS entries.
-    window_days must be 7 or a power of 2 (8..512).
-    min_observations must be >= 1 and <= window_days.
+    window_slots must be 7 or a power of 2 (8..512).
+    min_observations must be >= 1 and <= window_slots.
     """
     errors = []
     allowed_values = [7] + [2 ** i for i in range(3, 10)]  # 7, 8, 16, 32, 64, 128, 256, 512
 
     for name, config in METHOD_CONFIGS.items():
-        if config.window_days not in allowed_values:
+        if config.window_slots not in allowed_values:
             errors.append(
-                f"{name}: window_days={config.window_days} must be 7 or a power of 2"
+                f"{name}: window_slots={config.window_slots} must be 7 or a power of 2"
             )
         if config.min_observations < 1:
             errors.append(f"{name}: min_observations must be >= 1")
-        if config.min_observations > config.window_days:
+        if config.min_observations > config.window_slots:
             errors.append(
                 f"{name}: min_observations={config.min_observations} "
-                f"> window_days={config.window_days}"
+                f"> window_slots={config.window_slots}"
             )
 
     if errors:
@@ -212,7 +212,7 @@ def validate_configs():
     grouped = list_methods_by_window_size()
     for window_size in sorted(grouped.keys()):
         methods = grouped[window_size]
-        print(f"\nWindow {window_size} days ({len(methods)} methods):")
+        print(f"\nWindow {window_size} slots ({len(methods)} methods):")
         for method in methods:
             cfg = METHOD_CONFIGS[method]
             print(f"  • {method:<20} min_obs={cfg.min_observations:>3}")
@@ -229,4 +229,4 @@ validate_configs()
 if __name__ == '__main__':
     print("\nMethod configs (Chapter 3 alignment):\n")
     for name, cfg in METHOD_CONFIGS.items():
-        print(f"  {name:<15} window={cfg.window_days:>3}d  min_obs={cfg.min_observations:>3}  |  {cfg.description}")
+        print(f"  {name:<15} window={cfg.window_slots:>3} slots  min_obs={cfg.min_observations:>3}  |  {cfg.description}")

@@ -235,20 +235,20 @@ class IncrementalTemporalEvaluator:
         """
         # -- Method config -----------------------------------------------------
         try:
-            method_config = get_method_config(method_name)
-            window_days   = method_config.window_days
-            min_obs       = method_config.min_observations
+            method_config  = get_method_config(method_name)
+            window_slots   = method_config.window_slots   # slots, dataset-agnostic
+            min_obs        = method_config.min_observations
         except KeyError:
             print(f"  Warning: No config for {method_name}, using defaults")
-            window_days   = self.config.window_size
-            min_obs       = self.config.min_observations
+            window_slots   = self.config.window_size
+            min_obs        = self.config.min_observations
 
-        print(f"  Window size:      {window_days} days")
+        print(f"  Window size:      {window_slots} slots")
         print(f"  Min observations: {min_obs}")
         print(f"  Pre-range data:   {self.config.use_pre_range_data}")
 
         # -- Window list -------------------------------------------------------
-        windows = self._calculate_windows(window_days)
+        windows = self._calculate_windows(window_slots)
         unit = self.time_helper.get_unit_name()
         print(f"  Total windows:    {len(windows)} (one per {unit} in range)")
 
@@ -423,30 +423,21 @@ class IncrementalTemporalEvaluator:
     # Window generation (UNCHANGED)
     # ==========================================================================
 
-    def _calculate_windows(self, window_days: int) -> List[tuple]:
+    def _calculate_windows(self, window_slots: int) -> List[tuple]:
         """
         Build list of (train_start, train_end, test_start, test_end) tuples.
         One window per TIME-SLOT in the evaluation range.
 
-        Bug fixed: the original implementation stepped by calendar days,
-        producing only 29 windows for a 29-day YouTube hourly dataset
-        instead of the correct 697 hourly windows.
-
-        Now uses self.time_helper (same as temporal_evaluator) so that:
-          - daily  datasets → one window per day   (unchanged)
-          - hourly datasets → one window per hour  (YouTube fix)
-          - custom datasets → one window per slot  (Youku/Uber)
-
         Args:
-            window_days: method window size in DAYS (from MethodConfig).
-                         Converted to slots internally via time_helper.
+            window_slots: method window size in SLOTS (dataset-agnostic).
+                          7 = 7 slots on any dataset (hours, days, 5-min, etc.)
+                          This value comes directly from MethodConfig.window_slots
+                          with NO day→hour conversion.
         """
         windows       = []
         absolute_min  = self.data['timestamp'].min()
 
-        # Convert window_days to slots (e.g. 7 days → 168 hours for hourly)
-        # We use slots_to_timedelta so window boundaries stay correct.
-        window_slots  = self.time_helper.days_to_slots(window_days)
+        # window_slots is already in the correct unit — use directly.
         num_slots     = self.time_helper.count_slots(self.data_start, self.data_end)
 
         for slot_idx in range(num_slots + 1):
