@@ -93,6 +93,16 @@ class EvaluationConfig:
     # === Run naming ===
     run_name: Optional[str] = None          # نام دلخواه برای این run (یا None برای خودکار)
     use_timestamp: bool = True              # اضافه کردن timestamp به نام
+
+    # === Frozen Evaluation Protocol — Decision Layer ===
+    # K values used for NDCG@K, CHR@K, and RSI@K
+    k_list: List[int] = field(default_factory=lambda: [5, 10, 20])
+
+    # === Frozen Evaluation Protocol — Robustness Layer ===
+    # Number of stable low-popularity items selected for noise injection
+    robustness_sample_size: int = 50
+    # Spike magnitude relative to item's historical mean (10x = 1000% increase)
+    spike_multiplier: float = 10.0
     
     def __post_init__(self):
         """محاسبه خودکار پارامترها و اعتبارسنجی"""
@@ -214,7 +224,9 @@ class EvaluationConfig:
             parts.append("nall")
         
         # item selection
-        parts.append(self.item_selection[:3])  # top, ran, str
+        # Explicit abbreviation — avoid 'str' which looks like Python builtin
+        _abbrev = {'top': 'top', 'random': 'rnd', 'stratified': 'strat'}
+        parts.append(_abbrev.get(self.item_selection, self.item_selection[:4]))
         
         return "_".join(parts)
     
@@ -240,6 +252,10 @@ class EvaluationConfig:
             'final_format': self.final_format,
             'compression': self.compression,
             'dataset_name': self.dataset_name,
+            # Frozen Evaluation Protocol
+            'k_list': self.k_list,
+            'robustness_sample_size': self.robustness_sample_size,
+            'spike_multiplier': self.spike_multiplier,
         }
     
     def save_config(self, filepath: Path):
@@ -253,14 +269,18 @@ class EvaluationConfig:
         """نمایش خلاصه پیکربندی"""
         return (
             f"EvaluationConfig(\n"
-            f"  Dataset: {self.dataset_name}\n"
-            f"  Time Range: {self.start_date} to {self.end_date}\n"
-            f"  Window: {self.window_size} days, Horizon: {self.prediction_horizon} days\n"
-            f"  Items: {self.num_items or 'all'}, Selection: {self.item_selection}\n"
-            f"  DWT Level: {self.wavelet_config['dwt']['level']}, "
+            f"  Dataset:          {self.dataset_name}\n"
+            f"  Time Range:       {self.start_date} to {self.end_date}\n"
+            f"  Window:           {self.window_size} days, Horizon: {self.prediction_horizon} days\n"
+            f"  Items:            {self.num_items or 'all'}, Selection: {self.item_selection}\n"
+            f"  DWT Level:        {self.wavelet_config['dwt']['level']}, "
             f"DTCWT Level: {self.wavelet_config['dtcwt']['level']}\n"
-            f"  Output: {self.final_format} ({self.compression})\n"
-            f"  Parallel: {self.parallel} (cores: {self.num_cores})\n"
+            f"  Output:           {self.final_format} ({self.compression})\n"
+            f"  Parallel:         {self.parallel} (cores: {self.num_cores})\n"
+            f"  --- Frozen Evaluation Protocol ---\n"
+            f"  K values:         {self.k_list}\n"
+            f"  Robustness:       {self.robustness_sample_size} items, "
+            f"{self.spike_multiplier}x spike\n"
             f")"
         )
     
@@ -295,7 +315,12 @@ def get_movielens_config(**kwargs) -> EvaluationConfig:
         'dataset_name': 'movielens',
         'window_size': 30,
         'prediction_horizon': 7,
-        'strata_thresholds': [10, 100, 1000],  # ratings
+        # Thresholds in mean ratings/day (after mean-per-slot fix):
+        #   cold_start : < 1   rating/day  (rarely-rated, new items)
+        #   low        : 1-5   ratings/day
+        #   medium     : 5-20  ratings/day
+        #   high       : >= 20 ratings/day (consistently popular)
+        'strata_thresholds': [1, 5, 20],
         'min_observations': 10,
     }
     defaults.update(kwargs)
@@ -319,33 +344,35 @@ def get_uber_config(**kwargs) -> EvaluationConfig:
         'dataset_name': 'uber',
         'window_size': 30,
         'prediction_horizon': 7,  # legacy parameter, not used
-        'strata_thresholds': [10, 100, 1000],  # trip counts
+        # Thresholds in mean trips/hour per zone (after mean-per-slot fix):
+        #   cold_start : < 5   trips/hour  (low-traffic zones)
+        #   low        : 5-50  trips/hour
+        #   medium     : 50-300 trips/hour
+        #   high       : >= 300 trips/hour (major hubs)
+        'strata_thresholds': [5, 50, 300],
         'min_observations': 10,
     }
     defaults.update(kwargs)
     return EvaluationConfig(**defaults)
 
 
-# def get_youtube_config(**kwargs) -> EvaluationConfig:
-#     """پیکربندی پیش‌فرض برای YouTube07"""
-#     defaults = {
-#         'dataset_name': 'youtube07',
-#         'window_size': 14,              # 2 weeks
-#         'prediction_horizon': 3,        # 3 days
-#         'strata_thresholds': [100, 1000, 10000],  # views
-#         'min_observations': 50,
-#     }
-#     defaults.update(kwargs)
-#     return EvaluationConfig(**defaults)
+# (youtube07 config removed — not yet implemented)
 
 def get_youtube_config(**kwargs) -> EvaluationConfig:
-    """پیکربندی پیش‌فرض برای YouTube"""
+    """
+    Default config for YouTube (hourly granularity).
+    Thresholds in mean views/hour per video:
+      cold_start : < 50    views/hour
+      low        : 50-500  views/hour
+      medium     : 500-5000 views/hour
+      high       : >= 5000 views/hour
+    """
     defaults = {
         'dataset_name': 'youtube',
-        'time_granularity': 'hourly',  
-        'window_size': 30,  
-        'prediction_horizon': 3,  
-        'strata_thresholds': [100, 1000, 10000],  
+        'time_granularity': 'hourly',
+        'window_size': 30,
+        'prediction_horizon': 3,
+        'strata_thresholds': [50, 500, 5000],
         'min_observations': 50,
     }
     defaults.update(kwargs)
@@ -358,17 +385,9 @@ def get_youku_config(**kwargs) -> EvaluationConfig:
         'time_granularity': 'custom',
         'slot_duration_minutes': 5,     # 5-minute slots
         'window_size': 288,              # 288 slots = 24 hours
-        'strata_thresholds': [100, 1000, 10000],  # views
-        'min_observations': 20,
-    }
-    defaults.update(kwargs)
-    return EvaluationConfig(**defaults)
-    """پیکربندی پیش‌فرض برای Youku"""
-    defaults = {
-        'dataset_name': 'youku',
-        'window_size': 7,               # 1 week
-        'prediction_horizon': 1,        # 1 day
-        'strata_thresholds': [50, 500, 5000],  # views
+        # Thresholds in mean views/5-min-slot:
+        #   cold<50, low 50-500, medium 500-5000, high>=5000
+        'strata_thresholds': [50, 500, 5000],
         'min_observations': 20,
     }
     defaults.update(kwargs)

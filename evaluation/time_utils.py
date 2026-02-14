@@ -71,6 +71,26 @@ class TimeSlotHelper:
         """
         return self._slot_delta * n_slots
     
+    def days_to_slots(self, days: int) -> int:
+        """
+        Convert a window size expressed in DAYS to the equivalent number
+        of time-slots for this dataset's granularity.
+
+        Examples:
+          daily  granularity: 7 days → 7 slots
+          hourly granularity: 7 days → 168 slots
+          5-min  granularity: 7 days → 2016 slots
+
+        Args:
+            days: window size in calendar days (from MethodConfig.window_days)
+
+        Returns:
+            int: equivalent number of time-slots
+        """
+        day_seconds  = 24 * 3600
+        slot_seconds = self._slot_delta.total_seconds()
+        return max(1, int(days * day_seconds / slot_seconds))
+
     def count_slots(self, start: datetime, end: datetime) -> int:
         """
         محاسبه تعداد slots بین دو تاریخ
