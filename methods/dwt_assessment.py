@@ -80,19 +80,40 @@ class DWTAssessment(BaseMethod):
 
         return float(score)
 
+    def _safe_level(self, n: int) -> int:
+        """
+        Return the maximum decomposition level that avoids boundary-effect
+        warnings from pywt for a signal of length n.
+
+        pywt fires UserWarning when level > floor(log2(n / (filter_len - 1))).
+        For db4: filter_len = 8, so safe threshold is n >= 7 * 2^level.
+
+        If the requested self.level is already safe, it is returned unchanged.
+        Otherwise the largest safe level (>= 1) is returned.
+        """
+        wavelet_obj  = pywt.Wavelet(self.wavelet)
+        filter_len   = wavelet_obj.dec_len          # e.g. 8 for db4
+        import math
+        if filter_len <= 1 or n <= 0:
+            return 1
+        max_safe = int(math.floor(math.log2(n / (filter_len - 1)))) if n >= filter_len else 1
+        return max(1, min(self.level, max_safe))
+
     def assess_single(self, time_series: np.ndarray) -> float:
         """
         Calculate the final popularity score for a time series.
 
         Execution steps:
-        1. Padding: Increase data length if needed for wavelet transform stability.
-        2. Decomposition: Decompose time series into approximation and detail coefficients.
-        3. Extraction: Separate trend ($cA_L$) and shock ($cD_1$) components.
-        4. Scoring: Calculate AF for each component.
-        5. Fusion: Combine two scores with specified weights.
+        1. Adaptive level: choose the highest DWT level that is safe for
+           this signal length (avoids pywt boundary-effect warnings).
+        2. Padding: ensure minimum length of 2^level.
+        3. Decomposition: [cA_L, cD_L, …, cD_1].
+        4. Extraction: trend (cA_L) and shock (cD_1).
+        5. Scoring: weighted AF on each component.
+        6. Fusion: Score = AF(trend) + β * AF(shock).
 
         Args:
-            time_series (np.ndarray): Time series of visits (visit count per interval).
+            time_series (np.ndarray): Visit counts per time-slot.
 
         Returns:
             float: Final popularity score.
@@ -100,40 +121,35 @@ class DWTAssessment(BaseMethod):
         if len(time_series) == 0:
             return 0.0
 
-        # 1. Data length management (Padding)
-        # Wavelet requires minimum length of 2^level
-        min_len = 2 ** self.level
+        # 1. Adaptive level — never request more than the signal can support
+        safe_lvl = self._safe_level(len(time_series))
+
+        # 2. Minimum-length padding (now using safe_lvl, not self.level)
+        min_len = 2 ** safe_lvl
         if len(time_series) < min_len:
             pad_width = min_len - len(time_series)
-            # Use edge padding for minimal distortion of the trend
             ts_to_process = np.pad(time_series, (pad_width, 0), mode='edge')
         else:
             ts_to_process = time_series
 
         try:
-            # 2. Wavelet Decomposition
-            # Output: [cA_n, cD_n, cD_n-1, ..., cD_1]
-            coeffs = pywt.wavedec(ts_to_process, self.wavelet, level=self.level, mode=self.mode)
+            # 3. Wavelet decomposition at the (possibly reduced) safe level
+            coeffs = pywt.wavedec(ts_to_process, self.wavelet,
+                                  level=safe_lvl, mode=self.mode)
 
-            # 3. Extract components
-            # Trend component: lowest frequency (first list member)
-            approx_coeffs = coeffs[0]
+            # 4. Extract components
+            approx_coeffs = coeffs[0]   # trend  (cA_L)
+            detail_l1     = coeffs[-1]  # shock  (cD_1)
 
-            # Shock component: highest frequency (last list member = level 1)
-            detail_l1 = coeffs[-1]
-
-            # 4. Calculate scores
+            # 5. Calculate scores
             trend_score = self._apply_weighted_af(approx_coeffs)
             shock_score = self._apply_weighted_af(detail_l1)
 
-            # 5. Final fusion
-            final_score = trend_score + (self.detail_weight * shock_score)
-
-            return float(final_score)
+            # 6. Final fusion
+            return float(trend_score + self.detail_weight * shock_score)
 
         except Exception as e:
-            # Error handling: fall back to simple method if wavelet fails
-            print(f"Warning: DWT failed, using raw sum. Error: {e}")
+            # Fallback: weighted sum (no print — caller handles logging)
             return float(np.sum(time_series))
 
     def assess_batch(self, time_series_list: List[np.ndarray]) -> np.ndarray:
