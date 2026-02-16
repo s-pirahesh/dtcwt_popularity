@@ -166,12 +166,17 @@ class StratificationSystem:
 
     def _calculate_thresholds(self, item_means: pd.Series) -> List[float]:
         """
-        Compute [Q1, Q2, Q3] from the distribution of per-slot means.
+        Compute [Q25, Q50, Q90] from the distribution of per-slot means.
         Only called when config.strata_thresholds is None.
+
+        Q90 (not Q75) is used for the high boundary so that 'high' always
+        represents the top ~10% of items — consistent with the popularity
+        literature and avoids the artificial 25/25/25/25 split that Q75
+        would produce on power-law distributions (Uber, YouTube).
         """
         q1 = float(item_means.quantile(0.25))
         q2 = float(item_means.quantile(0.50))
-        q3 = float(item_means.quantile(0.75))
+        q3 = float(item_means.quantile(0.90))   # top 10% = high
 
         thresholds = [q1, q2, q3]
 
