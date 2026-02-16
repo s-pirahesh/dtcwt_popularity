@@ -115,7 +115,7 @@ FROZEN_PROTOCOL_CONFIG = {
 
 STRATA_THRESHOLDS = {
     'movielens': [1, 5, 20],      # mean ratings/day
-    'uber':      [5, 50, 300],    # mean trips/hour per zone
+    'uber':      [5, 30, 100],    # mean trips/hour per zone (hourly, NYC TLC)
     'youtube':   [50, 500, 5000], # mean views/hour
     'youku':     [50, 500, 5000], # mean views/5-min-slot
 }
