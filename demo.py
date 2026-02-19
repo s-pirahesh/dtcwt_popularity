@@ -213,7 +213,7 @@ def demo_comparison():
     # Initialize all methods
     methods = {
         'AF': None,
-        'LFU': None,
+        'MeanFreq': None,
         'EWMA': None,
         'DWT+AF': DWTAssessment(),
         'DTCWT+AF': DTCWTAssessment(),
@@ -231,8 +231,8 @@ def demo_comparison():
             if method is None:
                 if method_name == 'AF':
                     score = TraditionalBaselines.access_frequency(ts)
-                elif method_name == 'LFU':
-                    score = TraditionalBaselines.lfu_score(ts)
+                elif method_name == 'MeanFreq':
+                    score = TraditionalBaselines.mean_freq_score(ts)
                 else:  # EWMA
                     score = TraditionalBaselines.ewma_score(ts)
             else:
@@ -254,7 +254,7 @@ def demo_comparison():
     print("- Hybrid method consistently provides balanced scores")
     print("- DTCWT captures complex patterns better than DWT")
     print("- Statistical method sensitive to distribution shape")
-    print("- Baselines (AF, LFU) are simple but less discriminative")
+    print("- Baselines (AF, MeanFreq, EWMA, RRD, VSE, CompoundPop) are general-purpose but less discriminative")
     
     print("\n" + "="*70 + "\n")
 

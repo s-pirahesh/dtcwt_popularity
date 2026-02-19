@@ -3,7 +3,7 @@ Global configuration — DTCWT Popularity Assessment Framework
 Version 4.0  (Frozen Evaluation Protocol + WSPI)
 
 Chapter 3 method lineup:
-  Baselines   : AF, LRU, LFU, EWMA          (7-day window)
+  Baselines   : AF, MeanFreq, EWMA, RRD, VSE, CompoundPop  (7-slot window)
   Section 3-2 : DWT+AF   — Trend-Shock Model (64-day window)
   Section 3-3 : DTCWT+AF — Stable Model      (64-day window)
   Section 3-4 : WSPI     — Proposed Method   (64-day window, frozen params)
