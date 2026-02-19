@@ -4,7 +4,7 @@ Implements the 4-Layer "Frozen Evaluation Protocol" with incremental
 (crash-safe, low-memory) storage.
 
 Layers:
-  1 - Decision:    NDCG@K, CHR@K          (K ∈ {5, 10, 20})
+  1 - Decision:    NDCG@K, Coverage@K          (K ∈ {5, 10, 20})
   2 - Diagnostic:  Kendall τ, Spearman ρ, MAE
   3 - Stability:   RSI (Ranking Stability Index) @K
   4 - Robustness:  Rank Distortion under Noise Injection
@@ -31,7 +31,7 @@ from .method_configs import get_method_config, METHOD_CONFIGS
 from .time_utils import create_time_helper, TimeSlotHelper
 from .metrics import (
     calculate_ndcg,
-    calculate_hit_rate,
+    calculate_coverage,
     calculate_rsi,
     calculate_rank_distortion,
     calculate_diagnostics,
@@ -311,7 +311,7 @@ class IncrementalTemporalEvaluator:
                     decision: Dict[str, float] = {}
                     for k in self.K_VALUES:
                         decision[f'ndcg@{k}'] = calculate_ndcg(scores_clean, actuals, k=k)
-                        decision[f'chr@{k}']  = calculate_hit_rate(scores_clean, actuals, k=k)
+                        decision[f'coverage@{k}']  = calculate_coverage(scores_clean, actuals, k=k)
 
                     # ---- Layer 2: Diagnostics --------------------------------
                     diag = calculate_diagnostics(scores_clean, actuals)

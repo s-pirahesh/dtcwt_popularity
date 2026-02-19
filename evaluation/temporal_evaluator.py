@@ -2,7 +2,7 @@
 """
 Temporal Evaluator - Main Evaluation Engine
 Implements the 4-Layer "Frozen Evaluation Protocol":
-  Layer 1 - Decision:    NDCG@K, CHR@K
+  Layer 1 - Decision:    NDCG@K, Coverage@K
   Layer 2 - Diagnostic:  Kendall's Tau, Spearman's Rho, MAE
   Layer 3 - Stability:   RSI (Ranking Stability Index) @K
   Layer 4 - Robustness:  Rank Distortion (Noise Injection)
@@ -26,7 +26,7 @@ from .evaluation_config import EvaluationConfig
 from .stratification import StratificationSystem
 from .metrics import (
     calculate_ndcg,
-    calculate_hit_rate,
+    calculate_coverage,
     calculate_rsi,
     calculate_rank_distortion,
     calculate_diagnostics,
@@ -284,7 +284,7 @@ class TemporalEvaluator:
         Evaluate one method across all sliding windows using the
         4-Layer Frozen Evaluation Protocol.
 
-        Layer 1 – Decision:    NDCG@K, CHR@K          (K in {5, 10, 20})
+        Layer 1 – Decision:    NDCG@K, Coverage@K          (K in {5, 10, 20})
         Layer 2 – Diagnostic:  Kendall tau, Spearman rho, MAE
         Layer 3 – Stability:   RSI@K                   (K in {5, 10, 20})
         Layer 4 – Robustness:  Mean Rank Distortion (noise injection)
@@ -390,7 +390,7 @@ class TemporalEvaluator:
                 decision: Dict[str, float] = {}
                 for k in self.K_VALUES:
                     decision[f'ndcg@{k}'] = calculate_ndcg(scores_clean, actuals, k=k)
-                    decision[f'chr@{k}']  = calculate_hit_rate(scores_clean, actuals, k=k)
+                    decision[f'coverage@{k}']  = calculate_coverage(scores_clean, actuals, k=k)
 
                 # ---- Layer 2: Diagnostics -------------------------------------
                 diag = calculate_diagnostics(scores_clean, actuals)

@@ -4,10 +4,15 @@ Evaluation Metrics Module
 This module implements the core metrics defined in the Frozen Evaluation Protocol.
 
 Metrics included:
-1. Decision Layer: NDCG@K (Log-Relevance), HitRatio@K (Static Placement)
+1. Decision Layer: NDCG@K (Log-Relevance), Coverage@K (Top-K interaction coverage)
 2. Diagnostic Layer: Kendall's Tau, Spearman's Rho, MAE (Sanity Check)
 3. Stability Layer: RSI (Ranking Stability Index)
 4. Robustness Layer: Rank Distortion (for Noise Injection test)
+
+Note: CHR (Cache Hit Ratio) renamed to Coverage@K.
+  Coverage@K = proportion of future interactions covered by top-K items.
+  This is a general popularity metric, not cache-specific.
+  Formula unchanged: sum(actual_views[top_k]) / sum(actual_views)
 """
 
 import numpy as np
@@ -60,13 +65,17 @@ def calculate_ndcg(predicted_scores: np.ndarray, actual_views: np.ndarray, k: in
         return 0.0
     return float(dcg / idcg)
 
-def calculate_hit_rate(predicted_scores: np.ndarray, actual_views: np.ndarray, k: int = 10) -> float:
+def calculate_coverage(predicted_scores: np.ndarray, actual_views: np.ndarray, k: int = 10) -> float:
     """
-    Calculates Cache Hit Ratio (CHR) @ K assuming Static Placement.
-    
-    Protocol Adherence:
-        - Assumes Top-K items are placed in cache at the start.
-        - Hit Ratio = (Sum of views of Top-K items) / (Total views of all items)
+    Calculates Coverage @ K: proportion of future interactions captured by top-K items.
+
+    Formerly named calculate_hit_rate / CHR@K.
+    Renamed to Coverage@K to decouple from caching terminology.
+    Interpretation: "What fraction of future interactions do the top-K predicted
+    items account for?" — a general popularity quality metric applicable to any
+    content selection or replication decision, not limited to caching.
+
+    Formula: Coverage@K = sum(actual_views[top_K]) / sum(actual_views)
     """
     total_views = np.sum(actual_views)
     if total_views == 0:
@@ -246,3 +255,7 @@ class MetricsCalculator:
             'rank_predicted': rank_predicted,
             'rank_actual':    rank_actual,
         }
+
+# Backward-compatibility alias
+calculate_hit_rate = calculate_coverage
+

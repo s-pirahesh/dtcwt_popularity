@@ -95,7 +95,7 @@ class EvaluationConfig:
     use_timestamp: bool = True              # اضافه کردن timestamp به نام
 
     # === Frozen Evaluation Protocol — Decision Layer ===
-    # K values used for NDCG@K, CHR@K, and RSI@K
+    # K values used for NDCG@K, Coverage@K, and RSI@K
     k_list: List[int] = field(default_factory=lambda: [5, 10, 20])
 
     # === Frozen Evaluation Protocol — Robustness Layer ===
