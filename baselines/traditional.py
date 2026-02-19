@@ -1,15 +1,20 @@
 """
-Traditional Baseline Methods
-AF, LRU, LFU, EWMA
-"""
-import numpy as np
-from typing import List, Dict
-from collections import Counter, OrderedDict
+Popularity Assessment Baseline Methods
+=======================================
+General-purpose popularity scoring methods for distributed systems.
+Based on definitions from: Hamdeni et al. (2016) and related works.
 
+Methods:
+  - AF          : Access Frequency (exponential decay weighting) [Chang & Chang, 2008]
+  - EWMA        : Exponentially Weighted Moving Average [Gui & Chen, 2020]
+  - RRD         : Requests / Lifetime ratio [Al Mistarihi & Yong, 2008]
+  - VSE         : Volume + Recency combined score [Mansouri & Asadi, 2014]
+  - CompoundPop : Three-factor compound popularity [Ye et al., 2014]
+  - PFRF        : Period-based popularity weighting [Lee et al., 2012]
 
-"""
-Traditional Baseline Methods
-Based on definitions in Baseline_Popularity_methods.docx
+Removed:
+  - LRU      — cache-specific eviction policy, not a general popularity metric
+  - MeanFreq — replaced by RRD (same concept but normalised by lifetime)
 """
 import numpy as np
 from typing import List, Dict
@@ -17,233 +22,163 @@ from typing import List, Dict
 
 class TraditionalBaselines:
     """
-    Traditional caching/popularity prediction methods
+    General-purpose popularity scoring methods.
+    All methods output a scalar popularity score for a given time series.
     """
-    
+
     @staticmethod
     def access_frequency(time_series: np.ndarray) -> float:
         """
-        Weighted Access Frequency (AF)
-        Ref [34]: Assigns weights 2^-i to history.
-        Recent accesses have higher weight (1, 0.5, 0.25, ...).
+        Weighted Access Frequency (AF).
+        Ref: Chang & Chang (2008), Eq(7).
+        Recent accesses have higher weight: 2^0, 2^-1, 2^-2, ...
         """
         if len(time_series) == 0:
             return 0.0
-
-        # Reverse to make index 0 the present time
         reversed_ts = time_series[::-1]
         score = 0.0
-
         for i, val in enumerate(reversed_ts):
-            weight = 2.0 ** (-i)
-            score += weight * val
-
+            score += (2.0 ** (-i)) * val
         return float(score)
-    
-    @staticmethod
-    def lfu_score(time_series: np.ndarray) -> float:
-        """
-        Least Frequently Used (LFU)
-        Ref [32] Eq(5): Mean request frequency per period.
-        Formula: Sum(Requests) / Num_Periods
-        """
-        if len(time_series) == 0:
-            return 0.0
 
-        # Precise implementation of average formula
-        return float(np.mean(time_series))
-    
     @staticmethod
     def ewma_score(time_series: np.ndarray, alpha: float = 0.2) -> float:
         """
-        Exponentially Weighted Moving Average (EWMA)
-        Ref [39] Eq(13): Recurrent formula for popularity.
+        Exponentially Weighted Moving Average (EWMA).
+        Ref: Gui & Chen (2020), Eq(13).
         P(t) = alpha * R(t) + (1-alpha) * P(t-1)
+        Recent periods have higher influence.
         """
         if len(time_series) == 0:
             return 0.0
-
-        # Initial value
         ewma = float(time_series[0])
-
-        # Recursive calculation
         for val in time_series[1:]:
             ewma = alpha * val + (1 - alpha) * ewma
-
         return float(ewma)
-    
+
     @staticmethod
-    def lru_score(time_series: np.ndarray) -> float:
+    def rrd_score(time_series: np.ndarray) -> float:
         """
-        Least Recently Used (LRU) — volume-weighted recency score.
-        Ref [33]: Based on time since last access.
-
-        The original formulation 1/(dist+1) is recency-only.  When every
-        item was active in the most recent slot (dist=0 for all), every
-        score equals 1.0 — a constant array — making Spearman/Kendall
-        undefined (ConstantInputWarning).
-
-        Fix: multiply the recency weight by the mean non-zero count in the
-        window.  This preserves the LRU semantic (recent access counts more)
-        while adding enough differentiation via volume to avoid ties.
-
-        Formula:  score = mean_nonzero_volume * 1/(dist+1)
-          - dist         = slots since last non-zero observation
-          - mean_nonzero = mean of count values where count > 0
+        Requests per unit Lifetime (RRD — Relative Request Density).
+        Ref: Al Mistarihi & Yong (2008), Eq(3).
+        Formula: total_requests / lifetime_slots
+        Normalizes frequency by data lifetime to avoid bias for older data.
         """
         if len(time_series) == 0:
             return 0.0
-
+        total_requests = float(np.sum(time_series))
+        # Lifetime = number of periods from first non-zero access to end
         nonzero_indices = np.nonzero(time_series)[0]
-
         if len(nonzero_indices) == 0:
             return 0.0
+        first_access = nonzero_indices[0]
+        lifetime = len(time_series) - first_access
+        if lifetime <= 0:
+            return 0.0
+        return total_requests / lifetime
 
-        # Recency component: 1/(distance_from_last_access + 1)
-        last_access_idx  = nonzero_indices[-1]
-        current_time_idx = len(time_series) - 1
-        dist             = current_time_idx - last_access_idx
-        recency_weight   = 1.0 / (dist + 1.0)
+    @staticmethod
+    def vse_score(time_series: np.ndarray) -> float:
+        """
+        Volume + Recency Score (VSE — Value-based Score with Elapsed time).
+        Ref: Mansouri & Asadi (2014), Eq(6).
+        Formula: total_requests * recency_weight
+        Recency weight = 1 / (slots_since_last_access + 1)
+        Combines total demand with temporal recency.
+        """
+        if len(time_series) == 0:
+            return 0.0
+        nonzero_indices = np.nonzero(time_series)[0]
+        if len(nonzero_indices) == 0:
+            return 0.0
+        # Recency: distance from last access to end of window
+        last_access = nonzero_indices[-1]
+        dist = len(time_series) - 1 - last_access
+        recency_weight = 1.0 / (dist + 1.0)
+        total_requests = float(np.sum(time_series))
+        return total_requests * recency_weight
 
-        # Volume component: mean of active (non-zero) slots
-        mean_volume = float(np.mean(time_series[nonzero_indices]))
+    @staticmethod
+    def compound_pop_score(time_series: np.ndarray,
+                           cons1: float = 0.5,
+                           cons2: float = 0.3,
+                           cons3: float = 0.2) -> float:
+        """
+        Compound Popularity Score (three-factor model).
+        Ref: Ye et al. (2014), Eq(8).
+        Combines: (1) total requests, (2) recent-period requests, (3) recency.
+        Formula: cons1*total + cons2*recent + cons3*(1/(dist+1))
+        Normalised by window size for scale invariance.
+        """
+        if len(time_series) == 0:
+            return 0.0
+        n = len(time_series)
+        total_requests = float(np.sum(time_series))
+        # Recent period: last 20% of window
+        recent_n = max(1, int(n * 0.2))
+        recent_requests = float(np.sum(time_series[-recent_n:]))
+        # Recency weight
+        nonzero_indices = np.nonzero(time_series)[0]
+        if len(nonzero_indices) == 0:
+            return 0.0
+        last_access = nonzero_indices[-1]
+        dist = n - 1 - last_access
+        recency = 1.0 / (dist + 1.0)
+        # Normalize by window size
+        score = (cons1 * (total_requests / n) +
+                 cons2 * (recent_requests / recent_n) +
+                 cons3 * recency)
+        return float(score)
 
-        return mean_volume * recency_weight
+    @staticmethod
+    def pfrf_score(time_series: np.ndarray,
+                   a: float = 1.2,
+                   b: float = 0.8) -> float:
+        """
+        PFRF Period-based Popularity Weight.
+        Ref: Lee et al. (2012), Eq(11) — Popular File Replicate First.
+
+        Divides the window into equal-length periods and iteratively
+        updates a weight: if a period has requests → multiply by `a`
+        (boost), else multiply by `b` (decay). Final score is the
+        accumulated weight, reflecting recent active periods more.
+
+        Args:
+            time_series: 1-D array of request counts per time slot.
+            a: boost factor for active periods (default 1.2, > 1).
+            b: decay factor for inactive periods (default 0.8, < 1).
+
+        Returns:
+            Cumulative popularity weight.
+        """
+        if len(time_series) == 0:
+            return 0.0
+        # Treat each slot as one period (generalisation of the formula)
+        weight = 1.0
+        for count in time_series:
+            if count > 0:
+                weight *= a
+            else:
+                weight *= b
+        return float(weight)
 
     @staticmethod
     def batch_assess_all(time_series_list: List[np.ndarray]) -> Dict[str, np.ndarray]:
-        """Compute all baseline scores efficiently"""
+        """Compute all baseline scores for a list of time series."""
         n = len(time_series_list)
         results = {
-            'AF': np.zeros(n),
-            'LFU': np.zeros(n),
-            'EWMA': np.zeros(n),
-            'LRU': np.zeros(n)
+            'AF':          np.zeros(n),
+            'EWMA':        np.zeros(n),
+            'RRD':         np.zeros(n),
+            'VSE':         np.zeros(n),
+            'CompoundPop': np.zeros(n),
+            'PFRF':        np.zeros(n),
         }
-        
         for i, ts in enumerate(time_series_list):
-            results['AF'][i] = TraditionalBaselines.access_frequency(ts)
-            results['LFU'][i] = TraditionalBaselines.lfu_score(ts)
-            results['EWMA'][i] = TraditionalBaselines.ewma_score(ts)
-            results['LRU'][i] = TraditionalBaselines.lru_score(ts)
-            
+            results['AF'][i]          = TraditionalBaselines.access_frequency(ts)
+            results['EWMA'][i]        = TraditionalBaselines.ewma_score(ts)
+            results['RRD'][i]         = TraditionalBaselines.rrd_score(ts)
+            results['VSE'][i]         = TraditionalBaselines.vse_score(ts)
+            results['CompoundPop'][i] = TraditionalBaselines.compound_pop_score(ts)
+            results['PFRF'][i]        = TraditionalBaselines.pfrf_score(ts)
         return results
-    
-
-class CacheSimulator:
-    """
-    Cache Simulator that supports both Traditional (LRU/LFU)
-    and Score-Based (DTCWT, Hybrid, AF) replacement policies.
-    """
-    
-    def __init__(self, cache_size: int):
-        self.cache_size = cache_size
-        # cache keys -> arbitrary value (True)
-        # Using OrderedDict to track insertion/access order for LRU logic
-        self.cache = OrderedDict()
-        
-        # For LFU: track frequency history
-        self.access_count = Counter()
-        
-        # Metrics
-        self.hits = 0
-        self.misses = 0
-    
-    def reset(self):
-        self.cache.clear()
-        self.access_count.clear()
-        self.hits = 0
-        self.misses = 0
-
-    def get_hit_rate(self) -> float:
-        total = self.hits + self.misses
-        return self.hits / total if total > 0 else 0.0
-
-    # --- Traditional Policies ---
-
-    def lru_access(self, item_id: str) -> bool:
-        """Standard LRU Access"""
-        if item_id in self.cache:
-            self.hits += 1
-            self.cache.move_to_end(item_id) # Mark as most recent
-            return True
-        else:
-            self.misses += 1
-            self.cache[item_id] = True
-            if len(self.cache) > self.cache_size:
-                self.cache.popitem(last=False) # Remove least recent (first item)
-            return False
-
-    def lfu_access(self, item_id: str) -> bool:
-        """LFU Access with LRU Tie-breaking"""
-        self.access_count[item_id] += 1
-        
-        if item_id in self.cache:
-            self.hits += 1
-            self.cache.move_to_end(item_id) # Update for LRU tie-breaking
-            return True
-        else:
-            self.misses += 1
-            if len(self.cache) >= self.cache_size:
-                # Evict item with min frequency
-                # Tie-breaker: least recently used (first in OrderedDict)
-                victim = min(self.cache.keys(), key=lambda k: self.access_count[k])
-                del self.cache[victim]
-            
-            self.cache[item_id] = True
-            return False
-
-    # --- Score-Based Policy (For DTCWT/Hybrid) ---
-
-    def access_with_score(self, item_id: str, 
-                          item_score: float, 
-                          current_cache_scores: Dict[str, float]) -> bool:
-        """
-        Generic access for Score-Based Replacement.
-        Used for AF, DTCWT, Hybrid, etc.
-        
-        Strategy:
-        - If item in cache: HIT.
-        - If miss and cache full:
-            Compare item_score with MIN score in cache.
-            If item_score > min_cache_score: Evict min & Insert item.
-            Else: Don't cache (or cache & evict immediately).
-        """
-        if item_id in self.cache:
-            self.hits += 1
-            return True
-        
-        self.misses += 1
-        
-        if len(self.cache) < self.cache_size:
-            self.cache[item_id] = True
-            return False
-            
-        # Cache is full, decide replacement based on scores
-        # Find victim (item with minimum score currently in cache)
-        # Note: current_cache_scores must contain scores for keys in self.cache
-        if not current_cache_scores:
-            # Fallback if no scores provided: Random eviction or LRU
-            self.cache.popitem(last=False)
-            self.cache[item_id] = True
-            return False
-
-        # Find key in cache with lowest score
-        # We only look at items that are actually IN the cache
-        valid_cache_items = [k for k in self.cache.keys() if k in current_cache_scores]
-        
-        if not valid_cache_items:
-             # Safety fallback
-            self.cache.popitem(last=False)
-            self.cache[item_id] = True
-            return False
-
-        victim_id = min(valid_cache_items, key=lambda k: current_cache_scores[k])
-        victim_score = current_cache_scores[victim_id]
-        
-        if item_score > victim_score:
-            # Replace victim with new item
-            del self.cache[victim_id]
-            self.cache[item_id] = True
-        
-        return False
