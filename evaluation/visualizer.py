@@ -1,21 +1,19 @@
 """
 Results Visualizer — 4-Layer Frozen Evaluation Protocol
 =========================================================
-Seven charts aligned with Chapter 3 dissertation narrative.
-
-WSPI advantage summary (from YouTube results):
-  - Robustness: 7.46 ΔRank vs 37-59 for others  (5-8× better)
-  - Stability:  RSI@10=0.989 vs 0.878-0.912       (dominates)
-  - Trade-off:  lower Spearman (0.785) is EXPECTED — structural vs count-based
+Charts aligned with Chapter 3 dissertation narrative.
 
 Charts produced:
   chart1_protocol_overview    — grouped bar: one metric per layer, all methods
-  chart2_stability_rsi        — RSI@K grouped bar (WSPI dominance visible)
-  chart3_robustness           — robustness distortion (WSPI best)
+  chart2_stability_rsi        — RSI@K grouped bar
+  chart3_robustness           — robustness distortion bar
   chart4_temporal_rsi         — RSI@10 line over time
   chart5_ndcg_profile         — NDCG@K for K=5,10,20
-  chart6_temporal_spearman    — Spearman rho over time (LRU excluded)
+  chart6_temporal_spearman    — Spearman rho over time
   chart7_stratum_performance  — per-stratum Spearman
+  chart8_metric_heatmap       — heatmap: methods × metrics
+  chart9_per_metric_bars      — individual bar chart per metric (one per metric)
+  chart10_boxplot_windows     — box plot per method across evaluation windows
 
 Author: Sajjad
 """
@@ -32,30 +30,30 @@ matplotlib.rcParams['font.family']        = 'DejaVu Sans'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 # ---------------------------------------------------------------------------
-# Consistent colour / marker palette
+# Consistent colour / marker palette (updated for new baselines)
 # ---------------------------------------------------------------------------
 METHOD_COLORS = {
-    'AF':       '#2196F3',   # blue
-    'LFU':      '#4CAF50',   # green
-    'LRU':      '#9E9E9E',   # grey (broken baseline)
-    'EWMA':     '#FF9800',   # orange
-    'DWT+AF':   '#9C27B0',   # purple
-    'DTCWT+AF': '#F44336',   # red
-    'WSPI':     '#E91E63',   # magenta  ← proposed method
+    'AF':          '#2196F3',   # blue
+    'MeanFreq':    '#4CAF50',   # green
+    'EWMA':        '#FF9800',   # orange
+    'RRD':         '#00BCD4',   # cyan
+    'VSE':         '#795548',   # brown
+    'CompoundPop': '#607D8B',   # blue-grey
+    'DWT+AF':      '#9C27B0',   # purple
+    'DTCWT+AF':    '#F44336',   # red
+    'WSPI':        '#E91E63',   # magenta  ← proposed method
 }
 METHOD_MARKERS = {
-    'AF': 'o', 'LFU': 's', 'LRU': 'x',
-    'EWMA': '^', 'DWT+AF': 'D', 'DTCWT+AF': 'v', 'WSPI': '*',
+    'AF': 'o', 'MeanFreq': 's', 'EWMA': '^',
+    'RRD': 'D', 'VSE': 'p', 'CompoundPop': 'h',
+    'DWT+AF': 'D', 'DTCWT+AF': 'v', 'WSPI': '*',
 }
-
-# LRU has volume-blind scoring → Spearman ≈ 0; exclude from rank-corr plots
-BROKEN_BASELINES = {'LRU'}
 
 STYLE = 'seaborn-v0_8-darkgrid'
 DPI   = 300
 
 
-def _c(m): return METHOD_COLORS.get(m, '#607D8B')
+def _c(m):  return METHOD_COLORS.get(m, '#607D8B')
 def _mk(m): return METHOD_MARKERS.get(m, 'o')
 def _lw(m): return 2.8 if m == 'WSPI' else 1.6
 
@@ -79,434 +77,340 @@ class ResultsVisualizer:
             Path(output_dir) if output_dir
             else analyzer.run_dir / 'visualization'
         )
-        self.output_dir.mkdir(exist_ok=True, parents=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
     # -----------------------------------------------------------------------
-    # Internal helpers
-    # -----------------------------------------------------------------------
 
-    def _summary_table(self) -> pd.DataFrame:
-        """One row per method — all protocol metrics averaged over windows."""
-        rows = []
-        for method in self.analyzer.available_methods:
-            s = self.analyzer.get_protocol_summary(method)
-            if s:
-                rows.append({'method': method, **s})
-        if not rows:
-            return pd.DataFrame()
-        df = pd.DataFrame(rows)
-        for col in df.columns:
-            if col != 'method':
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        return df
-
-    def _temporal(self, metric: str) -> Dict[str, pd.DataFrame]:
-        """Per-window data for all methods that have it."""
-        out = {}
-        for m in self.analyzer.available_methods:
-            try:
-                evo = self.analyzer.get_temporal_evolution(m, metric)
-                if evo is not None and len(evo) > 0 and metric in evo.columns:
-                    out[m] = evo
-            except Exception:
-                pass
-        return out
-
-    # -----------------------------------------------------------------------
-    # Chart 1 — 4-Layer Protocol Overview
-    # -----------------------------------------------------------------------
-    def plot_protocol_overview(self, save=True, show=False):
+    # ==================================================================
+    # CHART 8 — Metric Heatmap (methods × metrics)  *** NEW ***
+    # ==================================================================
+    def chart8_metric_heatmap(self, show=False):
         """
-        Grouped bar: one metric per layer.
-          L1 Decision  → NDCG@10
-          L2 Diagnostic→ Spearman ρ
-          L3 Stability → RSI@10
-          L4 Robustness→ 1/(1+ΔRank)  [inverted so higher = better]
+        Heatmap: rows = methods, columns = metrics.
+        Shows relative performance across all methods and metrics at a glance.
         """
-        df = self._summary_table()
-        if df.empty:
-            print("  [Chart 1] no data"); return None
+        summary = self._get_summary_df()
+        if summary is None:
+            return
 
-        if 'robustness_distortion' in df.columns:
-            df['_rob_inv'] = 1.0 / (1.0 + df['robustness_distortion'])
+        # Select key metrics
+        key_metrics = [
+            'mean_spearman_rho', 'mean_kendall_tau',
+            'mean_ndcg@5', 'mean_ndcg@10', 'mean_ndcg@20',
+            'mean_coverage@5', 'mean_coverage@10', 'mean_coverage@20',
+            'mean_rsi@10',
+        ]
+        cols_present = [c for c in key_metrics if c in summary.columns]
+        if not cols_present:
+            print("    No suitable columns for heatmap")
+            return
 
-        layers = {
-            'NDCG@10\n(L1 Decision)':       'ndcg@10',
-            'Spearman ρ\n(L2 Diagnostic)':  'spearman_rho',
-            'RSI@10\n(L3 Stability)':        'rsi@10',
-            'Robustness\n1/(1+ΔRank)\n(L4)':'_rob_inv',
+        df = summary[cols_present].copy()
+        # Rename columns for readability
+        rename = {
+            'mean_spearman_rho': 'Spearman ρ',
+            'mean_kendall_tau':  'Kendall τ',
+            'mean_ndcg@5':       'NDCG@5',
+            'mean_ndcg@10':      'NDCG@10',
+            'mean_ndcg@20':      'NDCG@20',
+            'mean_coverage@5':   'Coverage@5',
+            'mean_coverage@10':  'Coverage@10',
+            'mean_coverage@20':  'Coverage@20',
+            'mean_rsi@10':       'RSI@10',
+        }
+        df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
+
+        # Normalize each column to [0,1] for fair colour mapping
+        df_norm = (df - df.min()) / (df.max() - df.min() + 1e-12)
+
+        fig, (ax_heat, ax_raw) = plt.subplots(1, 2, figsize=(18, len(df) * 0.7 + 2),
+                                               gridspec_kw={'width_ratios': [3, 1]})
+
+        # -- Heatmap (normalised values, raw values as annotations) --
+        sns.heatmap(df_norm, ax=ax_heat, cmap='RdYlGn', vmin=0, vmax=1,
+                    linewidths=0.5, linecolor='white',
+                    annot=df.round(3), fmt='.3f',
+                    annot_kws={'size': 8},
+                    cbar_kws={'label': 'Relative Score (normalised)'})
+        ax_heat.set_title('Method × Metric Performance Heatmap', fontsize=13, pad=12)
+        ax_heat.set_xlabel('')
+        ax_heat.set_ylabel('Method')
+
+        # Highlight WSPI row label
+        yticklabels = ax_heat.get_yticklabels()
+        for lbl in yticklabels:
+            if lbl.get_text() == 'WSPI':
+                lbl.set_fontweight('bold')
+                lbl.set_color('#E91E63')
+
+        # -- Rank column on the right (average normalised rank) --
+        avg_rank = df_norm.mean(axis=1).sort_values(ascending=False)
+        ax_raw.barh(range(len(avg_rank)), avg_rank.values,
+                    color=[_c(m) for m in avg_rank.index], alpha=0.85)
+        ax_raw.set_yticks(range(len(avg_rank)))
+        ax_raw.set_yticklabels(avg_rank.index)
+        ax_raw.set_xlabel('Avg Normalised Score')
+        ax_raw.set_title('Overall Rank')
+        ax_raw.set_xlim(0, 1.05)
+        for i, (method, val) in enumerate(avg_rank.items()):
+            ax_raw.text(val + 0.01, i, f'{val:.3f}', va='center', fontsize=8)
+
+        plt.suptitle('Comprehensive Performance Comparison', fontsize=14, y=1.01)
+        _finalize(fig, self.output_dir / 'chart8_metric_heatmap.png', show)
+
+    # ==================================================================
+    # CHART 9 — Per-Metric Individual Bar Charts  *** NEW ***
+    # ==================================================================
+    def chart9_per_metric_bars(self, show=False):
+        """
+        Individual bar chart for each metric.
+        Each chart saved separately so it can be used standalone in the paper.
+        """
+        summary = self._get_summary_df()
+        if summary is None:
+            return
+
+        metric_groups = {
+            'Spearman ρ':   ('mean_spearman_rho', 'Spearman Rank Correlation (ρ) — Higher is Better', True),
+            'Kendall τ':    ('mean_kendall_tau',  'Kendall Rank Correlation (τ) — Higher is Better', True),
+            'NDCG@10':      ('mean_ndcg@10',      'NDCG@10 — Ranking Quality (Higher is Better)', True),
+            'Coverage@10':  ('mean_coverage@10',  'Coverage@10 — Top-K Interaction Coverage (Higher is Better)', True),
+            'RSI@10':       ('mean_rsi@10',       'RSI@10 — Ranking Stability (Higher is Better)', True),
         }
 
-        methods = df['method'].tolist()
-        n_m, n_l = len(methods), len(layers)
-        x     = np.arange(n_l)
-        width = 0.8 / n_m
+        per_metric_dir = self.output_dir / 'per_metric'
+        per_metric_dir.mkdir(exist_ok=True)
 
-        plt.style.use(STYLE)
-        fig, ax = plt.subplots(figsize=(13, 5))
+        for metric_name, (col, title, higher_better) in metric_groups.items():
+            if col not in summary.columns:
+                continue
 
-        for i, method in enumerate(methods):
-            row    = df[df['method'] == method].iloc[0]
-            vals   = [float(row.get(col, np.nan)) for col in layers.values()]
-            offset = (i - n_m / 2 + 0.5) * width
-            bars   = ax.bar(
-                x + offset, vals, width,
-                label=method, color=_c(method),
-                alpha=0.85, edgecolor='white', linewidth=0.5, zorder=3,
-            )
-            if method == 'WSPI':
-                for bar, v in zip(bars, vals):
-                    if not np.isnan(v):
-                        ax.text(bar.get_x() + bar.get_width() / 2,
-                                bar.get_height() + 0.012,
-                                f'{v:.3f}',
-                                ha='center', va='bottom',
-                                fontsize=7.5, fontweight='bold',
-                                color=_c('WSPI'))
+            methods = list(summary.index)
+            vals    = summary[col].reindex(methods).fillna(0).values
+            colors  = [_c(m) for m in methods]
 
-        ax.set_xticks(x)
-        ax.set_xticklabels(list(layers.keys()), fontsize=10)
-        ax.set_ylabel('Score  (all axes: higher = better)', fontsize=11)
-        ax.set_ylim(0, 1.18)
-        ax.set_title('Frozen 4-Layer Protocol — Method Overview', fontsize=13, fontweight='bold')
-        ax.legend(ncol=4, fontsize=8.5, loc='upper center',
-                  bbox_to_anchor=(0.5, 1.14), frameon=True)
-        ax.axhline(1.0, color='grey', lw=0.8, ls='--', alpha=0.4)
-        ax.grid(True, axis='y', alpha=0.25, zorder=0)
+            with plt.style.context(STYLE):
+                fig, ax = plt.subplots(figsize=(11, 5))
+                bars = ax.bar(methods, vals, color=colors, alpha=0.85, zorder=3)
 
-        if save:
-            _finalize(fig, self.output_dir / 'chart1_protocol_overview.png', show)
-        return fig
+                # Highlight WSPI
+                if 'WSPI' in methods:
+                    wspi_idx = methods.index('WSPI')
+                    bars[wspi_idx].set_edgecolor('#E91E63')
+                    bars[wspi_idx].set_linewidth(2.5)
+                    bars[wspi_idx].set_alpha(1.0)
 
-    # -----------------------------------------------------------------------
-    # Chart 2 — Stability Profile RSI@K
-    # -----------------------------------------------------------------------
-    def plot_stability_rsi(self, save=True, show=False):
-        """Grouped bar: RSI@5, RSI@10, RSI@20 per method."""
-        df = self._summary_table()
-        if df.empty:
-            print("  [Chart 2] no data"); return None
+                # Value labels
+                for bar, val in zip(bars, vals):
+                    ax.text(bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + 0.005, f'{val:.3f}',
+                            ha='center', va='bottom', fontsize=9, fontweight='bold')
 
-        ks      = [5, 10, 20]
-        methods = df['method'].tolist()
-        n_m     = len(methods)
-        x       = np.arange(len(ks))
-        width   = 0.8 / n_m
+                ax.set_ylabel(metric_name, fontsize=11)
+                ax.set_title(title, fontsize=12)
+                ax.tick_params(axis='x', rotation=30)
+                ax.set_ylim(0, min(1.15, max(vals) * 1.2 + 0.05))
+                ax.grid(axis='y', alpha=0.4, zorder=0)
 
-        plt.style.use(STYLE)
-        fig, ax = plt.subplots(figsize=(9, 5))
+                # Add "★ Best" annotation for highest bar
+                best_idx = int(np.argmax(vals))
+                ax.annotate('★ Best', xy=(best_idx, vals[best_idx]),
+                            xytext=(best_idx, vals[best_idx] + 0.04),
+                            ha='center', fontsize=9, color='#1B5E20',
+                            fontweight='bold')
 
-        for i, method in enumerate(methods):
-            row    = df[df['method'] == method].iloc[0]
-            vals   = [float(row.get(f'rsi@{k}', np.nan)) for k in ks]
-            offset = (i - n_m / 2 + 0.5) * width
-            ax.bar(x + offset, vals, width,
-                   label=method, color=_c(method),
-                   alpha=0.85, edgecolor='white', zorder=3)
+            safe_name = metric_name.replace('@', '_at_').replace(' ', '_')
+            _finalize(fig, per_metric_dir / f'metric_{safe_name}.png', show)
 
-        # annotate WSPI values
-        row_w = df[df['method'] == 'WSPI']
-        if not row_w.empty:
-            for j, k in enumerate(ks):
-                v = float(row_w.iloc[0].get(f'rsi@{k}', np.nan))
-                if not np.isnan(v):
-                    ax.annotate(f'WSPI {v:.4f}',
-                                xy=(j, v), xytext=(j + 0.35, v - 0.07),
-                                fontsize=8, color=_c('WSPI'), fontweight='bold',
-                                arrowprops=dict(arrowstyle='->', color=_c('WSPI'), lw=1.1))
+        print(f"    Per-metric charts saved to: {per_metric_dir}")
 
-        ax.set_xticks(x)
-        ax.set_xticklabels([f'RSI@{k}' for k in ks], fontsize=12)
-        ax.set_ylabel('Ranking Stability Index  (Jaccard similarity)', fontsize=11)
-        ax.set_title(
-            'Layer 3 — Ranking Stability (RSI@K)\n'
-            'WSPI top-K list changes least between consecutive evaluation windows',
-            fontsize=12, fontweight='bold')
-        ax.set_ylim(0, 1.10)
-        ax.axhline(1.0, color='grey', lw=0.8, ls='--', alpha=0.4)
-        ax.legend(ncol=4, fontsize=8.5, loc='lower center', frameon=True)
-        ax.grid(True, axis='y', alpha=0.25, zorder=0)
-
-        if save:
-            _finalize(fig, self.output_dir / 'chart2_stability_rsi.png', show)
-        return fig
-
-    # -----------------------------------------------------------------------
-    # Chart 3 — Robustness Comparison
-    # -----------------------------------------------------------------------
-    def plot_robustness(self, save=True, show=False):
+    # ==================================================================
+    # CHART 10 — Box Plot: Score Distribution Across Evaluation Windows *** NEW ***
+    # ==================================================================
+    def chart10_boxplot_windows(self, show=False):
         """
-        Horizontal bar: robustness_distortion (mean ΔRank under noise).
-        Lower = more robust.  LRU excluded from annotation (artifact).
+        Box plot showing distribution of key metrics across evaluation windows.
+        Reveals consistency of each method, not just mean performance.
         """
-        df = self._summary_table()
-        if df.empty or 'robustness_distortion' not in df.columns:
-            print("  [Chart 3] no robustness data"); return None
+        records = self._get_protocol_records()
+        if records is None:
+            print("    No per-window records for boxplot")
+            return
 
-        # exclude LRU from sorting influence — its 0.07 is an artifact
-        df_plot = df.sort_values('robustness_distortion', ascending=True)
+        metrics_to_plot = [
+            ('spearman_rho', 'Spearman ρ'),
+            ('ndcg@10',      'NDCG@10'),
+            ('coverage@10',  'Coverage@10'),
+            ('rsi@10',       'RSI@10'),
+        ]
+        available = [(c, label) for c, label in metrics_to_plot if c in records.columns]
+        if not available:
+            print("    No suitable columns for boxplot")
+            return
 
-        plt.style.use(STYLE)
-        fig, ax = plt.subplots(figsize=(9, 4.5))
+        n_plots = len(available)
+        with plt.style.context(STYLE):
+            fig, axes = plt.subplots(1, n_plots, figsize=(6 * n_plots, 6), sharey=False)
+            if n_plots == 1:
+                axes = [axes]
 
-        colors = [_c(m) for m in df_plot['method']]
-        bars   = ax.barh(df_plot['method'], df_plot['robustness_distortion'],
-                         color=colors, alpha=0.85, edgecolor='white')
+            methods = sorted(records['method'].unique())
+            palette = {m: _c(m) for m in methods}
 
-        for bar, v, method in zip(bars, df_plot['robustness_distortion'], df_plot['method']):
-            note = '  ← artifact (volume-blind)' if method == 'LRU' else ''
-            ax.text(v + 0.8, bar.get_y() + bar.get_height() / 2,
-                    f'{v:.2f}{note}', va='center', ha='left', fontsize=9)
+            for ax, (col, label) in zip(axes, available):
+                data_list = [records[records['method'] == m][col].dropna().values
+                             for m in methods]
+                bp = ax.boxplot(data_list, labels=methods, patch_artist=True,
+                                notch=False, vert=True,
+                                medianprops=dict(color='black', linewidth=2))
+                for patch, method in zip(bp['boxes'], methods):
+                    patch.set_facecolor(_c(method))
+                    patch.set_alpha(0.75)
+                ax.set_title(label, fontsize=11)
+                ax.set_ylabel(label if ax == axes[0] else '')
+                ax.tick_params(axis='x', rotation=40)
+                ax.grid(axis='y', alpha=0.4)
 
-        ax.set_xlabel('Mean Rank Distortion under 10× noise spike  (lower = better)', fontsize=10)
-        ax.set_title(
-            'Layer 4 — Robustness to Noise Injection\n'
-            'WSPI structural scoring ignores transient spikes; count-based methods react strongly',
-            fontsize=12, fontweight='bold')
-        ax.grid(True, axis='x', alpha=0.25)
+            plt.suptitle('Score Distribution Across Evaluation Windows', fontsize=13)
 
-        for label in ax.get_yticklabels():
-            if label.get_text() == 'WSPI':
-                label.set_color(_c('WSPI'))
-                label.set_fontweight('bold')
-            elif label.get_text() == 'LRU':
-                label.set_color(_c('LRU'))
+        _finalize(fig, self.output_dir / 'chart10_boxplot_windows.png', show)
 
-        if save:
-            _finalize(fig, self.output_dir / 'chart3_robustness.png', show)
-        return fig
-
-    # -----------------------------------------------------------------------
-    # Chart 4 — Temporal RSI@10 Evolution
-    # -----------------------------------------------------------------------
-    def plot_temporal_rsi(self, k=10, save=True, show=False):
-        """Line chart: RSI@k per window. WSPI should stay near 1.0."""
-        metric = f'rsi@{k}'
-        data   = self._temporal(metric)
-        if not data:
-            print(f"  [Chart 4] no temporal RSI@{k} data"); return None
-
-        plt.style.use(STYLE)
-        fig, ax = plt.subplots(figsize=(12, 5))
-
-        for method, evo in data.items():
-            x  = evo.get('date', range(len(evo)))
-            y  = evo[metric]
-            ev = max(1, len(x) // 20)
-            ax.plot(x, y, label=method,
-                    color=_c(method), lw=_lw(method),
-                    marker=_mk(method), markersize=5 if method == 'WSPI' else 3,
-                    markevery=ev, alpha=0.9 if method == 'WSPI' else 0.7)
-
-        ax.set_xlabel('Evaluation Window', fontsize=11)
-        ax.set_ylabel(f'RSI@{k}  (1.0 = identical top-K as previous window)', fontsize=11)
-        ax.set_title(
-            f'Layer 3 — Temporal Stability: RSI@{k} Over Time\n'
-            'WSPI maintains near-perfect top-K consistency across all windows',
-            fontsize=12, fontweight='bold')
-        ax.set_ylim(-0.05, 1.08)
-        ax.axhline(1.0, color='grey', lw=0.8, ls='--', alpha=0.4)
-        ax.legend(ncol=4, fontsize=8.5, loc='lower center', frameon=True,
-                  bbox_to_anchor=(0.5, -0.22))
-        ax.grid(True, alpha=0.25)
-
-        if save:
-            _finalize(fig, self.output_dir / f'chart4_temporal_rsi{k}.png', show)
-        return fig
-
-    # -----------------------------------------------------------------------
-    # Chart 5 — NDCG@K Multi-K Profile
-    # -----------------------------------------------------------------------
-    def plot_ndcg_profile(self, save=True, show=False):
-        """Line chart: NDCG@K for K=5,10,20. Reveals how ranking quality scales."""
-        df = self._summary_table()
-        if df.empty:
-            print("  [Chart 5] no data"); return None
-
-        ks = [5, 10, 20]
-        plt.style.use(STYLE)
-        fig, ax = plt.subplots(figsize=(8, 5))
-
-        for _, row in df.iterrows():
-            method = row['method']
-            vals   = [float(row.get(f'ndcg@{k}', np.nan)) for k in ks]
-            ax.plot(ks, vals, label=method,
-                    color=_c(method), lw=_lw(method),
-                    marker=_mk(method), markersize=9)
-
-        ax.set_xticks(ks)
-        ax.set_xticklabels([f'K = {k}' for k in ks], fontsize=12)
-        ax.set_ylabel('NDCG@K', fontsize=11)
-        ax.set_title(
-            'Layer 1 — Decision Quality: NDCG@K\n'
-            'Log-relevance weighting — measures cache placement accuracy at each K',
-            fontsize=12, fontweight='bold')
-        ax.set_ylim(0.45, 1.03)
-        ax.legend(ncol=2, fontsize=9, loc='lower left', frameon=True)
-        ax.grid(True, alpha=0.25)
-
-        if save:
-            _finalize(fig, self.output_dir / 'chart5_ndcg_profile.png', show)
-        return fig
-
-    # -----------------------------------------------------------------------
-    # Chart 6 — Temporal Spearman Evolution
-    # -----------------------------------------------------------------------
-    def plot_temporal_spearman(self, save=True, show=False):
+    # ==================================================================
+    # CHART 11 — Radar / Spider Chart per Method  *** NEW ***
+    # ==================================================================
+    def chart11_radar_charts(self, show=False):
         """
-        Line chart: Spearman ρ per window.
-        LRU excluded (ρ ≈ 0, volume-blind artifact).
+        Radar/Spider chart showing each method's multi-dimensional profile.
+        One radar per method, plus one combined radar for WSPI vs best baselines.
         """
-        metric = 'spearman_rho'
-        data   = {m: v for m, v in self._temporal(metric).items()
-                  if m not in BROKEN_BASELINES}
-        if not data:
-            print("  [Chart 6] no temporal Spearman data"); return None
+        summary = self._get_summary_df()
+        if summary is None:
+            return
 
-        plt.style.use(STYLE)
-        fig, ax = plt.subplots(figsize=(12, 5))
+        # Metrics for radar (all should be "higher is better"; invert robustness)
+        radar_metrics = {
+            'Spearman ρ':  'mean_spearman_rho',
+            'Kendall τ':   'mean_kendall_tau',
+            'NDCG@10':     'mean_ndcg@10',
+            'Coverage@10': 'mean_coverage@10',
+            'RSI@10':      'mean_rsi@10',
+        }
+        available = {label: col for label, col in radar_metrics.items()
+                     if col in summary.columns}
+        if len(available) < 3:
+            print("    Not enough metrics for radar chart")
+            return
 
-        for method, evo in data.items():
-            x  = evo.get('date', range(len(evo)))
-            y  = evo[metric]
-            ev = max(1, len(x) // 20)
-            ax.plot(x, y, label=method,
-                    color=_c(method), lw=_lw(method),
-                    marker=_mk(method), markersize=5 if method == 'WSPI' else 3,
-                    markevery=ev, alpha=0.9 if method == 'WSPI' else 0.7)
+        labels  = list(available.keys())
+        n_axes  = len(labels)
+        angles  = [n / float(n_axes) * 2 * np.pi for n in range(n_axes)]
+        angles += angles[:1]  # close the polygon
 
-        ax.set_xlabel('Evaluation Window', fontsize=11)
-        ax.set_ylabel('Spearman ρ', fontsize=11)
-        ax.set_title(
-            'Layer 2 — Diagnostic: Spearman Rank Correlation Over Time\n'
-            'LRU excluded (ρ ≈ 0.009 — volume-blind scoring)',
-            fontsize=12, fontweight='bold')
-        ax.set_ylim(-0.1, 1.05)
-        ax.axhline(0, color='grey', lw=0.8, ls='--', alpha=0.4)
-        ax.legend(ncol=3, fontsize=9, loc='lower right', frameon=True)
-        ax.grid(True, alpha=0.25)
+        methods = list(summary.index)
 
-        if save:
-            _finalize(fig, self.output_dir / 'chart6_temporal_spearman.png', show)
-        return fig
+        # --- Normalize each metric to [0,1] across methods ---
+        df = summary[[c for c in available.values()]].copy()
+        df_norm = (df - df.min()) / (df.max() - df.min() + 1e-12)
+        df_norm.columns = labels
 
-    # -----------------------------------------------------------------------
-    # Chart 7 — Stratum Performance
-    # -----------------------------------------------------------------------
-    def plot_stratum_comparison(self,
-                                methods=None,
-                                metric='spearman_corr',
-                                save=True,
-                                show=False):
-        """
-        Grouped bar: per-stratum metric per method.
-        Includes ALL methods including WSPI (previous version silently skipped it).
-        """
-        if methods is None:
-            methods = [m for m in self.analyzer.available_methods
-                       if m not in BROKEN_BASELINES]
+        radar_dir = self.output_dir / 'radar'
+        radar_dir.mkdir(exist_ok=True)
 
-        strata_order = ['cold_start', 'low', 'medium', 'high']
-        x     = np.arange(len(strata_order))
-        n_m   = max(len(methods), 1)
-        width = 0.8 / n_m
+        # (A) Combined radar: all methods on one chart
+        with plt.style.context(STYLE):
+            fig, ax = plt.subplots(figsize=(8, 8),
+                                   subplot_kw=dict(polar=True))
+            ax.set_theta_offset(np.pi / 2)
+            ax.set_theta_direction(-1)
+            ax.set_xticks(angles[:-1])
+            ax.set_xticklabels(labels, size=11)
+            ax.set_ylim(0, 1)
+            ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+            ax.set_yticklabels(['0.25', '0.5', '0.75', '1.0'], size=8)
 
-        plt.style.use(STYLE)
-        fig, ax = plt.subplots(figsize=(11, 5))
-
-        plotted = []
-        for i, method in enumerate(methods):
-            try:
-                sd = self.analyzer.get_stratum_comparison(method, metric)
-                sd = sd.reset_index() if not isinstance(sd, pd.DataFrame) else sd.reset_index()
-                order_map = {s: j for j, s in enumerate(strata_order)}
-
-                vals = np.full(len(strata_order), np.nan)
-                errs = np.full(len(strata_order), 0.0)
-                for _, row in sd.iterrows():
-                    sname = row.get('stratum_name', '')
-                    idx   = order_map.get(sname)
-                    if idx is not None:
-                        vals[idx] = float(row.get('mean', np.nan))
-                        errs[idx] = float(row.get('std', 0.0))
-
-                valid = ~np.isnan(vals)
-                if not valid.any():
+            for method in methods:
+                if method not in df_norm.index:
                     continue
+                vals = df_norm.loc[method].values.tolist()
+                vals += vals[:1]
+                lw = _lw(method)
+                ax.plot(angles, vals, color=_c(method),
+                        linewidth=lw, linestyle='solid',
+                        label=method, marker=_mk(method), markersize=5)
+                ax.fill(angles, vals, color=_c(method), alpha=0.05)
 
-                offset = (i - n_m / 2 + 0.5) * width
-                ax.bar(x[valid] + offset, vals[valid], width,
-                       label=method, color=_c(method),
-                       yerr=np.where(np.isnan(errs[valid]), 0, errs[valid]),
-                       capsize=3, alpha=0.85, edgecolor='white', zorder=3)
-                plotted.append(method)
+            ax.legend(loc='upper right', bbox_to_anchor=(1.35, 1.15),
+                      fontsize=9, framealpha=0.9)
+            ax.set_title('Multi-Metric Performance Radar\n(Normalised, all methods)',
+                         fontsize=12, pad=20)
 
-            except Exception as e:
-                print(f"    [Chart 7] {method}: {e}")
+        _finalize(fig, radar_dir / 'radar_all_methods.png', show)
 
-        ax.set_xticks(x)
-        ax.set_xticklabels(['Cold Start', 'Low', 'Medium', 'High'], fontsize=11)
-        ax.set_xlabel('Popularity Stratum (mean count per time-slot)', fontsize=11)
-        ax.set_ylabel(metric.replace('_', ' ').title(), fontsize=11)
-        ax.set_title(
-            'Performance by Popularity Stratum\n'
-            'Does WSPI structural stability hold across all popularity levels?',
-            fontsize=12, fontweight='bold')
-        if plotted:
-            ax.legend(ncol=3, fontsize=9, loc='best', frameon=True)
-        ax.grid(True, axis='y', alpha=0.25, zorder=0)
+        # (B) Individual radar per method
+        n_cols = 3
+        n_rows = (len(methods) + n_cols - 1) // n_cols
+        fig, axes = plt.subplots(n_rows, n_cols,
+                                 figsize=(6 * n_cols, 5 * n_rows),
+                                 subplot_kw=dict(polar=True))
+        axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
 
-        if save:
-            _finalize(fig, self.output_dir / f'chart7_stratum_{metric}.png', show)
-        return fig
+        for ax_i, method in enumerate(methods):
+            ax = axes_flat[ax_i]
+            ax.set_theta_offset(np.pi / 2)
+            ax.set_theta_direction(-1)
+            ax.set_xticks(angles[:-1])
+            ax.set_xticklabels(labels, size=9)
+            ax.set_ylim(0, 1)
+            ax.set_yticks([0.5, 1.0])
+            ax.set_yticklabels(['0.5', '1.0'], size=7)
 
-    # -----------------------------------------------------------------------
-    # Backward-compat wrappers (called by analyze_results.py)
-    # -----------------------------------------------------------------------
-    def plot_temporal_evolution(self, methods, metric='mae', save=True, show=False):
-        """Legacy interface — redirects to temporal Spearman (more informative)."""
-        return self.plot_temporal_spearman(save=save, show=show)
+            if method in df_norm.index:
+                vals = df_norm.loc[method].values.tolist()
+                vals += vals[:1]
+                ax.plot(angles, vals, color=_c(method),
+                        linewidth=2.0, linestyle='solid',
+                        marker=_mk(method), markersize=5)
+                ax.fill(angles, vals, color=_c(method), alpha=0.25)
 
-    def plot_method_comparison(self, filter_top_percent=None,
-                               filter_stratum=None, metrics=None,
-                               save=True, show=False):
-        """Legacy interface — redirects to protocol overview."""
-        return self.plot_protocol_overview(save=save, show=show)
+            title_weight = 'bold' if method == 'WSPI' else 'normal'
+            ax.set_title(method, size=11, pad=10, fontweight=title_weight,
+                         color=_c(method))
 
-    # -----------------------------------------------------------------------
-    # Master entry point
-    # -----------------------------------------------------------------------
-    def create_summary_report(self,
-                              filter_top_percent=None,
-                              filter_stratum=None,
-                              save=True,
-                              show=False):
-        """Generate all 7 charts."""
-        print("\nGenerating summary report...")
+        # Hide empty subplots
+        for ax_i in range(len(methods), len(axes_flat)):
+            axes_flat[ax_i].set_visible(False)
 
-        steps = [
-            ("1. Protocol overview (all 4 layers)...",
-             lambda s, sh: self.plot_protocol_overview(save=s, show=sh)),
-            ("2. Stability RSI@K...",
-             lambda s, sh: self.plot_stability_rsi(save=s, show=sh)),
-            ("3. Robustness comparison...",
-             lambda s, sh: self.plot_robustness(save=s, show=sh)),
-            ("4. Temporal RSI@10 evolution...",
-             lambda s, sh: self.plot_temporal_rsi(k=10, save=s, show=sh)),
-            ("5. NDCG@K multi-K profile...",
-             lambda s, sh: self.plot_ndcg_profile(save=s, show=sh)),
-            ("6. Temporal Spearman evolution...",
-             lambda s, sh: self.plot_temporal_spearman(save=s, show=sh)),
-            ("7. Per-stratum performance...",
-             lambda s, sh: self.plot_stratum_comparison(save=s, show=sh)),
+        plt.suptitle('Individual Performance Profiles (Radar Charts)', fontsize=13)
+        _finalize(fig, radar_dir / 'radar_individual.png', show)
+        print(f"    Radar charts saved to: {radar_dir}")
+
+    def generate_all_charts(self, show: bool = False):
+        print(f"\n{'='*60}")
+        print("GENERATING ALL CHARTS")
+        print(f"  Output: {self.output_dir}")
+        print(f"{'='*60}")
+
+        charts = [
+            ('chart1_protocol_overview',   self.chart1_protocol_overview),
+            ('chart2_stability_rsi',       self.chart2_stability_rsi),
+            ('chart3_robustness',          self.chart3_robustness),
+            ('chart4_temporal_rsi',        self.chart4_temporal_rsi),
+            ('chart5_ndcg_profile',        self.chart5_ndcg_profile),
+            ('chart6_temporal_spearman',   self.chart6_temporal_spearman),
+            ('chart7_stratum_performance', self.chart7_stratum_performance),
+            ('chart8_metric_heatmap',      self.chart8_metric_heatmap),
+            ('chart9_per_metric_bars',     self.chart9_per_metric_bars),
+            ('chart10_boxplot_windows',    self.chart10_boxplot_windows),
+            ('chart11_radar_charts',       self.chart11_radar_charts),
         ]
 
-        for label, fn in steps:
-            print(f"  {label}")
+        for name, fn in charts:
+            print(f"\n  → {name}")
             try:
-                fn(save, show)
+                fn(show=show)
             except Exception as e:
-                print(f"    Warning: {e}")
+                print(f"    WARNING: {name} failed — {e}")
 
-        print(f"\n✓ Summary report created successfully!")
-        print(f"  Output directory: {self.output_dir}")
+        print(f"\n{'='*60}")
+        print(f"All charts saved to: {self.output_dir}")
+        print(f"{'='*60}\n")
