@@ -5,7 +5,7 @@ Popularity Assessment — Main Evaluation Pipeline
 Evaluates content popularity using the Frozen 4-Layer Protocol.
 
 Three assessment models from Chapter 3:
-  Baselines : AF, LFU, LRU, EWMA            (7-day window)
+  Baselines : AF, EWMA, RRD, VSE, CompoundPop, PFRF  (7-slot window)
   Section 3-2: DWT+AF   — Trend-Shock Model  (64-day window)
   Section 3-3: DTCWT+AF — Stable DTCWT Model (64-day window)
   Section 3-4: WSPI     — Proposed Method     (64-day window, frozen params)
@@ -62,11 +62,20 @@ except ImportError as e:
 
 # Import baselines
 try:
-    from baselines import AccessFrequency, LFU, LRU, EWMA
+    from baselines import (
+        AFMethod,
+        EWMAMethod,
+        RRDMethod,
+        VSEMethod,
+        CompoundPopMethod,
+        PFRFMethod,
+        get_all_baseline_methods,
+    )
     BASELINES_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Baselines not available: {e}")
-    AccessFrequency = LFU = LRU = EWMA = None
+    AFMethod = EWMAMethod = RRDMethod = VSEMethod = CompoundPopMethod = PFRFMethod = None
+    get_all_baseline_methods = None
     BASELINES_AVAILABLE = False
 from config import WAVELET_CONFIG, DATASETS
 
@@ -76,7 +85,7 @@ def create_methods_dict(config: EvaluationConfig) -> dict:
     Build the methods dictionary for the Frozen Evaluation Protocol.
 
     Chapter 3 method lineup:
-      Baselines   — AF, LFU, LRU, EWMA          (7-day window)
+      Baselines   — AF, EWMA, RRD, VSE, CompoundPop, PFRF  (7-slot window)
       Section 3-2 — DWT+AF   (Trend-Shock Model) (64-day window)
       Section 3-3 — DTCWT+AF (Stable Model)      (64-day window)
       Section 3-4 — WSPI     (Proposed, frozen)  (64-day window)
@@ -92,12 +101,15 @@ def create_methods_dict(config: EvaluationConfig) -> dict:
     """
     methods = {}
 
-    # --- Group 1: Baselines (Section 3-1 context) ----------------------------
+    # --- Group 1: General Popularity Baselines (7-slot window) ---------------
     if BASELINES_AVAILABLE:
-        methods['AF']   = AccessFrequency()
-        methods['LFU']  = LFU()
-        methods['LRU']  = LRU()
-        methods['EWMA'] = EWMA(alpha=0.3)
+        methods['AF']          = AFMethod()
+
+        methods['EWMA']        = EWMAMethod(alpha=0.2)
+        methods['RRD']         = RRDMethod()
+        methods['VSE']         = VSEMethod()
+        methods['CompoundPop'] = CompoundPopMethod()
+        methods['PFRF']        = PFRFMethod()
 
     # --- Group 2 & 3 & 4: Chapter 3 models -----------------------------------
     if METHODS_AVAILABLE:
@@ -372,7 +384,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Chapter 3 methods:
-  Baselines   : AF, LFU, LRU, EWMA             (7-day window)
+  Baselines   : AF, EWMA, RRD, VSE, CompoundPop, PFRF  (7-slot window)
   Section 3-2 : DWT+AF   — Trend-Shock Model   (64-day window)
   Section 3-3 : DTCWT+AF — Stable DTCWT Model  (64-day window)
   Section 3-4 : WSPI     — Proposed Method      (64-day window)
@@ -429,7 +441,7 @@ Window formula:
 
     parser.add_argument('--methods', type=str, nargs='+', default=None,
                         help='Methods to evaluate (default: all). '
-                             'Choices: AF LFU LRU EWMA DWT+AF DTCWT+AF WSPI')
+                             'Choices: AF EWMA RRD VSE CompoundPop PFRF DWT+AF DTCWT+AF WSPI')
 
     parser.add_argument('--format', type=str, default='csv',
                         choices=['csv', 'parquet'],
