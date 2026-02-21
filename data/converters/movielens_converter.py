@@ -187,14 +187,16 @@ class MovieLensConverter(BaseConverter):
         self.log(f"  Aggregating by: {self.aggregate_by}")
         
         # گرد کردن timestamp
-        freq_map = {
-            'hour': '1h',
-            'day': '1D',
-            'week': '1W'
-        }
-        freq = freq_map.get(self.aggregate_by, 'D')
-        
-        df['time_bucket'] = df['timestamp'].dt.floor(freq)
+        if self.aggregate_by == 'week':
+            # تبدیل به ابتدای هفته (دوشنبه) برای جلوگیری از خطای non-fixed frequency در پانداز
+            df['time_bucket'] = df['timestamp'].dt.to_period('W').dt.start_time
+        else:
+            freq_map = {
+                'hour': 'h',  # 'h' برای سازگاری بهتر با pandas جدید
+                'day': 'D'
+            }
+            freq = freq_map.get(self.aggregate_by, 'D')
+            df['time_bucket'] = df['timestamp'].dt.floor(freq)
         
         # تجمیع
         agg_dict = {
