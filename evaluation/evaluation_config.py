@@ -385,7 +385,8 @@ def get_youtube_config(**kwargs) -> EvaluationConfig:
         'time_granularity': 'hourly',
         'window_size': 30,
         'prediction_horizon': 3,
-        'strata_thresholds': [50, 500, 5000],
+        # 'strata_thresholds': [50, 500, 5000],
+        'strata_thresholds': None,
         'min_observations': 50,
     }
     defaults.update(kwargs)
