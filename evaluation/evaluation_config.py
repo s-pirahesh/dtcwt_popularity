@@ -320,7 +320,8 @@ def get_movielens_config(**kwargs) -> EvaluationConfig:
         #   low        : 1-5   ratings/day
         #   medium     : 5-20  ratings/day
         #   high       : >= 20 ratings/day (consistently popular)
-        'strata_thresholds': [1, 5, 20],
+        # 'strata_thresholds': [1, 5, 20],
+        'strata_thresholds': None,
         'min_observations': 10,
     }
     defaults.update(kwargs)
