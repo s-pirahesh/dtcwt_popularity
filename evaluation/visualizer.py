@@ -1580,6 +1580,60 @@ class ResultsVisualizer:
                 fontsize=12)
 
         _finalize(fig, self.output_dir / 'chart16_temporal_scale_robustness.png', show)
+    # ==================================================================
+    # CHART 17 — Cross-Scenario Spearman Heatmap (Uber)
+    # ==================================================================
+    def chart17_cross_scenario_spearman_heatmap(self, show=False):
+        """
+        Creates a unified heatmap comparing Spearman Correlation across 
+        the three Uber scenarios (Hourly, 30min, 5min).
+        Data is aggregated from the respective runs for cross-comparison.
+        """
+        # Data extracted from the three Uber results files
+        methods = ['AF', 'EWMA', 'RRD', 'VSE', 'CompoundPop', 'PFRF', 'DWT+AF', 'DTCWT+AF', 'WSPI']
+        data = {
+            'Uber Hourly': [0.8566, 0.8422, 0.8473, 0.8544, 0.8537, 0.6824, 0.8661, 0.8581, 0.8583],
+            'Uber 30min':  [0.8357, 0.8354, 0.8350, 0.8509, 0.8380, 0.8032, 0.8532, 0.8349, 0.8460],
+            'Uber 5min':   [0.7733, 0.7874, 0.8021, 0.8489, 0.8044, 0.8479, 0.8056, 0.7511, 0.8262]
+        }
+
+        df = pd.DataFrame(data, index=methods)
+
+        # Sort index to put baseline methods first, then proposed wavelet methods at the bottom
+        wavelet_methods = ['DWT+AF', 'DTCWT+AF', 'WSPI']
+        baselines = [m for m in methods if m not in wavelet_methods]
+        df = df.reindex(baselines + wavelet_methods)
+
+        with plt.style.context(STYLE):
+            fig, ax = plt.subplots(figsize=(7, 6))
+            
+            # Draw heatmap (using a clean blue-green colormap)
+            sns.heatmap(df, annot=True, fmt=".3f", cmap="YlGnBu", 
+                        linewidths=1, ax=ax, cbar_kws={'label': 'Spearman Rank Correlation (ρ)'})
+
+            # Emphasize proposed methods on the Y-axis labels
+            ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+            for label in ax.get_yticklabels():
+                text = label.get_text()
+                if text == 'WSPI':
+                    label.set_color('#C2185B') # Bold Pink for WSPI
+                    label.set_fontweight('bold')
+                elif text in wavelet_methods:
+                    label.set_color('#4A148C') # Purple for other proposed
+                    label.set_fontweight('bold')
+
+            ax.set_title('Spearman Correlation Across Temporal Granularities', pad=15, fontweight='bold')
+            plt.tight_layout()
+
+            out_path = self.output_dir / 'chart17_cross_scenario_spearman.png'
+            fig.savefig(out_path, dpi=DPI, bbox_inches='tight')
+            print(f"    Saved: {out_path}")
+
+            if show:
+                plt.show()
+            else:
+                plt.close(fig)
+
 
     # ==================================================================
     # Entry Points
@@ -1608,6 +1662,7 @@ class ResultsVisualizer:
             ('chart14_longterm_structure',       self.chart14_longterm_structure),
             ('chart15_wavelet_advantage',        self.chart15_wavelet_advantage),
             ('chart16_temporal_scale_robustness',self.chart16_temporal_scale_robustness),
+            ('chart17_cross_scenario_spearman_heatmap',self.chart17_cross_scenario_spearman_heatmap),
         ]
         for name, fn in charts:
             print(f"\n  → {name}")
