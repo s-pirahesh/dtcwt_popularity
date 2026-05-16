@@ -1,6 +1,8 @@
 """
 Cross-dataset comparison visualizer for the WSPI paper.
 
+Created by: Sajjad Pirahesh, 2026-05-17
+
 Aggregates per-window results from multiple completed dataset runs and
 produces one grouped-bar figure per metric so that each figure shows ONE
 metric across ALL datasets (Figures 3, 5, 6, 7 in the paper).
@@ -12,7 +14,6 @@ Accepted input formats per dataset
 - Path to a run output directory whose ``protocol/`` sub-dir holds per-method
   ``*_protocol.parquet`` files (the layout that temporal_evaluator.py writes)
 """
-
 
 from __future__ import annotations
 
