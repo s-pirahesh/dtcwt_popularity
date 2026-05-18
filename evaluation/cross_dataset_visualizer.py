@@ -3,9 +3,20 @@ Cross-dataset comparison visualizer for the WSPI paper.
 
 Created by: Sajjad Pirahesh, 2026-05-17
 
-Aggregates per-window results from multiple completed dataset runs and
-produces one grouped-bar figure per metric so that each figure shows ONE
-metric across ALL datasets (Figures 3, 5, 6, 7 in the paper).
+Produces one figure per metric, in either of two layout modes:
+
+  group_by="method"   (default — used in the paper)
+      X axis = methods (6 baselines | divider | 3 wavelet-based)
+      Bars within each method  = datasets (colour-coded by dataset)
+      Background: baselines region light grey, proposed region light pink
+      WSPI bars get a bright magenta edge to pop as "ours"
+
+  group_by="dataset"   (alternative view)
+      X axis = datasets (4 scenarios)
+      Bars within each dataset = methods (colour-coded by method)
+      No background regions; instead, proposed-method bars (DWT+AF, DTCWT+AF,
+      WSPI) get a thicker dark edge and a hatch pattern so they pop relative
+      to baselines.  Legend labels for proposed methods are bold + coloured.
 
 Accepted input formats per dataset
 -----------------------------------
@@ -21,39 +32,65 @@ import warnings
 from pathlib import Path
 from typing import Union
 
+import os
+
 import matplotlib
-matplotlib.use("Agg")
+# Backend selection.  Default is Agg (suitable for batch generation on
+# headless machines).  Set CROSS_VIZ_BACKEND=TkAgg (or another interactive
+# backend) before importing this module to enable plt.show() pop-ups.
+_BACKEND = os.environ.get("CROSS_VIZ_BACKEND", "Agg")
+
+def _try_use_backend(name: str) -> bool:
+    """Activate `name` if it works on this machine; return True on success."""
+    try:
+        # Probe the backend by actually importing its module.  matplotlib.use
+        # alone may succeed even if the rendering library is missing; the
+        # error only surfaces later when a figure is created.
+        if name.lower() in ("tkagg", "tk"):
+            import tkinter  # noqa: F401
+        elif name.lower() == "qt5agg":
+            import PyQt5  # noqa: F401
+        elif name.lower() == "qtagg":
+            import PyQt6  # noqa: F401
+        matplotlib.use(name, force=True)
+        return True
+    except (ImportError, ValueError):
+        return False
+
+if not _try_use_backend(_BACKEND):
+    if _BACKEND.lower() != "agg":
+        import warnings
+        warnings.warn(
+            f"Matplotlib backend {_BACKEND!r} not available on this machine; "
+            f"falling back to 'Agg' (no interactive display).",
+            RuntimeWarning,
+        )
+    matplotlib.use("Agg", force=True)
+
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+# Use a built-in matplotlib style that produces white gridlines on a light
+# grey background (similar to seaborn's "whitegrid" theme used in the old
+# visualizer.py).  No external dependency required.
+try:
+    plt.style.use("seaborn-v0_8-whitegrid")
+except OSError:
+    # Older matplotlib uses the un-versioned name
+    plt.style.use("seaborn-whitegrid")
 
-# ── Method ordering (left to right within every group) ───────────────────────
 
-METHOD_ORDER: list[str] = [
-    "AF", "EWMA", "RRD", "VSE", "CompoundPop", "PFRF",   # baselines
-    "DWT+AF", "DTCWT+AF", "WSPI",                         # wavelet
-]
+# ── Method ordering: baselines first, then wavelet-based ─────────────────────
 
-WAVELET_METHODS: set[str] = {"DWT+AF", "DTCWT+AF", "WSPI"}
+BASELINE_METHODS: list[str] = ["AF", "CompoundPop", "EWMA", "PFRF", "RRD", "VSE"]
+WAVELET_METHODS:  list[str] = ["DWT+AF", "DTCWT+AF", "WSPI"]
+METHOD_ORDER: list[str] = BASELINE_METHODS + WAVELET_METHODS
 
-# ── Colour / style constants (tweak here without touching any other code) ─────
-
-BASELINE_COLOR = "#B0C4DE"
-BASELINE_ALPHA = 0.55
-
-WAVELET_COLORS: dict[str, str] = {
-    "DWT+AF":   "#FF8C00",
-    "DTCWT+AF": "#4682B4",
-    "WSPI":     "#C71585",
-}
-WAVELET_ALPHA = 1.0
-
-WSPI_HATCH   = "//"      # hatching applied to WSPI bars so they pop as "ours"
-WSPI_EDGE_LW = 1.8       # black edge linewidth on WSPI bars
-
-# ── Dataset display order ─────────────────────────────────────────────────────
+# ── Dataset display order & dataset-colour palette ───────────────────────────
+# Used as bar colours in group_by="method" mode and as x-axis groups in
+# group_by="dataset" mode.
 
 DATASET_ORDER: list[str] = [
     "YouTube Hourly",
@@ -62,22 +99,61 @@ DATASET_ORDER: list[str] = [
     "Uber 5m",
 ]
 
-# ── Column name aliases ───────────────────────────────────────────────────────
-# Maps every variant that temporal_evaluator.py might write → canonical name.
+DATASET_COLORS: dict[str, str] = {
+    "YouTube Hourly": "#1f77b4",   # blue
+    "Uber Hourly":    "#2ca02c",   # green
+    "Uber 30m":       "#ff7f0e",   # orange
+    "Uber 5m":        "#9467bd",   # purple
+}
+
+# ── Method-colour palette (used as bar colours in group_by="dataset" mode) ──
+# Baselines get soft, distinguishable colours; wavelet methods get strong,
+# saturated colours so they stand out without needing background shading.
+
+METHOD_COLORS: dict[str, str] = {
+    # Baselines (cool, soft palette)
+    "AF":          "#A6CEE3",
+    "CompoundPop": "#B2DF8A",
+    "EWMA":        "#FDBF6F",
+    "PFRF":        "#CAB2D6",
+    "RRD":         "#FB9A99",
+    "VSE":         "#FFFF99",
+    # Proposed methods (strong, saturated)
+    "DWT+AF":      "#FF8C00",   # dark orange
+    "DTCWT+AF":    "#4682B4",   # steel blue
+    "WSPI":        "#C71585",   # bright magenta
+}
+
+# ── Region (background) styling for group_by="method" mode ───────────────────
+
+BASELINE_REGION_COLOR = "#D7D7DD"   # slightly darker grey than the axes bg
+BASELINE_REGION_ALPHA = 0.55
+PROPOSED_REGION_COLOR = "#F7D9E8"
+PROPOSED_REGION_ALPHA = 0.65
+REGION_BORDER_COLOR   = "#888888"
+
+# ── Proposed-method highlighting ─────────────────────────────────────────────
+
+WSPI_EDGE_COLOR    = "#C71585"   # magenta edge for WSPI bars (mode 1)
+WSPI_EDGE_LW       = 1.6
+WAVELET_TICK_COLOR = "#7E1C9F"   # x-tick / legend label colour for proposed
+PROPOSED_HATCH     = "//"        # hatch on proposed bars in mode 2
+PROPOSED_EDGE_LW   = 1.2         # thicker edge on proposed bars in mode 2
+PROPOSED_EDGE_COL  = "#222222"   # dark edge on proposed bars in mode 2
+
+# ── Column name aliases ──────────────────────────────────────────────────────
 
 _COL_ALIASES: dict[str, str] = {
     "ndcg@10":               "ndcg_10",
     "ndcg_10":               "ndcg_10",
     "rsi@10":                "rsi_10",
     "rsi_10":                "rsi_10",
-    "robustness_distortion": "delta_rank",   # actual saved name
+    "robustness_distortion": "delta_rank",
     "delta_rank":            "delta_rank",
     "spearman_rho":          "spearman_rho",
 }
 
 _CANONICAL_COLS: list[str] = ["ndcg_10", "spearman_rho", "rsi_10", "delta_rank"]
-
-# ── Axis label text ───────────────────────────────────────────────────────────
 
 METRIC_LABELS: dict[str, str] = {
     "ndcg_10":      "NDCG@10  (higher is better ↑)",
@@ -93,13 +169,20 @@ METRIC_FILENAMES: dict[str, str] = {
     "delta_rank":   "fig_deltarank.png",
 }
 
-# ── Figure layout constants ───────────────────────────────────────────────────
+# ── Figure layout constants ──────────────────────────────────────────────────
 
-BAR_WIDTH  = 0.08   # data-unit width of each bar
-GROUP_GAP  = 0.28   # blank space between dataset groups
-FIG_SIZE   = (11, 5)
+# Mode 1: group_by="method"
+M_BAR_WIDTH       = 0.18
+M_GROUP_GAP_EXTRA = 0.40   # extra gap between baseline and proposed regions
+M_METHOD_SPACING  = 1.0
+
+# Mode 2: group_by="dataset"
+D_BAR_WIDTH       = 0.085
+D_DATASET_SPACING = 1.0
+
+FIG_SIZE   = (12, 5.5)
 FIG_DPI    = 300
-GRID_ALPHA = 0.25
+GRID_ALPHA = 0.9    # near-opaque gridlines, white-on-light-grey
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -109,7 +192,7 @@ class CrossDatasetVisualizer:
 
     def __init__(
         self,
-        dataset_results: dict,          # {label: DataFrame | Path | str}
+        dataset_results: dict,
         output_dir: Union[Path, str],
     ) -> None:
         self.output_dir = Path(output_dir)
@@ -132,7 +215,6 @@ class CrossDatasetVisualizer:
             return self._normalise_columns(df)
 
         if path.is_dir():
-            # temporal_evaluator.py stores one file per method under protocol/
             proto_dir  = path / "protocol"
             search_dir = proto_dir if proto_dir.is_dir() else path
 
@@ -164,7 +246,6 @@ class CrossDatasetVisualizer:
     # ── Aggregation ───────────────────────────────────────────────────────────
 
     def _compute_aggregates(self) -> pd.DataFrame:
-        """Return a DataFrame indexed by (dataset, method) with mean metric values."""
         rows: list[dict] = []
 
         for dataset, df in self._raw.items():
@@ -191,8 +272,6 @@ class CrossDatasetVisualizer:
                     if col not in mdf.columns:
                         row[col] = np.nan
                     else:
-                        # Exclude LRU from spearman aggregation (broken rank corr.)
-                        # LRU is not in METHOD_ORDER but guard here for robustness.
                         if col == "spearman_rho":
                             series = mdf.loc[mdf["method"] != "LRU", col].dropna()
                         else:
@@ -203,7 +282,7 @@ class CrossDatasetVisualizer:
 
         return pd.DataFrame(rows)
 
-    # ── Plotting helpers ──────────────────────────────────────────────────────
+    # ── Helpers ──────────────────────────────────────────────────────────────
 
     def _ordered_datasets(self) -> list[str]:
         present = list(self._raw.keys())
@@ -211,127 +290,327 @@ class CrossDatasetVisualizer:
         ordered += [d for d in present if d not in ordered]
         return ordered
 
-    def _make_bar_chart(self, metric: str, savepath: Union[Path, str]) -> None:
-        datasets  = self._ordered_datasets()
-        n_groups  = len(datasets)
-        n_methods = len(METHOD_ORDER)
+    def _get_value(self, dataset: str, method: str, metric: str) -> float:
+        mask = ((self._agg["dataset"] == dataset)
+                & (self._agg["method"] == method))
+        val = self._agg.loc[mask, metric]
+        if val.empty or val.isna().all():
+            return np.nan
+        return float(val.iloc[0])
 
-        group_width   = n_methods * BAR_WIDTH + GROUP_GAP
-        group_centers = np.arange(n_groups) * group_width
+    # ──────────────────────────────────────────────────────────────────────────
+    # Mode 1: group_by="method"
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _method_xpositions(self) -> tuple[np.ndarray, np.ndarray, float]:
+        n_base = len(BASELINE_METHODS)
+        n_wav  = len(WAVELET_METHODS)
+
+        xpos_base = np.arange(n_base) * M_METHOD_SPACING
+        gap_start = xpos_base[-1] + M_METHOD_SPACING + M_GROUP_GAP_EXTRA
+        xpos_wav  = gap_start + np.arange(n_wav) * M_METHOD_SPACING
+
+        divider_x = (xpos_base[-1] + xpos_wav[0]) / 2.0
+        return xpos_base, xpos_wav, divider_x
+
+    def _plot_by_method(
+        self,
+        metric: str,
+        savepath: Union[Path, str],
+        show: bool = False,
+    ) -> None:
+        datasets   = self._ordered_datasets()
+        n_datasets = len(datasets)
+
+        xpos_base, xpos_wav, divider_x = self._method_xpositions()
+        all_xpos = np.concatenate([xpos_base, xpos_wav])
 
         fig, ax = plt.subplots(figsize=FIG_SIZE)
+        ax.set_facecolor("#EAEAF2")   # light grey axes background (seaborn-like)
         ax.set_axisbelow(True)
-        ax.yaxis.grid(True, alpha=GRID_ALPHA, linewidth=0.8, color="grey")
+        ax.yaxis.grid(True, alpha=GRID_ALPHA, linewidth=1.0, color="white")
 
-        legend_handles: list[mpatches.Patch] = []
+        # Background regions
+        left_pad  = M_METHOD_SPACING * 0.6
+        right_pad = M_METHOD_SPACING * 0.6
 
-        for i, method in enumerate(METHOD_ORDER):
-            offset = (i - (n_methods - 1) / 2) * BAR_WIDTH
-            xpos   = group_centers + offset
+        ax.axvspan(
+            xpos_base[0] - left_pad, divider_x,
+            facecolor=BASELINE_REGION_COLOR, alpha=BASELINE_REGION_ALPHA,
+            zorder=0,
+        )
+        ax.axvspan(
+            divider_x, xpos_wav[-1] + right_pad,
+            facecolor=PROPOSED_REGION_COLOR, alpha=PROPOSED_REGION_ALPHA,
+            zorder=0,
+        )
+        ax.axvline(
+            divider_x, color=REGION_BORDER_COLOR,
+            linestyle="--", linewidth=1.0, alpha=0.7, zorder=1,
+        )
 
-            values: list[float] = []
-            for ds in datasets:
-                mask = (self._agg["dataset"] == ds) & (self._agg["method"] == method)
-                val  = self._agg.loc[mask, metric]
-                values.append(
-                    float(val.iloc[0]) if not val.empty and not val.isna().all()
-                    else np.nan
+        # Bars: per method, one bar per dataset
+        offsets = (np.arange(n_datasets) - (n_datasets - 1) / 2.0) * M_BAR_WIDTH
+
+        for method_idx, method in enumerate(METHOD_ORDER):
+            method_x = all_xpos[method_idx]
+            is_wspi  = (method == "WSPI")
+
+            for ds_idx, ds in enumerate(datasets):
+                val = self._get_value(ds, method, metric)
+
+                bar_kw: dict = dict(
+                    width=M_BAR_WIDTH,
+                    color=DATASET_COLORS[ds],
+                    zorder=3,
                 )
+                if is_wspi:
+                    bar_kw.update(
+                        edgecolor=WSPI_EDGE_COLOR,
+                        linewidth=WSPI_EDGE_LW,
+                    )
+                else:
+                    bar_kw.update(edgecolor="white", linewidth=0.5)
 
-            is_wavelet = method in WAVELET_METHODS
-            is_wspi    = method == "WSPI"
+                ax.bar(method_x + offsets[ds_idx], val, **bar_kw)
 
-            bar_kw: dict = dict(width=BAR_WIDTH, zorder=2)
-            if is_wavelet:
-                bar_kw.update(color=WAVELET_COLORS[method], alpha=WAVELET_ALPHA)
-            else:
-                bar_kw.update(color=BASELINE_COLOR, alpha=BASELINE_ALPHA)
+        # X-tick labels (proposed methods coloured + bold)
+        ax.set_xticks(all_xpos)
+        labels = ax.set_xticklabels(METHOD_ORDER, fontsize=10)
+        for tick_label, method in zip(labels, METHOD_ORDER):
+            if method in WAVELET_METHODS:
+                tick_label.set_color(WAVELET_TICK_COLOR)
+                tick_label.set_fontweight("bold")
 
-            if is_wspi:
-                bar_kw.update(
-                    hatch=WSPI_HATCH,
-                    edgecolor="black",
-                    linewidth=WSPI_EDGE_LW,
-                )
-
-            bars = ax.bar(xpos, values, **bar_kw)
-
-            # Build matching legend patch
-            patch_kw: dict = dict(
-                label=method,
-                facecolor=bar_kw["color"],
-                alpha=bar_kw.get("alpha", 1.0),
-            )
-            if is_wspi:
-                patch_kw.update(
-                    hatch=WSPI_HATCH,
-                    edgecolor="black",
-                    linewidth=WSPI_EDGE_LW,
-                )
-            legend_handles.append(mpatches.Patch(**patch_kw))
-
-            # Annotate WSPI bars with value labels (rotated to fit narrow bars)
-            if is_wspi:
-                for bar, val in zip(bars, values):
-                    if not np.isnan(val):
-                        ax.text(
-                            bar.get_x() + bar.get_width() / 2,
-                            bar.get_height() + 0.003,
-                            f"{val:.3f}",
-                            ha="center", va="bottom",
-                            fontsize=6.5, fontweight="bold",
-                            rotation=90,
-                        )
-
-        ax.set_xticks(group_centers)
-        ax.set_xticklabels(datasets, fontsize=10)
+        # Cosmetics
         ax.set_ylabel(METRIC_LABELS[metric], fontsize=10)
         ax.tick_params(axis="x", length=0)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
+        ax.set_xlim(xpos_base[0] - left_pad, xpos_wav[-1] + right_pad)
+        if metric != "delta_rank":
+            ax.set_ylim(0, 1.10)
 
-        ax.legend(
-            handles=legend_handles,
-            loc="upper right",
-            fontsize=8,
-            framealpha=0.85,
-            ncol=1,
+        # "Proposed Methods" label
+        ymin, ymax = ax.get_ylim()
+        ax.text(
+            (divider_x + xpos_wav[-1] + right_pad) / 2.0,
+            ymax * 0.98,
+            "Proposed Methods",
+            ha="center", va="top",
+            color=WAVELET_TICK_COLOR, fontweight="bold", fontsize=10,
         )
 
-        fig.tight_layout()
+        # Legend (one entry per dataset) — placed BELOW the plot, outside axes
+        legend_handles = [
+            mpatches.Patch(facecolor=DATASET_COLORS[ds], label=ds)
+            for ds in datasets
+        ]
+        ax.legend(
+            handles=legend_handles,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.10),
+            fontsize=9,
+            frameon=False,
+            ncol=len(datasets),
+            title="Dataset",
+            title_fontsize=9,
+        )
 
+        self._save_fig(fig, savepath, show=show)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Mode 2: group_by="dataset"
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _plot_by_dataset(
+        self,
+        metric: str,
+        savepath: Union[Path, str],
+        show: bool = False,
+    ) -> None:
+        datasets   = self._ordered_datasets()
+        n_datasets = len(datasets)
+        n_methods  = len(METHOD_ORDER)
+
+        # X positions: one group per dataset
+        group_centers = np.arange(n_datasets) * D_DATASET_SPACING
+        offsets = (np.arange(n_methods) - (n_methods - 1) / 2.0) * D_BAR_WIDTH
+
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+        ax.set_facecolor("#EAEAF2")
+        ax.set_axisbelow(True)
+        ax.yaxis.grid(True, alpha=GRID_ALPHA, linewidth=1.0, color="white")
+
+        # Bars: per dataset, one bar per method
+        for method_idx, method in enumerate(METHOD_ORDER):
+            is_wavelet = method in WAVELET_METHODS
+
+            xs = group_centers + offsets[method_idx]
+            ys = [self._get_value(ds, method, metric) for ds in datasets]
+
+            bar_kw: dict = dict(
+                width=D_BAR_WIDTH,
+                color=METHOD_COLORS[method],
+                zorder=3,
+            )
+            if is_wavelet:
+                bar_kw.update(
+                    edgecolor=PROPOSED_EDGE_COL,
+                    linewidth=PROPOSED_EDGE_LW,
+                    hatch=PROPOSED_HATCH,
+                )
+            else:
+                bar_kw.update(edgecolor="white", linewidth=0.4)
+
+            ax.bar(xs, ys, **bar_kw)
+
+        # Dataset x-tick labels
+        ax.set_xticks(group_centers)
+        ax.set_xticklabels(datasets, fontsize=10)
+
+        # Cosmetics
+        ax.set_ylabel(METRIC_LABELS[metric], fontsize=10)
+        ax.tick_params(axis="x", length=0)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        x_pad = D_DATASET_SPACING * 0.55
+        ax.set_xlim(group_centers[0] - x_pad, group_centers[-1] + x_pad)
+        if metric != "delta_rank":
+            ax.set_ylim(0, 1.10)
+
+        # Legend: one entry per method, proposed-method labels bold + coloured
+        legend_handles = []
+        for method in METHOD_ORDER:
+            is_wavelet = method in WAVELET_METHODS
+            patch_kw: dict = dict(
+                facecolor=METHOD_COLORS[method],
+                label=method,
+            )
+            if is_wavelet:
+                patch_kw.update(
+                    edgecolor=PROPOSED_EDGE_COL,
+                    linewidth=PROPOSED_EDGE_LW,
+                    hatch=PROPOSED_HATCH,
+                )
+            legend_handles.append(mpatches.Patch(**patch_kw))
+
+        legend = ax.legend(
+            handles=legend_handles,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.10),
+            fontsize=9,
+            frameon=False,
+            ncol=9,
+            title="Method",
+            title_fontsize=9,
+            handlelength=1.4,
+            columnspacing=1.0,
+        )
+        # Style proposed method legend texts in bold + colour
+        for text, method in zip(legend.get_texts(), METHOD_ORDER):
+            if method in WAVELET_METHODS:
+                text.set_color(WAVELET_TICK_COLOR)
+                text.set_fontweight("bold")
+
+        self._save_fig(fig, savepath, show=show)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Save helper & public API
+    # ──────────────────────────────────────────────────────────────────────────
+
+    _shown_agg_warning = False
+
+    @staticmethod
+    def _save_fig(fig, savepath: Union[Path, str], show: bool = False) -> None:
+        # bbox_inches="tight" will expand the saved bounding box to include the
+        # external legend below the axes, so we don't need extra padding.
         savepath = Path(savepath)
         savepath.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(savepath, dpi=FIG_DPI, bbox_inches="tight")
+
+        if show:
+            backend = matplotlib.get_backend().lower()
+            if backend == "agg":
+                if not CrossDatasetVisualizer._shown_agg_warning:
+                    import warnings
+                    warnings.warn(
+                        "show=True was requested but the matplotlib backend "
+                        "is 'Agg' (non-interactive).  Set CROSS_VIZ_BACKEND="
+                        "TkAgg (or another interactive backend) BEFORE "
+                        "running this script to display figures.  "
+                        "Figures are still being saved to disk normally.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                    CrossDatasetVisualizer._shown_agg_warning = True
+            else:
+                plt.show()
+
         plt.close(fig)
 
-    # ── Public plotting API ───────────────────────────────────────────────────
+    def _make_bar_chart(
+        self,
+        metric: str,
+        savepath: Union[Path, str],
+        group_by: str = "method",
+        show: bool = False,
+    ) -> None:
+        """Dispatch to the appropriate plotting routine based on group_by."""
+        if group_by == "method":
+            self._plot_by_method(metric, savepath, show=show)
+        elif group_by == "dataset":
+            self._plot_by_dataset(metric, savepath, show=show)
+        else:
+            raise ValueError(
+                f"group_by must be 'method' or 'dataset', got {group_by!r}"
+            )
 
-    def plot_ndcg10(self, savepath: Union[Path, str]) -> None:
-        self._make_bar_chart("ndcg_10", savepath)
+    # ── One-metric public methods ────────────────────────────────────────────
 
-    def plot_spearman(self, savepath: Union[Path, str]) -> None:
-        self._make_bar_chart("spearman_rho", savepath)
+    def plot_ndcg10(self, savepath, group_by: str = "method",
+                    show: bool = False) -> None:
+        self._make_bar_chart("ndcg_10", savepath, group_by=group_by, show=show)
 
-    def plot_rsi10(self, savepath: Union[Path, str]) -> None:
-        self._make_bar_chart("rsi_10", savepath)
+    def plot_spearman(self, savepath, group_by: str = "method",
+                      show: bool = False) -> None:
+        self._make_bar_chart("spearman_rho", savepath, group_by=group_by, show=show)
 
-    def plot_deltarank(self, savepath: Union[Path, str]) -> None:
-        self._make_bar_chart("delta_rank", savepath)
+    def plot_rsi10(self, savepath, group_by: str = "method",
+                   show: bool = False) -> None:
+        self._make_bar_chart("rsi_10", savepath, group_by=group_by, show=show)
 
-    def plot_all(self, output_dir: Union[Path, str]) -> None:
-        """Generate all four metric figures into ``output_dir``."""
+    def plot_deltarank(self, savepath, group_by: str = "method",
+                       show: bool = False) -> None:
+        self._make_bar_chart("delta_rank", savepath, group_by=group_by, show=show)
+
+    def plot_all(
+        self,
+        output_dir: Union[Path, str],
+        group_by: str = "method",
+        show: bool = False,
+    ) -> None:
+        """
+        Generate all four metric figures.
+
+        Args:
+            output_dir: target directory
+            group_by:   "method" (default) or "dataset"
+            show:       if True, also display each figure in a viewer window
+                        (requires an interactive matplotlib backend; set
+                        environment variable CROSS_VIZ_BACKEND=tk or similar
+                        before importing this module)
+        """
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
-        self.plot_ndcg10(out / METRIC_FILENAMES["ndcg_10"])
-        self.plot_spearman(out / METRIC_FILENAMES["spearman_rho"])
-        self.plot_rsi10(out / METRIC_FILENAMES["rsi_10"])
-        self.plot_deltarank(out / METRIC_FILENAMES["delta_rank"])
+        self.plot_ndcg10  (out / METRIC_FILENAMES["ndcg_10"],      group_by=group_by, show=show)
+        self.plot_spearman(out / METRIC_FILENAMES["spearman_rho"], group_by=group_by, show=show)
+        self.plot_rsi10   (out / METRIC_FILENAMES["rsi_10"],       group_by=group_by, show=show)
+        self.plot_deltarank(out / METRIC_FILENAMES["delta_rank"],  group_by=group_by, show=show)
 
     # ── Summary table ─────────────────────────────────────────────────────────
 
     def save_summary_table(self, savepath: Union[Path, str]) -> None:
-        """Write aggregated values (4 datasets × 9 methods × 4 metrics) to CSV."""
         savepath = Path(savepath)
         savepath.parent.mkdir(parents=True, exist_ok=True)
 
