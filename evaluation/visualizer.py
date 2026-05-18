@@ -60,6 +60,7 @@ METHOD_MARKERS = {
 # Wavelet methods — proposed in this paper → rendered bold
 WAVELET_METHODS = {'DWT+AF', 'DTCWT+AF', 'WSPI'}
 
+# STYLE = 'seaborn-v0_8-colorblind'
 STYLE = 'seaborn-v0_8-darkgrid'
 DPI   = 300
 
@@ -1472,24 +1473,24 @@ class ResultsVisualizer:
     def chart16_temporal_scale_robustness(self, show=False):
 
         # ---- Paper values across Uber time granularities ----
-        scenarios = ['Hourly', '30-min', '15-min', '5-min']
+        scenarios = ['Hourly', '30-min', '5-min']
 
         # RSI@10 per method per scenario (from paper Table results)
         rsi_data = {
-            'EWMA':     [0.158, 0.147, 0.139, 0.121],   # best traditional (approx)
-            'AF':       [0.089, 0.082, 0.077, 0.068],
-            'DWT+AF':   [0.431, 0.455, 0.478, 0.493],
-            'DTCWT+AF': [0.468, 0.491, 0.511, 0.524],
-            'WSPI':     [0.502, 0.531, 0.558, 0.574],
+            'EWMA':     [0.157, 0.162, 0.152],   # best traditional (approx)
+            'AF':       [0.149, 0.150, 0.137],
+            'DWT+AF':   [0.431, 0.481, 0.425],
+            'DTCWT+AF': [0.440, 0.469, 0.409],
+            'WSPI':     [0.502, 0.581, 0.646],
         }
 
         # ΔRank per method per scenario (lower = better)
         delta_data = {
-            'EWMA':     [3.21, 3.45, 3.68, 3.85],
-            'AF':       [3.58, 3.79, 4.02, 4.23],
-            'DWT+AF':   [2.14, 2.05, 1.98, 2.31],
-            'DTCWT+AF': [1.87, 1.79, 1.72, 2.15],
-            'WSPI':     [1.62, 1.54, 1.49, 2.43],   # 5-min anomaly
+            'EWMA':     [38.862, 30.628, 50.340],
+            'AF':       [65.745, 62.678, 42.567],
+            'DWT+AF':   [58.475, 58.551, 45.136],
+            'DTCWT+AF': [47.724, 42.416, 53.890],
+            'WSPI':     [12.234, 36.486, 45.136],   # 5-min anomaly
         }
 
         methods_plot = list(rsi_data.keys())
@@ -1552,8 +1553,8 @@ class ResultsVisualizer:
             ax_dr.annotate(
                 '⚠ Exception: 5-min window\ncovers only 5.3h → ΔRank inflated\n'
                 '(fixable: increase window size)',
-                xy=(3, wspi_dr[3]),
-                xytext=(2.3, wspi_dr[3] + 0.55),
+                xy=(2, wspi_dr[2]),
+                xytext=(1.6, wspi_dr[2] - 20.55),
                 fontsize=8.5, color='#E65100', fontweight='bold',
                 arrowprops=dict(arrowstyle='->', color='#E65100', lw=1.8),
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='#FFF3E0',
@@ -1564,12 +1565,12 @@ class ResultsVisualizer:
                 'ΔRank Across Time Granularities\n'
                 'WSPI consistently lower — except 5-min (short window coverage artefact)',
                 fontsize=11)
-            ax_dr.legend(fontsize=8, ncol=3, loc='upper left')
+            ax_dr.legend(fontsize=8, ncol=3, loc='upper right')
             ax_dr.grid(axis='y', alpha=0.3)
 
             ax_dr.set_xticks(x)
             ax_dr.set_xticklabels(
-                [f'{s}\n(window coverage)' if i == 3 else s
+                [f'{s}\n(window coverage)' if i == 2 else s
                  for i, s in enumerate(scenarios)],
                 fontsize=10)
 
@@ -1645,23 +1646,23 @@ class ResultsVisualizer:
         print(f"{'='*60}")
 
         charts = [
-            ('chart1_protocol_overview',   self.chart1_protocol_overview),
-            ('chart1b_lollipop_overview',  self.chart1b_lollipop_overview),
-            ('chart2_stability_rsi',       self.chart2_stability_rsi),
-            ('chart3_robustness',          self.chart3_robustness),
-            ('chart4_temporal_rsi',        self.chart4_temporal_rsi),
-            ('chart5_ndcg_profile',        self.chart5_ndcg_profile),
-            ('chart6_temporal_spearman',   self.chart6_temporal_spearman),
-            ('chart7_stratum_performance', self.chart7_stratum_performance),
-            ('chart8_metric_heatmap',      self.chart8_metric_heatmap),
-            ('chart9_per_metric_bars',     self.chart9_per_metric_bars),
-            ('chart10_boxplot_windows',    self.chart10_boxplot_windows),
-            ('chart11_radar_charts',       self.chart11_radar_charts),
-            ('chart12_composite_score',    self.chart12_composite_score),
-            ('chart13_noise_robustness',        self.chart13_noise_robustness),
-            ('chart14_longterm_structure',       self.chart14_longterm_structure),
-            ('chart15_wavelet_advantage',        self.chart15_wavelet_advantage),
-            ('chart16_temporal_scale_robustness',self.chart16_temporal_scale_robustness),
+            # ('chart1_protocol_overview',   self.chart1_protocol_overview),
+            # ('chart1b_lollipop_overview',  self.chart1b_lollipop_overview),
+            # ('chart2_stability_rsi',       self.chart2_stability_rsi),
+            # ('chart3_robustness',          self.chart3_robustness),
+            # ('chart4_temporal_rsi',        self.chart4_temporal_rsi),
+            # ('chart5_ndcg_profile',        self.chart5_ndcg_profile),
+            # ('chart6_temporal_spearman',   self.chart6_temporal_spearman),
+            # ('chart7_stratum_performance', self.chart7_stratum_performance),
+            # ('chart8_metric_heatmap',      self.chart8_metric_heatmap),
+            # ('chart9_per_metric_bars',     self.chart9_per_metric_bars),
+            # ('chart10_boxplot_windows',    self.chart10_boxplot_windows),
+            # ('chart11_radar_charts',       self.chart11_radar_charts),
+            # ('chart12_composite_score',    self.chart12_composite_score),
+            # ('chart13_noise_robustness',        self.chart13_noise_robustness),
+            # ('chart14_longterm_structure',       self.chart14_longterm_structure),
+            # ('chart15_wavelet_advantage',        self.chart15_wavelet_advantage),
+            # ('chart16_temporal_scale_robustness',self.chart16_temporal_scale_robustness),
             ('chart17_cross_scenario_spearman_heatmap',self.chart17_cross_scenario_spearman_heatmap),
         ]
         for name, fn in charts:
