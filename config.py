@@ -110,12 +110,12 @@ FROZEN_PROTOCOL_CONFIG = {
 # Dataset         Unit            cold  low   med   high
 # --------------  --------------  ----  ----  ----  -----
 # MovieLens       ratings/day      < 1   1-5  5-20   >= 20
-# Uber            trips/hour       < 5  5-50 50-300  >= 300
+# NYC Yellow Taxi trips/hour       < 5  5-50 50-300  >= 300
 # YouTube/Youku   views/hour       < 50 50-500 500-5000 >= 5000
 
 STRATA_THRESHOLDS = {
     'movielens': [1, 5, 20],      # mean ratings/day
-    'uber':      [5, 30, 100],    # mean trips/hour per zone (hourly, NYC TLC)
+    'yellow_taxi': [5, 30, 100],  # mean trips/hour per zone (hourly, NYC TLC)
     'youtube':   [50, 500, 5000], # mean views/hour
     'youku':     [50, 500, 5000], # mean views/5-min-slot
 }
@@ -144,9 +144,9 @@ DATASETS = {
         'granularity': 'daily',
     },
 
-    'uber': {
-        'name':        'uber',
-        'path':        DATA_DIR / 'uber.csv',
+    'yellow_taxi': {
+        'name':        'yellow_taxi',
+        'path':        DATA_DIR / 'yellow_taxi.csv',
         'time_col':    'timestamp',
         'item_col':    'item_id',
         'count_col':   'count',
