@@ -94,16 +94,16 @@ METHOD_ORDER: list[str] = BASELINE_METHODS + WAVELET_METHODS
 
 DATASET_ORDER: list[str] = [
     "YouTube Hourly",
-    "Uber Hourly",
-    "Uber 30m",
-    "Uber 5m",
+    "NYC Yellow Taxi Hourly",
+    "NYC Yellow Taxi 30m",
+    "NYC Yellow Taxi 5m",
 ]
 
 DATASET_COLORS: dict[str, str] = {
-    "YouTube Hourly": "#1f77b4",   # blue
-    "Uber Hourly":    "#2ca02c",   # green
-    "Uber 30m":       "#ff7f0e",   # orange
-    "Uber 5m":        "#9467bd",   # purple
+    "YouTube Hourly":         "#1f77b4",   # blue
+    "NYC Yellow Taxi Hourly": "#2ca02c",   # green
+    "NYC Yellow Taxi 30m":    "#ff7f0e",   # orange
+    "NYC Yellow Taxi 5m":     "#9467bd",   # purple
 }
 
 # ── Method-colour palette (used as bar colours in group_by="dataset" mode) ──
