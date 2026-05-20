@@ -29,7 +29,7 @@ class EvaluationConfig:
     #   MovieLens daily: timedelta(days=1)
     #   MovieLens weekly: timedelta(days=7)
     #   Youku (5-min): timedelta(minutes=5)
-    #   Uber (15-min): timedelta(minutes=15)
+    #   NYC Yellow Taxi (15-min): timedelta(minutes=15)
     time_granularity: str = 'daily'        # 'daily', 'hourly', 'minute', یا custom
     slot_duration_minutes: Optional[int] = None  # برای custom granularity
     
@@ -327,12 +327,12 @@ def get_movielens_config(**kwargs) -> EvaluationConfig:
     defaults.update(kwargs)
     return EvaluationConfig(**defaults)
 
-def get_uber_config(**kwargs) -> EvaluationConfig:
+def get_yellow_taxi_config(**kwargs) -> EvaluationConfig:
     """
-    Configuration for Uber/NYC Taxi dataset (hourly granularity).
+    Configuration for NYC Yellow Taxi dataset (hourly granularity).
 
     Usage:
-        config = get_uber_config(
+        config = get_yellow_taxi_config(
             num_items=50,
             window_size=168,             # 7 days × 24 hours
             start_date='2014-01-01',
@@ -354,9 +354,12 @@ def get_uber_config(**kwargs) -> EvaluationConfig:
     or subset of zones, at the cost of less interpretable boundaries.
 
     Note: window_size is in TIME SLOTS (hours for hourly data).
+
+    Data source: NYC Taxi & Limousine Commission, Yellow Taxi Trip Records.
+        https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
     """
     defaults = {
-        'dataset_name':      'uber',
+        'dataset_name':      'yellow_taxi',
         'time_granularity':  'hourly',
         'window_size':       168,        # 7 days × 24 h — sensible default
         'prediction_horizon': 24,        # predict next 24 hours
