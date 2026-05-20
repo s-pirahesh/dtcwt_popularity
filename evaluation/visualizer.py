@@ -461,7 +461,7 @@ class ResultsVisualizer:
     # ==================================================================
     # CHART 4 — Temporal RSI@10 — Rolling-Mean Trend
     #   Raw per-window points are too noisy when window count is large
-    #   (e.g. 8000+ windows for Uber).  We compute a rolling mean with
+    #   (e.g. 8000+ windows for NYC Yellow Taxi).  We compute a rolling mean with
     #   an adaptive window (~5 % of total windows, min 10) and show the
     #   smoothed trend line.  A light shaded band (±1 std, also rolling)
     #   is drawn only for WSPI to highlight its stability advantage.
@@ -1347,13 +1347,13 @@ class ResultsVisualizer:
     #        (Traditional vs Wavelet) with improvement arrows
     #     B) "RSI Lift" waterfall: how much each wavelet method adds
     #        over the best traditional baseline
-    #   Hard-coded fallback values from the paper (Uber scenario) are
+    #   Hard-coded fallback values from the paper (NYC Yellow Taxi scenario) are
     #   used when real data is unavailable.
     # ==================================================================
     def chart15_wavelet_advantage(self, show=False):
         summary = self._get_summary_df()
 
-        # ---- Paper values (Uber) as fallback ----
+        # ---- Paper values (NYC Yellow Taxi) as fallback ----
         PAPER_RSI = {
             'AF':         0.089, 'EWMA':     0.158, 'RRD':       0.102,
             'VSE':        0.121, 'CompoundPop': 0.134, 'PFRF':   0.147,
@@ -1472,7 +1472,7 @@ class ResultsVisualizer:
     # ==================================================================
     def chart16_temporal_scale_robustness(self, show=False):
 
-        # ---- Paper values across Uber time granularities ----
+        # ---- Paper values across NYC Yellow Taxi time granularities ----
         scenarios = ['Hourly', '30-min', '5-min']
 
         # RSI@10 per method per scenario (from paper Table results)
@@ -1582,20 +1582,20 @@ class ResultsVisualizer:
 
         _finalize(fig, self.output_dir / 'chart16_temporal_scale_robustness.png', show)
     # ==================================================================
-    # CHART 17 — Cross-Scenario Spearman Heatmap (Uber)
+    # CHART 17 — Cross-Scenario Spearman Heatmap (NYC Yellow Taxi)
     # ==================================================================
     def chart17_cross_scenario_spearman_heatmap(self, show=False):
         """
         Creates a unified heatmap comparing Spearman Correlation across 
-        the three Uber scenarios (Hourly, 30min, 5min).
+        the three NYC Yellow Taxi scenarios (Hourly, 30min, 5min).
         Data is aggregated from the respective runs for cross-comparison.
         """
-        # Data extracted from the three Uber results files
+        # Data extracted from the three NYC Yellow Taxi results files
         methods = ['AF', 'EWMA', 'RRD', 'VSE', 'CompoundPop', 'PFRF', 'DWT+AF', 'DTCWT+AF', 'WSPI']
         data = {
-            'Uber Hourly': [0.8566, 0.8422, 0.8473, 0.8544, 0.8537, 0.6824, 0.8661, 0.8581, 0.8583],
-            'Uber 30min':  [0.8357, 0.8354, 0.8350, 0.8509, 0.8380, 0.8032, 0.8532, 0.8349, 0.8460],
-            'Uber 5min':   [0.7733, 0.7874, 0.8021, 0.8489, 0.8044, 0.8479, 0.8056, 0.7511, 0.8262]
+            'NYC Yellow Taxi Hourly': [0.8566, 0.8422, 0.8473, 0.8544, 0.8537, 0.6824, 0.8661, 0.8581, 0.8583],
+            'NYC Yellow Taxi 30min':  [0.8357, 0.8354, 0.8350, 0.8509, 0.8380, 0.8032, 0.8532, 0.8349, 0.8460],
+            'NYC Yellow Taxi 5min':   [0.7733, 0.7874, 0.8021, 0.8489, 0.8044, 0.8479, 0.8056, 0.7511, 0.8262]
         }
 
         df = pd.DataFrame(data, index=methods)
@@ -1646,23 +1646,23 @@ class ResultsVisualizer:
         print(f"{'='*60}")
 
         charts = [
-            # ('chart1_protocol_overview',   self.chart1_protocol_overview),
-            # ('chart1b_lollipop_overview',  self.chart1b_lollipop_overview),
-            # ('chart2_stability_rsi',       self.chart2_stability_rsi),
-            # ('chart3_robustness',          self.chart3_robustness),
-            # ('chart4_temporal_rsi',        self.chart4_temporal_rsi),
-            # ('chart5_ndcg_profile',        self.chart5_ndcg_profile),
-            # ('chart6_temporal_spearman',   self.chart6_temporal_spearman),
-            # ('chart7_stratum_performance', self.chart7_stratum_performance),
-            # ('chart8_metric_heatmap',      self.chart8_metric_heatmap),
-            # ('chart9_per_metric_bars',     self.chart9_per_metric_bars),
-            # ('chart10_boxplot_windows',    self.chart10_boxplot_windows),
-            # ('chart11_radar_charts',       self.chart11_radar_charts),
-            # ('chart12_composite_score',    self.chart12_composite_score),
-            # ('chart13_noise_robustness',        self.chart13_noise_robustness),
-            # ('chart14_longterm_structure',       self.chart14_longterm_structure),
-            # ('chart15_wavelet_advantage',        self.chart15_wavelet_advantage),
-            # ('chart16_temporal_scale_robustness',self.chart16_temporal_scale_robustness),
+            ('chart1_protocol_overview',   self.chart1_protocol_overview),
+            ('chart1b_lollipop_overview',  self.chart1b_lollipop_overview),
+            ('chart2_stability_rsi',       self.chart2_stability_rsi),
+            ('chart3_robustness',          self.chart3_robustness),
+            ('chart4_temporal_rsi',        self.chart4_temporal_rsi),
+            ('chart5_ndcg_profile',        self.chart5_ndcg_profile),
+            ('chart6_temporal_spearman',   self.chart6_temporal_spearman),
+            ('chart7_stratum_performance', self.chart7_stratum_performance),
+            ('chart8_metric_heatmap',      self.chart8_metric_heatmap),
+            ('chart9_per_metric_bars',     self.chart9_per_metric_bars),
+            ('chart10_boxplot_windows',    self.chart10_boxplot_windows),
+            ('chart11_radar_charts',       self.chart11_radar_charts),
+            ('chart12_composite_score',    self.chart12_composite_score),
+            ('chart13_noise_robustness',        self.chart13_noise_robustness),
+            ('chart14_longterm_structure',       self.chart14_longterm_structure),
+            ('chart15_wavelet_advantage',        self.chart15_wavelet_advantage),
+            ('chart16_temporal_scale_robustness',self.chart16_temporal_scale_robustness),
             ('chart17_cross_scenario_spearman_heatmap',self.chart17_cross_scenario_spearman_heatmap),
         ]
         for name, fn in charts:
