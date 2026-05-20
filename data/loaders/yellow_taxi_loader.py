@@ -18,9 +18,9 @@ from .base_loader import BaseLoader
 logger = logging.getLogger(__name__)
 
 
-class UberLoader(BaseLoader):
+class YellowTaxiLoader(BaseLoader):
     """
-    Loader for converted Uber/NYC Taxi data
+    Loader for converted NYC Yellow Taxi data
     
     Expected format (from converter):
         - timestamp (datetime)
@@ -31,8 +31,8 @@ class UberLoader(BaseLoader):
     
     def __init__(self, config: dict):
         """
-        Initialize Uber loader
-        
+        Initialize NYC Yellow Taxi loader
+
         Args:
             config: Dataset configuration dict with keys:
                 - path: Path to converted CSV file
@@ -41,7 +41,7 @@ class UberLoader(BaseLoader):
                 - count_col: Count column name (default: 'count')
         """
         super().__init__(config)
-        logger.info(f"UberLoader initialized for {self.data_path}")
+        logger.info(f"YellowTaxiLoader initialized for {self.data_path}")
     
     def load_data(self) -> pd.DataFrame:
         """
@@ -50,7 +50,7 @@ class UberLoader(BaseLoader):
         Returns:
             DataFrame with columns: timestamp, item_id, count, [features]
         """
-        logger.info(f"Loading Uber data from {self.data_path}")
+        logger.info(f"Loading NYC Yellow Taxi data from {self.data_path}")
         
         # Read CSV
         df = pd.read_csv(self.data_path)
@@ -344,27 +344,27 @@ class UberLoader(BaseLoader):
         return data, items
 
 # Factory function (like get_movielens_loader)
-def get_uber_loader(config: dict = None) -> UberLoader:
+def get_yellow_taxi_loader(config: dict = None) -> YellowTaxiLoader:
     """
-    Factory function for creating UberLoader
+    Factory function for creating YellowTaxiLoader
     
     Args:
         config: Dataset configuration (optional)
     
     Returns:
-        UberLoader instance
+        YellowTaxiLoader instance
     
     Example:
-        >>> loader = get_uber_loader()
+        >>> loader = get_yellow_taxi_loader()
         >>> data = loader.load_data()
     """
     if config is None:
         from config import DATASETS
-        config = DATASETS.get('uber', {
-            'name': 'uber',
-            'path': 'data/datasets/uber_hourly.csv',
+        config = DATASETS.get('yellow_taxi', {
+            'name': 'yellow_taxi',
+            'path': 'data/datasets/yellow_taxi_hourly.csv',
             'time_col': 'timestamp',
             'item_col': 'item_id',
             'count_col': 'count'
         })
-    return UberLoader(config)
+    return YellowTaxiLoader(config)
