@@ -17,7 +17,7 @@ from .evaluation_config import (
     get_movielens_config,
     get_youtube_config,
     get_youku_config,
-    get_uber_config,
+    get_yellow_taxi_config,
 )
 
 # --- Core subsystems ---------------------------------------------------------
@@ -52,7 +52,7 @@ __all__ = [
     'get_movielens_config',
     'get_youtube_config',
     'get_youku_config',
-    'get_uber_config',
+    'get_yellow_taxi_config',
     # Core subsystems
     'StratificationSystem',
     'StorageSystem',
