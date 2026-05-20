@@ -16,7 +16,7 @@ from .base_converter import BaseConverter, ConverterFactory
 
 # Import converters to auto-register them
 from . import movielens_converter
-from . import uber_converter
+from . import yellow_taxi_converter
 from . import youtube_converter
 
 # TODO: Import future converters here
