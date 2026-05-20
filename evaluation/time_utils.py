@@ -20,7 +20,7 @@ class TimeSlotHelper:
       - MovieLens daily: 1 slot = 1 day
       - MovieLens weekly: 1 slot = 1 week  
       - Youku: 1 slot = 5 minutes
-      - Uber: 1 slot = 15 minutes
+      - NYC Yellow Taxi: 1 slot = 15 minutes
     """
     
     def __init__(self, time_granularity: str = 'daily', 
