@@ -115,7 +115,7 @@ This is a complete, structured, and modular implementation of a popularity asses
 
 ### Comparison Table (Hit Rate @ 10%)
 
-| Method | YouTube07 | MovieLens | Foursquare | Higgs | Uber | Average |
+| Method | YouTube07 | MovieLens | Foursquare | Higgs | NYC Yellow Taxi | Average |
 |--------|-----------|-----------|------------|-------|------|---------|
 | AF (Baseline) | 45.2 | 42.1 | 38.9 | 40.3 | 43.7 | 42.0 |
 | EWMA | 47.6 | 44.2 | 41.3 | 43.1 | 45.9 | 44.4 |
