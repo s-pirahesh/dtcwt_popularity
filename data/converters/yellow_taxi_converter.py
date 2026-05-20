@@ -1,5 +1,5 @@
 """
-Uber Yellow Taxi Dataset Converter
+NY Yellow Taxi Dataset Converter
 Converts NYC Yellow Taxi trip records to standard popularity format
 
 Dataset: NYC Yellow Taxi Trip Records
@@ -13,9 +13,9 @@ from datetime import datetime
 from .base_converter import BaseConverter, ConverterFactory
 
 
-class UberConverter(BaseConverter):
+class YellowTaxiConverter(BaseConverter):
     """
-    Converter for Uber/NYC Yellow Taxi data
+    Converter for NYC Yellow Taxi data
     
     Input: Parquet files
         - tpep_pickup_datetime: pickup time
@@ -29,15 +29,15 @@ class UberConverter(BaseConverter):
         - avg_fare, avg_distance, avg_passengers (optional features)
     
     Dataset-Specific Parameters:
-        --uber-granularity: Time slot size (5min/15min/30min/hourly/daily)
-        --uber-min-trips-per-location: Minimum total trips to keep a location
-        --uber-extract-features: Extract additional features (fare, distance, etc.)
+        --yellow-taxi-granularity: Time slot size (5min/15min/30min/hourly/daily)
+        --yellow-taxi-min-trips-per-location: Minimum total trips to keep a location
+        --yellow-taxi-extract-features: Extract additional features (fare, distance, etc.)
     """
     
     # ==========================================
     # Metadata
     # ==========================================
-    DATASET_NAME = 'uber'
+    DATASET_NAME = 'yellow_taxi'
     SUPPORTED_FILE_TYPES = ['.parquet']
     DESCRIPTION = 'NYC Yellow Taxi trip data converter'
     
@@ -137,7 +137,7 @@ class UberConverter(BaseConverter):
         Returns:
             Standard DataFrame
         """
-        self.log(f"Reading Uber file: {file_path.name}")
+        self.log(f"Reading Yellow Taxi file: {file_path.name}")
         
         # ==========================================
         # Step 1: Read Parquet
@@ -372,7 +372,7 @@ class UberConverter(BaseConverter):
 # ==========================================
 # Register in Factory
 # ==========================================
-ConverterFactory.register('uber', UberConverter)
+ConverterFactory.register('yellow_taxi', YellowTaxiConverter)
 
 
 # ==========================================
@@ -383,27 +383,27 @@ if __name__ == '__main__':
     Usage examples:
     
     # Single file
-    python uber_converter.py yellow_2024_01.parquet output.csv
+    python yellow_taxi_converter.py yellow_2024_01.parquet output.csv
     
     # With options
-    python uber_converter.py yellow_2024_01.parquet output.csv \
+    python yellow_taxi_converter.py yellow_2024_01.parquet output.csv \
         --granularity hourly --min-trips 200 --extract-features
     """
     import sys
     import argparse
     from glob import glob
     
-    parser = argparse.ArgumentParser(description='Uber/NYC Taxi Converter')
+    parser = argparse.ArgumentParser(description='NYC Yellow Taxi Converter')
     parser.add_argument('input', help='Input Parquet file(s) - use quotes for wildcards')
     parser.add_argument('output', help='Output CSV file')
     
     # Add arguments
-    UberConverter.add_arguments(parser, prefix=False)
+    YellowTaxiConverter.add_arguments(parser, prefix=False)
     
     args = parser.parse_args()
     
     # Extract parameters
-    params = UberConverter.extract_params_from_args(args, prefix=False)
+    params = YellowTaxiConverter.extract_params_from_args(args, prefix=False)
     
     # Process wildcards
     if '*' in args.input or '?' in args.input:
@@ -416,7 +416,7 @@ if __name__ == '__main__':
         input_files = args.input
     
     # Convert
-    converter = UberConverter(**params)
+    converter = YellowTaxiConverter(**params)
     df = converter.convert(input_files, args.output)
     
     # Show statistics
