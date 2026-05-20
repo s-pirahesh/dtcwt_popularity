@@ -12,7 +12,7 @@ This project implements **WSPI** (Wavelet Structural Popularity Index), a novel 
 
 ## Features
 
-- **Multiple Datasets**: MovieLens 25M, Uber/NYC Taxi, YouTube, Youku
+- **Multiple Datasets**: MovieLens 25M, NYC Yellow Taxi, YouTube, Youku
 - **Flexible Time Granularity**: Daily, hourly, minute-level, or custom intervals
 - **Two Evaluation Modes**:
   - Standard: Full in-memory evaluation (`TemporalEvaluator`)
