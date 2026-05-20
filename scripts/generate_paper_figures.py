@@ -20,10 +20,10 @@ Grouping modes (``--group-by``)
 Usage (Windows PowerShell)
 --------------------------
     python scripts/generate_paper_figures.py `
-        --youtube  "results/youtube/<run_folder>" `
-        --uber-h   "results/uber/<run_folder>" `
-        --uber-30m "results/uber/<run_folder>" `
-        --uber-5m  "results/uber/<run_folder>" `
+        --youtube         "results/youtube/<run_folder>" `
+        --yellow-taxi-h   "results/yellow_taxi/<run_folder>" `
+        --yellow-taxi-30m "results/yellow_taxi/<run_folder>" `
+        --yellow-taxi-5m  "results/yellow_taxi/<run_folder>" `
         --out      "paper_figures/" `
         --group-by method
 
@@ -58,10 +58,14 @@ from evaluation.cross_dataset_visualizer import CrossDatasetVisualizer
 
 
 DATASET_FLAGS = [
-    ("--youtube",  "YouTube Hourly", "Path to the YouTube hourly run directory"),
-    ("--uber-h",   "Uber Hourly",    "Path to the Uber NYC hourly run directory"),
-    ("--uber-30m", "Uber 30m",       "Path to the Uber NYC 30-minute run directory"),
-    ("--uber-5m",  "Uber 5m",        "Path to the Uber NYC 5-minute run directory"),
+    ("--youtube",         "YouTube Hourly",
+     "Path to the YouTube hourly run directory"),
+    ("--yellow-taxi-h",   "NYC Yellow Taxi Hourly",
+     "Path to the NYC Yellow Taxi hourly run directory"),
+    ("--yellow-taxi-30m", "NYC Yellow Taxi 30m",
+     "Path to the NYC Yellow Taxi 30-minute run directory"),
+    ("--yellow-taxi-5m",  "NYC Yellow Taxi 5m",
+     "Path to the NYC Yellow Taxi 5-minute run directory"),
 ]
 
 
