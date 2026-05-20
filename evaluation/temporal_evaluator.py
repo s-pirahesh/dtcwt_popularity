@@ -582,8 +582,8 @@ class TemporalEvaluator:
             actual_count = int(item_test['count'].sum()) if len(item_test) > 0 else 0
 
             # Mean-per-slot: independent of window length, comparable across datasets.
-            # Uber/YouTube have high per-slot counts; using sum caused everything
-            # to land in 'high' stratum.  Mean fixes the scale.
+            # NYC Yellow Taxi / YouTube have high per-slot counts; using sum caused
+            # everything to land in 'high' stratum.  Mean fixes the scale.
             n_slots      = max(len(item_train), 1)
             train_mean   = item_train['count'].sum() / n_slots
             stratum_label = self.stratification.get_stratum_label(train_mean)
