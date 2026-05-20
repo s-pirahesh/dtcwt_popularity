@@ -31,7 +31,7 @@ from evaluation import (
     get_movielens_config,
     get_youtube_config,
     get_youku_config,
-    get_uber_config,  
+    get_yellow_taxi_config,
     TemporalEvaluator
 )
 
@@ -42,8 +42,8 @@ except ImportError as e:
     print(f"⚠️  Warning: Incremental evaluator not available: {e}")
     IncrementalTemporalEvaluator = None
     INCREMENTAL_AVAILABLE = False
-from data.loaders import MovieLensLoader, UberLoader, YouTubeLoader
-# YouTubeLoader and YoukuLoader are not yet fully implemented — MovieLens and Uber are the primary datasets
+from data.loaders import MovieLensLoader, YellowTaxiLoader, YouTubeLoader
+# YouTubeLoader and YoukuLoader are not yet fully implemented — MovieLens and NYC Yellow Taxi are the primary datasets
 # Import assessment methods (may require optional dependencies: pywt, dtcwt)
 try:
     from methods import (
@@ -154,7 +154,7 @@ def get_data_loader(dataset_name: str, data_path: str = None):
     Create the appropriate data loader for the given dataset.
 
     Args:
-        dataset_name: one of 'movielens', 'uber', 'youtube'
+        dataset_name: one of 'movielens', 'yellow_taxi', 'youtube'
         data_path:    optional override for the file path in config
 
     Returns:
@@ -165,17 +165,17 @@ def get_data_loader(dataset_name: str, data_path: str = None):
         if data_path:
             config['path'] = Path(data_path)
         return MovieLensLoader(config)
-    elif dataset_name == 'uber':
-        config = DATASETS.get('uber', {
-            'name': 'uber',
-            'path': data_path or Path('./data/uber/uber.csv'),
+    elif dataset_name == 'yellow_taxi':
+        config = DATASETS.get('yellow_taxi', {
+            'name': 'yellow_taxi',
+            'path': data_path or Path('./data/yellow_taxi/yellow_taxi.csv'),
             'time_col': 'timestamp',
             'item_col': 'item_id',
             'count_col': 'count'
         }).copy()
         if data_path:
             config['path'] = Path(data_path)
-        return UberLoader(config)
+        return YellowTaxiLoader(config)
     elif dataset_name == 'youtube':
         config = DATASETS['youtube'].copy()
         if data_path:
@@ -208,7 +208,7 @@ def run_temporal_evaluation(dataset_name: str,
     Run a full temporal evaluation with the Frozen 4-Layer Protocol.
 
     Args:
-        dataset_name:       'movielens', 'uber', 'youtube'
+        dataset_name:       'movielens', 'yellow_taxi', 'youtube'
         num_items:          number of items (None = all)
         start_date:         'YYYY-MM-DD' or None (dataset start)
         end_date:           'YYYY-MM-DD' or None (dataset end)
@@ -250,8 +250,8 @@ def run_temporal_evaluation(dataset_name: str,
             num_cores=num_cores,
             **kwargs
         )
-    elif dataset_name == 'uber':
-        config = get_uber_config(
+    elif dataset_name == 'yellow_taxi':
+        config = get_yellow_taxi_config(
             num_items=num_items,
             start_date=start_date,
             end_date=end_date,
@@ -421,7 +421,7 @@ Window formula:
     )
 
     parser.add_argument('dataset', type=str,
-                        choices=['movielens', 'youtube07', 'youku', 'uber', 'youtube'],
+                        choices=['movielens', 'youtube07', 'youku', 'yellow_taxi', 'youtube'],
                         help='Dataset name')
 
     parser.add_argument('--num-items', type=int, default=None,
