@@ -5,7 +5,7 @@ Root cause of the old bug
 --------------------------
 The previous implementation computed per-item popularity as the SUM of counts
 over the entire training window.  For datasets with high per-slot counts
-(Uber: ~100-2000 trips/hour, YouTube: ~1000-100000 views/hour) and a
+(NYC Yellow Taxi: ~100-2000 trips/hour, YouTube: ~1000-100000 views/hour) and a
 window of 30 slots, almost every item ended up in the 'high' stratum,
 making stratified analysis useless.
 
@@ -13,9 +13,9 @@ Fix
 ---
 Popularity is now expressed as the MEAN count per time-slot
 (sum / num_slots).  This is the natural unit of each dataset:
-  - MovieLens  -> mean ratings/day
-  - Uber       -> mean trips/hour per zone
-  - YouTube    -> mean views/hour per video
+  - MovieLens       -> mean ratings/day
+  - NYC Yellow Taxi -> mean trips/hour per zone
+  - YouTube         -> mean views/hour per video
 
 Since the metric no longer scales with window_size, thresholds are
 meaningful and stable across runs with different window configurations.
@@ -172,7 +172,7 @@ class StratificationSystem:
         Q90 (not Q75) is used for the high boundary so that 'high' always
         represents the top ~10% of items — consistent with the popularity
         literature and avoids the artificial 25/25/25/25 split that Q75
-        would produce on power-law distributions (Uber, YouTube).
+        would produce on power-law distributions (NYC Yellow Taxi, YouTube).
         """
         q1 = float(item_means.quantile(0.25))
         q2 = float(item_means.quantile(0.50))
