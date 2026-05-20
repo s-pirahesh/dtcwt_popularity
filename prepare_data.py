@@ -22,16 +22,16 @@ Features:
         --movielens-keep-rating \\
         --movielens-min-rating 4.0
     
-    # Uber - با options
-    python prepare_data.py --dataset uber \\
-        --input "data/raw/uber/yellow_*.parquet" \\
-        --output data/datasets/uber_15min.csv \\
-        --uber-granularity 15min \\
-        --uber-min-trips-per-location 200 \\
-        --uber-extract-features
+    # Yellow Taxi - با options
+    python prepare_data.py --dataset yellow_taxi \\
+        --input "data/raw/yellow_taxi/yellow_*.parquet" \\
+        --output data/datasets/yellow_taxi_15min.csv \\
+        --yellow-taxi-granularity 15min \\
+        --yellow-taxi-min-trips-per-location 200 \\
+        --yellow-taxi-extract-features
     
     # از config file
-    python prepare_data.py --config configs/uber_hourly.yaml
+    python prepare_data.py --config configs/yellow_taxi_hourly.yaml
     
     # لیست دیتاست‌ها
     python prepare_data.py --list
@@ -55,7 +55,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import converters (این باعث auto-registration می‌شود)
 from data.converters.base_converter import ConverterFactory
 from data.converters import movielens_converter
-from data.converters import uber_converter
+from data.converters import yellow_taxi_converter
 from data.converters import youtube_converter
 
 # پیکربندی دیتاست‌ها (برای --all و مسیرهای پیش‌فرض)
@@ -65,10 +65,10 @@ DATASET_CONFIGS = {
         'input': 'data/raw/movielens/ratings.csv',
         'output': 'data/datasets/movielens.csv'
     },
-    'uber': {
+    'yellow_taxi': {
         'description': 'NYC Yellow Taxi trip data',
-        'input': 'data/raw/uber/yellow_*.parquet',
-        'output': 'data/datasets/uber_15min.csv'
+        'input': 'data/raw/yellow_taxi/yellow_*.parquet',
+        'output': 'data/datasets/yellow_taxi_15min.csv'
     },
     'youtube': {  
         'description': 'YouTube hourly video views converter',
@@ -114,8 +114,8 @@ def parse_args():
   # MovieLens با aggregation
   python prepare_data.py --dataset movielens --movielens-aggregate-by day --movielens-keep-rating
   
-  # Uber با features
-  python prepare_data.py --dataset uber --uber-granularity hourly --uber-extract-features
+  # NYC Yellow Taxi با features
+  python prepare_data.py --dataset yellow_taxi --yellow-taxi-granularity hourly --yellow-taxi-extract-features
   
   # از config file
   python prepare_data.py --config configs/movielens_daily.yaml
