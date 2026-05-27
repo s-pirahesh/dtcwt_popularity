@@ -79,7 +79,8 @@ class DTCWTAssessment(BaseMethod):
 
         # 1. Calculate magnitude for each complex coefficient
         # This removes phase information and keeps only the signal "intensity"
-        magnitudes = np.abs(complex_coeffs)
+        # FIX: ensure 1-D output (newer dtcwt returns shape (n, 1))
+        magnitudes = np.abs(np.asarray(complex_coeffs).ravel())
 
         # 2. Reverse the array (index 0 = most recent time)
         reversed_mags = magnitudes[::-1]
