@@ -86,7 +86,9 @@ class HybridAssessment(BaseMethod):
             pyramid = self.transform.forward(ts_proc, nlevels=self.level)
             
             # 3. Feature Extraction
-            lowpass_mags = np.abs(pyramid.lowpass)
+            # FIX: newer dtcwt versions return shape (n, 1); flatten to 1-D
+            # so np.average / np.sum behave consistently.
+            lowpass_mags = np.abs(np.asarray(pyramid.lowpass).ravel())
             
             # A) Volume (μ_L) with Exponential Weighting
             # Weights: 2^-(N-i) -> Recent items get higher weight
@@ -95,11 +97,16 @@ class HybridAssessment(BaseMethod):
             mu_L = np.average(lowpass_mags, weights=weights)
             
             # B) Slope (Persistence) - Normalized & Stabilized
-            slope_L = self._calculate_trend_slope(pyramid.lowpass)
+            slope_L = self._calculate_trend_slope(
+                np.asarray(pyramid.lowpass).ravel()
+            )
             
             # C) Stability Ratio (R)
             e_low = np.sum(lowpass_mags ** 2)
-            e_highs = [np.sum(np.abs(h)**2) for h in pyramid.highpasses]
+            e_highs = [
+                float(np.sum(np.abs(np.asarray(h).ravel()) ** 2))
+                for h in pyramid.highpasses
+            ]
             e_total = e_low + sum(e_highs)
             R = e_low / e_total if e_total > 0 else 0.0
             
