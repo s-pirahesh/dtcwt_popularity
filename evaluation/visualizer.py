@@ -1481,16 +1481,16 @@ class ResultsVisualizer:
             'AF':       [0.149, 0.150, 0.137],
             'DWT+AF':   [0.431, 0.481, 0.425],
             'DTCWT+AF': [0.440, 0.469, 0.409],
-            'WSPI':     [0.502, 0.581, 0.646],
+            'WSPI':     [0.473, 0.504, 0.456],
         }
 
         # ΔRank per method per scenario (lower = better)
         delta_data = {
-            'EWMA':     [38.862, 30.628, 50.340],
-            'AF':       [65.745, 62.678, 42.567],
-            'DWT+AF':   [58.475, 58.551, 45.136],
-            'DTCWT+AF': [47.724, 42.416, 53.890],
-            'WSPI':     [12.234, 36.486, 45.136],   # 5-min anomaly
+            'EWMA':     [38.870, 30.590, 50.340],
+            'AF':       [65.745, 62.647, 42.567],
+            'DWT+AF':   [58.476, 58.500, 45.136],
+            'DTCWT+AF': [47.732, 42.436, 53.890],
+            'WSPI':     [16.801, 27.723, 68.248],   # 5-min anomaly
         }
 
         methods_plot = list(rsi_data.keys())
@@ -1554,7 +1554,7 @@ class ResultsVisualizer:
                 '⚠ Exception: 5-min window\ncovers only 5.3h → ΔRank inflated\n'
                 '(fixable: increase window size)',
                 xy=(2, wspi_dr[2]),
-                xytext=(1.6, wspi_dr[2] - 20.55),
+                xytext=(1.6, wspi_dr[2] - 40.55),
                 fontsize=8.5, color='#E65100', fontweight='bold',
                 arrowprops=dict(arrowstyle='->', color='#E65100', lw=1.8),
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='#FFF3E0',
