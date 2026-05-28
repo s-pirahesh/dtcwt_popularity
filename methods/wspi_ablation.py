@@ -112,7 +112,8 @@ class WSPIAblation(HybridAssessment):
                        else self._decompose_dwt(ts_proc))
 
             # 3. Feature extraction (identical to parent WSPI)
-            lowpass_mags = np.abs(pyramid.lowpass)
+            # FIX: newer dtcwt returns shape (n, 1); flatten to 1-D.
+            lowpass_mags = np.abs(np.asarray(pyramid.lowpass).ravel())
 
             # μ_L  — weighted volume
             n = len(lowpass_mags)
@@ -120,11 +121,16 @@ class WSPIAblation(HybridAssessment):
             mu_L = np.average(lowpass_mags, weights=weights)
 
             # S_L  — normalised slope
-            slope_L = self._calculate_trend_slope(pyramid.lowpass)
+            slope_L = self._calculate_trend_slope(
+                np.asarray(pyramid.lowpass).ravel()
+            )
 
             # R    — energy concentration ratio
             e_low   = float(np.sum(lowpass_mags ** 2))
-            e_highs = [float(np.sum(np.abs(h) ** 2)) for h in pyramid.highpasses]
+            e_highs = [
+                float(np.sum(np.abs(np.asarray(h).ravel()) ** 2))
+                for h in pyramid.highpasses
+            ]
             e_total = e_low + sum(e_highs)
             R       = e_low / e_total if e_total > 0 else 0.0
 
