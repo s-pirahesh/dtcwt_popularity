@@ -1,10 +1,11 @@
 r"""
-WSPI Ablation Study (wrapper-style)
-====================================
-Runs five ablation variants of WSPI through the SAME pipeline that
-run_popularity_assessment.py uses.  No reimplementation, no parallel
-codepath — the variants are injected into create_methods_dict() and
-registered in METHOD_CONFIGS before main() runs.
+WSPI Ablation Study (wrapper-style, auto-extract)
+==================================================
+Runs five ablation variants of WSPI alongside the 9 standard methods,
+all in a SINGLE evaluator run that produces ONE results folder.
+
+After the run finishes, a tidy CSV summary is automatically produced at:
+    results/tables/ablation_<dataset>_<TIMESTAMP>.csv
 
 Variants (see methods/wspi_ablation.py):
     1. WSPI-noWE     (gamma = 0)              — drops wavelet-entropy penalty
@@ -13,12 +14,6 @@ Variants (see methods/wspi_ablation.py):
     4. WSPI-DWT      (DTCWT -> DWT)           — same features on DWT coeffs
     5. WSPI-noClip   (no exponent clamp)      — exponent unbounded
 
-Full WSPI is always included for reference.
-
-Output: results land in the standard timestamped folder
-        results/<dataset>/w64_h7_..._<TIMESTAMP>/protocol/<variant>_protocol.parquet
-        Use extract_fair_window.py to summarise them later.
-
 Usage (Windows):
     python experiments\run_ablation.py youtube
     python experiments\run_ablation.py yellow_taxi --data-path data\datasets\yellow_taxi_2025_all_hourly.csv
@@ -26,6 +21,11 @@ Usage (Windows):
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Record the fence BEFORE any heavy import, so the auto-extractor knows the
+# cut-off for "new folders created during this run".
+from experiments._auto_extract import fence, auto_extract
+fence()
 
 # ---------------------------------------------------------------------------
 # 1) Define the ablation variants
@@ -78,7 +78,7 @@ def _patched_create_methods(config):
 runner.create_methods_dict = _patched_create_methods
 
 # ---------------------------------------------------------------------------
-# 4) Announce what we're doing and hand off to the standard main()
+# 4) Announce, run, and auto-extract
 # ---------------------------------------------------------------------------
 print('=' * 70)
 print('ABLATION STUDY MODE')
@@ -90,4 +90,8 @@ print('=' * 70)
 
 
 if __name__ == '__main__':
-    runner.main()
+    try:
+        runner.main()
+    finally:
+        # ALWAYS try to produce a CSV, even if main() crashed late
+        auto_extract('ablation')
