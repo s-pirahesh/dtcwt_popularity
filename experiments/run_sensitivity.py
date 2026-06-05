@@ -1,29 +1,28 @@
 r"""
-WSPI Sensitivity Analysis (wrapper-style)
-==========================================
+WSPI Sensitivity Analysis (wrapper-style, auto-extract)
+========================================================
 One-at-a-Time (OAT) sweep over each WSPI hyperparameter:
     alpha (slope weight)        in {0.25, 0.5, 1.0, 1.5, 2.0}   default = 1.0
     beta  (energy-ratio weight) in {0.0, 0.25, 0.5, 0.75, 1.0}  default = 0.5
     gamma (entropy weight)      in {0.0, 0.25, 0.5, 0.75, 1.0}  default = 0.5
     c     (clip bound)          in {1.0, 2.0, 3.0, 4.0, 5.0}    default = 3.0
 
-Each parameter is varied one-at-a-time while the others stay at their default
-values.  This yields ~20 variants per dataset, all run through the standard
-pipeline.
+All 20 variants run alongside the 9 standard methods in a SINGLE evaluator
+pass that produces ONE results folder.
 
-Output: standard timestamped folder; use extract_fair_window.py to summarise.
+After the run finishes, a tidy CSV summary is automatically produced at:
+    results/tables/sensitivity_<dataset>_<TIMESTAMP>.csv
 
 Usage (Windows):
     python experiments\run_sensitivity.py youtube
     python experiments\run_sensitivity.py yellow_taxi --data-path data\datasets\yellow_taxi_2025_all_hourly.csv
-
-Tip: this run produces many variants (20+) and will take several hours.
-For a quick check, edit the SWEEPS dict to use fewer values, or just run
-the alpha and c sweeps first.
 """
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from experiments._auto_extract import fence, auto_extract
+fence()
 
 from methods.wspi_ablation import WSPIAblation
 import evaluation.method_configs as mc
@@ -43,23 +42,18 @@ DEFAULT = dict(alpha=1.0, beta=0.5, gamma=0.5, c=3.0)
 
 
 def _build_variants():
-    """Materialise all OAT variants as (name, kwargs) pairs."""
     variants = {}
     for pname, values in SWEEPS.items():
         for v in values:
             kw = dict(DEFAULT)
             kw[pname] = v
-            # Skip the default point if it would duplicate another sweep's default
-            if kw == DEFAULT and 'WSPI-default' in variants:
-                continue
-            # Use a short, file-system-friendly name
-            tag  = f'{pname}{str(v).replace(".", "p")}'
+            tag = f'{pname}{str(v).replace(".", "p")}'
             name = f'WSPI-{tag}'
             variants[name] = dict(
                 alpha_slope   = kw['alpha'],
                 beta_ratio    = kw['beta'],
                 gamma_entropy = kw['gamma'],
-                clip_c        = kw['c'],          # WSPIAblation supports clip_c
+                clip_c        = kw['c'],
                 use_dtcwt     = True,
                 use_clip      = True,
             )
@@ -67,7 +61,6 @@ def _build_variants():
 
 
 VARIANT_KW = _build_variants()
-
 
 # ---------------------------------------------------------------------------
 # 2) Register each variant in METHOD_CONFIGS
@@ -79,7 +72,6 @@ for vname in VARIANT_KW:
         min_observations=32,
         description=f'Sensitivity sweep variant: {vname}',
     )
-
 
 # ---------------------------------------------------------------------------
 # 3) Monkey-patch create_methods_dict to add the variants
@@ -109,4 +101,7 @@ print('=' * 70)
 
 
 if __name__ == '__main__':
-    runner.main()
+    try:
+        runner.main()
+    finally:
+        auto_extract('sensitivity')
