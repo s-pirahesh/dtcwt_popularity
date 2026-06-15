@@ -23,6 +23,15 @@ import sys
 import argparse
 from pathlib import Path
 
+# Make stdout/stderr UTF-8 safe BEFORE importing modules that print Unicode
+# (e.g. methods/__init__.py prints a checkmark). On Windows a redirected
+# stdout defaults to cp1252 and would otherwise crash with UnicodeEncodeError.
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -51,6 +60,7 @@ try:
         DWTAssessment,
         HybridAssessment,
     )
+    from methods.wspi_assessment import WSPIAssessment
     METHODS_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Some methods not available: {e}")
@@ -58,6 +68,7 @@ except ImportError as e:
     DTCWTAssessment = None
     DWTAssessment = None
     HybridAssessment = None
+    WSPIAssessment = None
     METHODS_AVAILABLE = False
 
 # Import baselines
@@ -132,15 +143,11 @@ def create_methods_dict(config: EvaluationConfig) -> dict:
             qshift=config.wavelet_config['dtcwt']['qshift']
         )
 
-        # Section 3-4: WSPI — Proposed Method (Frozen Parameters)
-        # P_WSPI = mu_L * exp(clip(alpha*S_L + beta*R - gamma*WE, -3, 3))
-        # alpha=1.0 (trend slope), beta=0.5 (energy ratio), gamma=0.5 (entropy)
-        if HybridAssessment is not None:
-            methods['WSPI'] = HybridAssessment(
-                alpha_slope=1.0,
-                beta_ratio=0.5,
-                gamma_entropy=0.5
-            )
+        # Section 3-4: WSPI — Proposed Method (final, evidence-based form)
+        # WSPI = mu_L * exp(alpha*R - beta*WE)   with alpha = beta = 1
+        # (slope term and clip removed; see methods/wspi_assessment.py)
+        if WSPIAssessment is not None:
+            methods['WSPI'] = WSPIAssessment(alpha=1.0, beta=1.0)
 
     # --- Filter by --methods CLI flag ----------------------------------------
     if config.methods is not None:
@@ -466,6 +473,10 @@ Window formula:
     parser.add_argument('--quiet', action='store_true',
                         help='Suppress verbose config output')
 
+    parser.add_argument('--resume', type=str, default=None,
+                        help='Parallel mode: continue an interrupted run by giving its folder path '
+                             '(re-runs only methods not marked done in that folder).')
+
     parser.add_argument('--k-list', type=int, nargs='+', default=None,
                         metavar='K',
                         help='K values for NDCG/CHR/RSI (default: 5 10 20). '
@@ -473,6 +484,24 @@ Window formula:
 
     args = parser.parse_args()
 
+    # ---- Parallel path: one process per method, one shared folder ----------
+    if not args.no_parallel:
+        from experiments.parallel_engine import run_methods_parallel
+        import evaluation.method_configs as _mc
+        method_names = args.methods or list(_mc.METHOD_CONFIGS.keys())
+        run_methods_parallel(
+            args.dataset, method_names,
+            cores=args.cores, tag='main',
+            specs=None,
+            data_path=args.data_path, num_items=args.num_items,
+            start_date=args.start_date, end_date=args.end_date,
+            window_size=args.window_size, prediction_horizon=args.horizon,
+            item_selection=args.item_selection,
+            k_list=args.k_list, resume=args.resume,
+        )
+        return
+
+    # ---- Serial path (original, unchanged) ---------------------------------
     run_temporal_evaluation(
         dataset_name=args.dataset,
         num_items=args.num_items,
