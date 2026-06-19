@@ -132,17 +132,27 @@ def _worker(task):
 
         spec = task.get('spec')
         if spec is not None:
+            sp = dict(spec)
+            wslots = sp.pop('_window_slots', 64)
+            minobs = sp.pop('_min_obs', 32)
+            kind = sp.pop('_kind', 'wspi')
             mc.METHOD_CONFIGS[method] = MethodConfig(
-                name=method, window_slots=64, min_observations=32,
-                description=f'WSPI variant: {method}')
+                name=method, window_slots=wslots, min_observations=minobs,
+                description=f'variant: {method}')
             _orig = runner.create_methods_dict
 
             def _patched(config):
-                from methods.wspi_assessment import WSPIAssessment
                 d = _orig(config)
                 req = set(config.methods) if config.methods else None
                 if req is None or method in req:
-                    d[method] = WSPIAssessment(name=method, **spec)
+                    if kind == 'hybrid':
+                        from methods.hybrid_assessment import HybridAssessment
+                        obj = HybridAssessment(**sp)
+                        obj.name = method
+                        d[method] = obj
+                    else:
+                        from methods.wspi_assessment import WSPIAssessment
+                        d[method] = WSPIAssessment(name=method, **sp)
                 return d
 
             runner.create_methods_dict = _patched
