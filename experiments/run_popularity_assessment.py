@@ -323,6 +323,8 @@ def run_temporal_evaluation(dataset_name: str,
 
     # 2. Load data
     data_loader = get_data_loader(dataset_name, data_path=data_path)
+    # record the data file path on the config so it lands in run_metadata.json
+    config.data_path = data_path
 
     # 3. Build methods dict
     methods_dict = create_methods_dict(config)
