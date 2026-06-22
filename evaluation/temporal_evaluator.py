@@ -125,6 +125,33 @@ class TemporalEvaluator:
         print("Loading data...")
         self.data = self.data_loader.load_data()
 
+        # ===================================================================
+        # FIX (granularity): derive the slot duration from the data itself.
+        # Previously time_granularity was hard-coded to 'hourly' for the taxi
+        # config, so 30-min / 5-min runs were stepped HOURLY and produced the
+        # wrong number of evaluation windows (~8k instead of ~16k / ~96k).
+        # The data loader does not resample, so we read the real granularity
+        # from the timestamps and rebuild the time helper to match it.
+        # ===================================================================
+        try:
+            _ts = pd.to_datetime(self.data['timestamp']).drop_duplicates().sort_values()
+            if len(_ts) > 2:
+                _delta_min = int(round(_ts.diff().dropna().dt.total_seconds().median() / 60.0))
+                if _delta_min >= 1:
+                    self.config.time_granularity = 'custom'
+                    self.config.slot_duration_minutes = _delta_min
+                    self.time_helper = TimeSlotHelper(
+                        time_granularity='custom',
+                        slot_duration_minutes=_delta_min,
+                    )
+                    if self.config.verbose:
+                        print(f"  [granularity-fix] auto-detected slot = {_delta_min} min "
+                              f"(window stepping now matches the data)")
+        except Exception as _e:
+            if self.config.verbose:
+                print(f"  [granularity-fix] skipped ({_e}); using config granularity "
+                      f"'{self.config.time_granularity}'")
+
         if self.config.verbose:
             print(f"  Total records: {len(self.data):,}")
             print(f"  Date range: {self.data['timestamp'].min()} to {self.data['timestamp'].max()}")
@@ -743,6 +770,9 @@ class TemporalEvaluator:
     def _save_runtime_stats(self):
         stats = {
             **self.runtime_stats,
+            'data_path':           getattr(self.config, 'data_path', None),
+            'time_granularity':    getattr(self.config, 'time_granularity', None),
+            'slot_duration_minutes': getattr(self.config, 'slot_duration_minutes', None),
             'config':              self.config.to_dict(),
             'num_methods':         len(self.methods),
             'num_items':           len(self.items),
