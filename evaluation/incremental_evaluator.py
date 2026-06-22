@@ -120,6 +120,30 @@ class IncrementalTemporalEvaluator:
         # hourly datasets (YouTube), producing 29 windows instead of ~697.
         self.time_helper = create_time_helper(config)
 
+        # ===================================================================
+        # FIX (granularity): get_yellow_taxi_config hard-codes 'hourly', so the
+        # PARALLEL path (which uses this incremental evaluator) stepped the
+        # window hourly even for 30-min / 5-min data -> ~8k windows instead of
+        # ~16k / ~96k. Derive the real slot duration from the data timestamps
+        # and rebuild the time helper so stepping matches the data.
+        # ===================================================================
+        try:
+            _ts = pd.to_datetime(self.data['timestamp']).drop_duplicates().sort_values()
+            if len(_ts) > 2:
+                _delta_min = int(round(_ts.diff().dropna().dt.total_seconds().median() / 60.0))
+                if _delta_min >= 1:
+                    config.time_granularity = 'custom'
+                    config.slot_duration_minutes = _delta_min
+                    self.time_helper = TimeSlotHelper(
+                        time_granularity='custom',
+                        slot_duration_minutes=_delta_min,
+                    )
+                    print(f"  [granularity-fix] auto-detected slot = {_delta_min} min "
+                          f"(window stepping now matches the data)")
+        except Exception as _e:
+            print(f"  [granularity-fix] skipped ({_e}); "
+                  f"using config granularity '{config.time_granularity}'")
+
         # --- Runtime stats ----------------------------------------------------
         self.runtime_stats = {
             'start_time':   None,
@@ -188,6 +212,9 @@ class IncrementalTemporalEvaluator:
 
         metadata = {
             'dataset':   self.config.dataset_name if hasattr(self.config, 'dataset_name') else 'unknown',
+            'data_path': getattr(self.config, 'data_path', None),
+            'time_granularity': getattr(self.config, 'time_granularity', None),
+            'slot_duration_minutes': getattr(self.config, 'slot_duration_minutes', None),
             'num_items': len(self.items),
             'date_range': {
                 'start': str(self.data_start.date()),
