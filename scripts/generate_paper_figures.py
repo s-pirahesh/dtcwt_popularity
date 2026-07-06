@@ -1,11 +1,29 @@
 """
-Generate the four cross-dataset comparison figures for the WSPI paper.
+Generate all cross-dataset and cross-scenario figures for the WSPI paper.
 
 This script reads the per-window 4-Layer Protocol metrics that
 ``temporal_evaluator.py`` writes for every method of every dataset
 (layout: ``<run_dir>/protocol/<method>_protocol.parquet``) and produces
 four publication-quality bar charts — one per metric (NDCG@10, Spearman ρ,
 RSI@10, ΔRank) — each comparing nine methods across all four scenarios.
+
+It additionally produces the four cross-scenario thesis figures (ablation,
+sensitivity, temporal-scale robustness, granularity trend) via
+``CrossDatasetVisualizer.plot_all_scenario_figures``.
+
+  - temporal-scale robustness and granularity trend need NO extra input:
+    they are derived from the very same four dataset addresses given via
+    --youtube/--yellow-taxi-* above (the three NYC Yellow Taxi granularities
+    already contain everything these two figures need).
+  - ablation and sensitivity are separate experiments (their method variants,
+    e.g. WSPI-noR or WSPI_a0.25, never appear in the standard protocol
+    output), so they read their own summary CSVs — see --ablation-youtube /
+    --ablation-taxi / --sensitivity-youtube / --sensitivity-taxi below. Any
+    of the four cross-scenario figures whose input is missing is skipped
+    with a message rather than failing the whole run.
+
+Every figure this script produces — from both groups — is written into the
+single ``--out`` folder.
 
 Grouping modes (``--group-by``)
 -------------------------------
@@ -25,15 +43,26 @@ Usage (Windows PowerShell)
         --yellow-taxi-30m "results/yellow_taxi/<run_folder>" `
         --yellow-taxi-5m  "results/yellow_taxi/<run_folder>" `
         --out      "paper_figures/" `
-        --group-by method
+        --group-by method `
+        --ablation-youtube   "results/ablation/ablation_summary_youtube.csv" `
+        --ablation-taxi      "results/ablation/ablation_summary_yellowtaxi_1h.csv" `
+        --sensitivity-youtube "results/sensitivity/sensitivity_summary_youtube.csv" `
+        --sensitivity-taxi    "results/sensitivity/sensitivity_summary_yellowtaxi_1h.csv"
 
-Output
-------
+(The four --ablation-*/--sensitivity-* flags are optional; omit them to use
+the default paths shown above.)
+
+Output (all written into the single --out folder)
+--------------------------------------------------
     <out>/fig_ndcg10.png
     <out>/fig_spearman.png
     <out>/fig_rsi10.png
     <out>/fig_deltarank.png
-    <out>/summary_table.csv     (4 datasets × 9 methods × 4 metrics)
+    <out>/summary_table.csv                        (4 datasets x 9 methods x 4 metrics)
+    <out>/chart19_ablation_components.png          (skipped if input CSVs are missing)
+    <out>/chart20_sensitivity_curves.png           (skipped if input CSVs are missing)
+    <out>/chart16_temporal_scale_robustness.png    (derived from the 4 datasets above)
+    <out>/fig8_granularity_trend.png               (derived from the 4 datasets above)
 """
 
 from __future__ import annotations
@@ -82,7 +111,8 @@ def parse_args() -> argparse.Namespace:
         parser.add_argument(flag, dest=flag.lstrip("-").replace("-", "_"),
                             required=True, help=help_text)
     parser.add_argument("--out", required=True,
-                        help="Output directory for the four PNGs and summary_table.csv")
+                        help="Output directory for every figure and summary_table.csv "
+                             "(no per-figure output paths — everything lands here)")
     parser.add_argument(
         "--group-by",
         dest="group_by",
@@ -104,6 +134,31 @@ def parse_args() -> argparse.Namespace:
             "CROSS_VIZ_BACKEND=TkAgg before running."
         ),
     )
+
+    # Ablation and sensitivity are separate experiments (method variants like
+    # WSPI-noR or WSPI_a0.25 aren't part of the standard protocol output), so
+    # they need their own summary CSVs rather than the four run dirs above.
+    parser.add_argument(
+        "--ablation-youtube", dest="ablation_youtube",
+        default="results/ablation/ablation_summary_youtube.csv",
+        help="Ablation summary CSV for YouTube (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--ablation-taxi", dest="ablation_taxi",
+        default="results/ablation/ablation_summary_yellowtaxi_1h.csv",
+        help="Ablation summary CSV for NYC Yellow Taxi hourly (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--sensitivity-youtube", dest="sensitivity_youtube",
+        default="results/sensitivity/sensitivity_summary_youtube.csv",
+        help="Sensitivity summary CSV for YouTube (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--sensitivity-taxi", dest="sensitivity_taxi",
+        default="results/sensitivity/sensitivity_summary_yellowtaxi_1h.csv",
+        help="Sensitivity summary CSV for NYC Yellow Taxi hourly (default: %(default)s)",
+    )
+
     return parser.parse_args()
 
 
@@ -167,6 +222,17 @@ def main() -> int:
     viz.plot_all(out_dir, group_by=args.group_by, show=args.show)
     print("Writing summary_table.csv...")
     viz.save_summary_table(out_dir / "summary_table.csv")
+
+    print("\nProducing cross-scenario figures "
+          "(ablation, sensitivity, temporal-scale, granularity trend)...")
+    viz.plot_all_scenario_figures(
+        out_dir,
+        ablation_csv_youtube=args.ablation_youtube,
+        ablation_csv_taxi=args.ablation_taxi,
+        sensitivity_csv_youtube=args.sensitivity_youtube,
+        sensitivity_csv_taxi=args.sensitivity_taxi,
+        show=args.show,
+    )
 
     print("\nDone. Generated files:")
     for f in sorted(out_dir.iterdir()):
