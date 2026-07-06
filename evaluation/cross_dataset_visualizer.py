@@ -185,6 +185,41 @@ FIG_DPI    = 300
 GRID_ALPHA = 0.9    # near-opaque gridlines, white-on-light-grey
 
 
+# ── Cross-scenario thesis-figure constants ───────────────────────────────────
+# These belong to the ablation / sensitivity figures consolidated from the
+# standalone script viz_additions.py.  They use their OWN palette and
+# darkgrid style (their method variants are outside METHOD_COLORS /
+# METHOD_ORDER above) and are deliberately independent of the
+# group_by="method"/"dataset" machinery above (the two layout modes only
+# apply to the per-metric bar charts).
+
+_SCENARIO_STYLE = "seaborn-v0_8-darkgrid"
+if _SCENARIO_STYLE not in plt.style.available:
+    _SCENARIO_STYLE = (
+        "seaborn-darkgrid" if "seaborn-darkgrid" in plt.style.available else "default"
+    )
+
+# Palette used by the scenario figures (distinct from METHOD_COLORS above).
+_SCENARIO_METHOD_COLORS: dict[str, str] = {
+    "AF": "#2196F3", "EWMA": "#FF9800", "RRD": "#00BCD4", "VSE": "#795548",
+    "CompoundPop": "#607D8B", "PFRF": "#009688",
+    "DWT+AF": "#9C27B0", "DTCWT+AF": "#F44336", "WSPI": "#E91E63",
+}
+
+# Ablation-figure ordering, labels and colours.
+_ABL_ORDER: list[str] = ["WSPI", "WSPI-noR", "WSPI-noWE", "WSPI-DWT"]
+_ABL_LABELS: dict[str, str] = {
+    "WSPI": "WSPI (full)",
+    "WSPI-noR": "w/o Energy Ratio (R)",
+    "WSPI-noWE": "w/o Wavelet Entropy (WE)",
+    "WSPI-DWT": "DWT instead of DTCWT",
+}
+_ABL_COLORS: dict[str, str] = {
+    "WSPI": _SCENARIO_METHOD_COLORS["WSPI"], "WSPI-noR": "#FF9800",
+    "WSPI-noWE": "#2196F3", "WSPI-DWT": "#9C27B0",
+}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 class CrossDatasetVisualizer:
@@ -607,6 +642,358 @@ class CrossDatasetVisualizer:
         self.plot_spearman(out / METRIC_FILENAMES["spearman_rho"], group_by=group_by, show=show)
         self.plot_rsi10   (out / METRIC_FILENAMES["rsi_10"],       group_by=group_by, show=show)
         self.plot_deltarank(out / METRIC_FILENAMES["delta_rank"],  group_by=group_by, show=show)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cross-scenario thesis figures
+    # ---------------------------------------------------------------------------
+    # Consolidated from the standalone scripts viz_additions.py (ablation,
+    # sensitivity, temporal-scale) and generate_granularity_trend.py
+    # (granularity trend).
+    #
+    # ablation_components / sensitivity_curves need their OWN separate summary
+    # CSVs: their method variants (WSPI-noR, WSPI-noWE, WSPI-DWT for ablation;
+    # WSPI_a0.25, WSPI_b1.5, ... for sensitivity) come from dedicated
+    # experiment runs and never appear in the standard 9-method protocol
+    # output for the 4 main datasets, so they stay static methods with
+    # explicit csv_youtube / csv_taxi parameters and their own darkgrid style.
+    #
+    # temporal_scale_robustness / granularity_trend, by contrast, only need
+    # RSI@10 / ΔRank for the standard methods across the three NYC Yellow Taxi
+    # granularities — data that's already sitting in self._agg once the
+    # constructor is given the four dataset addresses. They are instance
+    # methods that reuse the class's own data pipeline and style constants
+    # (no separate input files at all).
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # The three NYC Yellow Taxi granularities, in order, with short x-axis
+    # labels — shared by temporal_scale_robustness and granularity_trend.
+    _TAXI_GRANULARITY_DATASETS: list[tuple[str, str]] = [
+        ("NYC Yellow Taxi Hourly", "Hourly"),
+        ("NYC Yellow Taxi 30m", "30-min"),
+        ("NYC Yellow Taxi 5m", "5-min"),
+    ]
+
+    def _require_taxi_granularities(self) -> list[tuple[str, str]]:
+        missing = [ds for ds, _ in self._TAXI_GRANULARITY_DATASETS
+                   if ds not in self._raw]
+        if missing:
+            raise ValueError(
+                "This figure requires the three NYC Yellow Taxi granularities "
+                f"(Hourly, 30m, 5m) to be loaded; missing: {missing}. Pass "
+                "them via the dataset_results dict given to the constructor."
+            )
+        return self._TAXI_GRANULARITY_DATASETS
+
+    @staticmethod
+    def plot_ablation_components(
+        csv_youtube: Union[Path, str] = "results/ablation/ablation_summary_youtube.csv",
+        csv_taxi: Union[Path, str] = "results/ablation/ablation_summary_yellowtaxi_1h.csv",
+        savepath: Union[Path, str] = "results/ablation/chart19_ablation_components.png",
+        show: bool = False,
+    ) -> str:
+        """Chart 19 — grouped ablation bars (RSI@10 and ΔRank) for the four WSPI
+        variants on YouTube and NYC Yellow Taxi (hourly).  Standalone
+        counterpart: ``viz_additions.chart19_ablation_components``."""
+        with plt.style.context(_SCENARIO_STYLE):
+            dfs = {
+                "YouTube Hourly": pd.read_csv(csv_youtube).set_index("method"),
+                "NYC Yellow Taxi Hourly": pd.read_csv(csv_taxi).set_index("method"),
+            }
+            fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.4))
+            panels = [
+                ("rsi@10", "RSI@10  (higher = better ↑)", axes[0]),
+                ("robustness_distortion", "ΔRank  (lower = better ↓)", axes[1]),
+            ]
+            x, width = np.arange(len(dfs)), 0.19
+            for mcol, ylabel, ax in panels:
+                for i, variant in enumerate(_ABL_ORDER):
+                    vals = [dfs[d].loc[variant, mcol] for d in dfs]
+                    bars = ax.bar(
+                        x + (i - 1.5) * width, vals, width,
+                        label=_ABL_LABELS[variant], color=_ABL_COLORS[variant],
+                        edgecolor="black", linewidth=0.5,
+                        hatch="//" if variant == "WSPI" else None,
+                    )
+                    for b, v in zip(bars, vals):
+                        ax.annotate(
+                            f"{v:.3g}", (b.get_x() + b.get_width() / 2, v),
+                            textcoords="offset points", xytext=(0, 3),
+                            ha="center", fontsize=8,
+                        )
+                ax.set_xticks(x)
+                ax.set_xticklabels(list(dfs.keys()), fontsize=10)
+                ax.set_ylabel(ylabel)
+            handles, labels = axes[0].get_legend_handles_labels()
+            fig.legend(
+                handles, labels,
+                loc="upper center", bbox_to_anchor=(0.5, 0.02),
+                ncol=4, frameon=False, fontsize=8.5,
+                handlelength=1.6, columnspacing=1.4,
+            )
+            fig.suptitle(
+                "Ablation of WSPI Components — contribution of R, WE, and DTCWT",
+                fontsize=12,
+            )
+            fig.tight_layout(rect=(0, 0.08, 1, 0.97))
+        CrossDatasetVisualizer._save_fig(fig, savepath, show=show)
+        return str(savepath)
+
+    @staticmethod
+    def plot_sensitivity_curves(
+        csv_youtube: Union[Path, str] = "results/sensitivity/sensitivity_summary_youtube.csv",
+        csv_taxi: Union[Path, str] = "results/sensitivity/sensitivity_summary_yellowtaxi_1h.csv",
+        savepath: Union[Path, str] = "results/sensitivity/chart20_sensitivity_curves.png",
+        show: bool = False,
+    ) -> str:
+        """Chart 20 — 2x2 sensitivity grid: RSI@10 and ΔRank versus α and β
+        (one-dimensional sweep, other coefficient fixed at 1), both datasets.
+        Standalone counterpart: ``viz_additions.chart20_sensitivity_curves``."""
+
+        def load(csv):
+            rows = []
+            for _, r in pd.read_csv(csv).iterrows():
+                tag = r["method"].split("_")[1]          # a0.25 / b1.5
+                rows.append(dict(coef=tag[0], val=float(tag[1:]),
+                                 rsi=r["rsi@10"], dr=r["robustness_distortion"]))
+            return pd.DataFrame(rows)
+
+        with plt.style.context(_SCENARIO_STYLE):
+            data = {"YouTube Hourly": load(csv_youtube),
+                    "NYC Yellow Taxi Hourly": load(csv_taxi)}
+            ds_style = {
+                "YouTube Hourly": dict(color=_SCENARIO_METHOD_COLORS["WSPI"], marker="o"),
+                "NYC Yellow Taxi Hourly": dict(color=_SCENARIO_METHOD_COLORS["AF"], marker="s"),
+            }
+            fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.2), sharex=True)
+            for col, coef in enumerate(["a", "b"]):
+                sym = "α" if coef == "a" else "β"
+                for row, (mkey, ylabel) in enumerate(
+                        [("rsi", "RSI@10 ↑"), ("dr", "ΔRank ↓")]):
+                    ax = axes[row, col]
+                    for ds, d in data.items():
+                        dd = d[d.coef == coef].sort_values("val")
+                        ax.plot(dd.val, dd[mkey], lw=2, label=ds, **ds_style[ds])
+                    ax.axvline(1.0, color="gray", ls="--", lw=1)
+                    if row == 1:
+                        ax.set_xlabel(f"{sym}  (other coefficient fixed at 1)")
+                    if col == 0:
+                        ax.set_ylabel(ylabel)
+            axes[0, 0].legend(fontsize=8, loc="center right")
+            fig.suptitle(
+                "Sensitivity of WSPI to fusion coefficients "
+                "— flat RSI, ΔRank minimised near 1", fontsize=12,
+            )
+            fig.tight_layout()
+        CrossDatasetVisualizer._save_fig(fig, savepath, show=show)
+        return str(savepath)
+
+    def plot_temporal_scale_robustness(
+        self,
+        savepath: Union[Path, str] = "results/chart16_temporal_scale_robustness.png",
+        show: bool = False,
+    ) -> str:
+        """Chart 16 (data-driven) — NYC Yellow Taxi temporal-scale robustness.
+        Plots the corrected, monotonic RSI@10 / ΔRank trends across the three
+        taxi granularities (the version embedded in the old ``visualizer.py``
+        hard-coded stale pre-bugfix numbers). Sourced entirely from
+        ``self._agg`` — i.e. the same four dataset addresses passed to the
+        constructor, no separate CSV files. Standalone counterpart:
+        ``viz_additions.chart16_temporal_scale_robustness_FIXED``."""
+        granularities = self._require_taxi_granularities()
+        methods = ["AF", "EWMA", "RRD", "DWT+AF", "DTCWT+AF", "WSPI"]
+        gx = list(range(len(granularities)))
+
+        fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.2))
+        for ax, metric, ylabel in [
+                (axes[0], "rsi_10", "RSI@10  (higher = better ↑)"),
+                (axes[1], "delta_rank", "ΔRank  (lower = better ↓)")]:
+            for m in methods:
+                vals = [self._get_value(ds, m, metric) for ds, _ in granularities]
+                ax.plot(gx, vals, marker="o", lw=2.4 if m == "WSPI" else 1.4,
+                        color=METHOD_COLORS[m], label=m,
+                        zorder=5 if m == "WSPI" else 2)
+                if m == "WSPI":
+                    for xx, yy in zip(gx, vals):
+                        ax.annotate(
+                            f"{yy:.3g}", (xx, yy), textcoords="offset points",
+                            xytext=(0, 7), ha="center", fontsize=8,
+                            color=METHOD_COLORS["WSPI"], fontweight="bold")
+            ax.set_xticks(gx)
+            ax.set_xticklabels([short for _, short in granularities])
+            ax.set_ylabel(ylabel)
+        axes[0].legend(fontsize=8, ncol=2)
+        fig.suptitle(
+            "NYC Yellow Taxi — temporal-scale robustness "
+            "(data-driven, post-bugfix values)", fontsize=12,
+        )
+        fig.tight_layout()
+        self._save_fig(fig, savepath, show=show)
+        return str(savepath)
+
+    # ── Granularity-trend line chart (Figure 8) ───────────────────────────────
+
+    _GRANULARITY_TREND_TRADITIONAL_EXCLUDE = "PFRF"  # degenerate baseline
+
+    def _best_traditional(self, dataset: str, metric: str) -> float:
+        traditional = [m for m in BASELINE_METHODS
+                       if m != self._GRANULARITY_TREND_TRADITIONAL_EXCLUDE]
+        vals = [self._get_value(dataset, m, metric) for m in traditional]
+        vals = [v for v in vals if v == v]  # drop NaN
+        if not vals:
+            return float("nan")
+        return max(vals) if metric == "rsi_10" else min(vals)
+
+    def plot_granularity_trend(
+        self,
+        savepath: Union[Path, str] = "results/fig8_granularity_trend.png",
+        show: bool = False,
+    ) -> str:
+        """Figure 8 — WSPI performance versus temporal granularity on NYC
+        Yellow Taxi (Hourly -> 30-min -> 5-min): a two-panel line-trend chart
+        of (a) RSI@10 rising and (b) ΔRank falling as granularity gets finer,
+        for WSPI, DTCWT+AF, and a "Best traditional" reference (best baseline
+        per granularity, excluding the degenerate PFRF). Sourced entirely
+        from ``self._agg`` — i.e. the same four dataset addresses passed to
+        the constructor, no separate CSV files. Standalone counterpart:
+        ``scripts/generate_granularity_trend.py``."""
+        granularities = self._require_taxi_granularities()
+        x = np.arange(len(granularities))
+        xticklabels = [short for _, short in granularities]
+
+        line_style = {
+            "WSPI": dict(color=METHOD_COLORS["WSPI"], ls="-", lw=2.6, marker="o",
+                        ms=7.5, markeredgecolor=PROPOSED_EDGE_COL,
+                        markeredgewidth=0.9, zorder=6),
+            "DTCWT+AF": dict(color=METHOD_COLORS["DTCWT+AF"], ls="--", lw=2.0,
+                             marker="s", ms=6.5, markeredgecolor=PROPOSED_EDGE_COL,
+                             markeredgewidth=0.7, zorder=5),
+            "Best traditional": dict(color="#888888", ls=":", lw=1.9, marker="^",
+                                     ms=6.5, zorder=4),
+        }
+
+        def series(metric):
+            wspi, dtcwt, best = [], [], []
+            for ds, _short in granularities:
+                wspi.append(self._get_value(ds, "WSPI", metric))
+                dtcwt.append(self._get_value(ds, "DTCWT+AF", metric))
+                best.append(self._best_traditional(ds, metric))
+            return wspi, dtcwt, best
+
+        def draw_panel(ax, series_map, ylabel, title, annotate_fmt, annotate_below):
+            ax.set_facecolor("#EAEAF2")
+            ax.set_axisbelow(True)
+            ax.yaxis.grid(True, alpha=GRID_ALPHA, linewidth=1.0, color="white")
+            for name in ("WSPI", "DTCWT+AF", "Best traditional"):
+                ax.plot(x, series_map[name], label=name, **line_style[name])
+            dy = -16 if annotate_below else 9
+            for xi, yi in zip(x, series_map["WSPI"]):
+                ax.annotate(annotate_fmt.format(yi), (xi, yi),
+                            textcoords="offset points", xytext=(0, dy),
+                            ha="center", fontsize=8.5,
+                            color=METHOD_COLORS["WSPI"], fontweight="bold")
+            ax.set_xticks(x)
+            ax.set_xticklabels(xticklabels, fontsize=10)
+            ax.set_ylabel(ylabel, fontsize=10)
+            ax.set_title(title, fontsize=10.5)
+            ax.tick_params(axis="x", length=0)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.set_xlim(x[0] - 0.35, x[-1] + 0.35)
+
+        rsi_w, rsi_d, rsi_b = series("rsi_10")
+        dr_w, dr_d, dr_b = series("delta_rank")
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.6))
+
+        draw_panel(
+            ax1, {"WSPI": rsi_w, "DTCWT+AF": rsi_d, "Best traditional": rsi_b},
+            METRIC_LABELS["rsi_10"], "(a) Temporal stability",
+            annotate_fmt="{:.3f}", annotate_below=False,
+        )
+        ax1.set_ylim(0, max(rsi_w + rsi_d) * 1.18)
+
+        draw_panel(
+            ax2, {"WSPI": dr_w, "DTCWT+AF": dr_d, "Best traditional": dr_b},
+            METRIC_LABELS["delta_rank"], "(b) Noise robustness",
+            annotate_fmt="{:.2f}", annotate_below=True,
+        )
+        ax2.set_ylim(0, max(dr_d + dr_b) * 1.15)
+
+        handles, labels = ax1.get_legend_handles_labels()
+        legend = fig.legend(
+            handles, labels,
+            loc="upper center", bbox_to_anchor=(0.5, 0.02),
+            ncol=3, frameon=False, fontsize=9, handlelength=2.2, columnspacing=2.0,
+        )
+        for text in legend.get_texts():
+            if text.get_text() in ("WSPI", "DTCWT+AF"):
+                text.set_color(WAVELET_TICK_COLOR)
+                text.set_fontweight("bold")
+
+        fig.suptitle("NYC Yellow Taxi — effect of temporal granularity", fontsize=11)
+        fig.tight_layout(rect=(0, 0.04, 1, 0.97))
+
+        self._save_fig(fig, savepath, show=show)
+        return str(savepath)
+
+    # ── Convenience: generate every cross-scenario figure at once ─────────────
+
+    _SCENARIO_FIGURE_FILENAMES: dict[str, str] = {
+        "ablation_components": "chart19_ablation_components.png",
+        "sensitivity_curves": "chart20_sensitivity_curves.png",
+        "temporal_scale_robustness": "chart16_temporal_scale_robustness.png",
+        "granularity_trend": "fig8_granularity_trend.png",
+    }
+
+    def plot_all_scenario_figures(
+        self,
+        out_dir: Union[Path, str],
+        ablation_csv_youtube: Union[Path, str] = "results/ablation/ablation_summary_youtube.csv",
+        ablation_csv_taxi: Union[Path, str] = "results/ablation/ablation_summary_yellowtaxi_1h.csv",
+        sensitivity_csv_youtube: Union[Path, str] = "results/sensitivity/sensitivity_summary_youtube.csv",
+        sensitivity_csv_taxi: Union[Path, str] = "results/sensitivity/sensitivity_summary_yellowtaxi_1h.csv",
+        show: bool = False,
+    ) -> dict:
+        """Generate all four cross-scenario thesis figures, all saved into a
+        single ``out_dir`` (no per-figure output path).
+
+        ``temporal_scale_robustness`` and ``granularity_trend`` need no extra
+        arguments — they're derived from the same four dataset addresses
+        already given to the constructor. ``ablation_components`` and
+        ``sensitivity_curves`` need their own separate summary CSVs (distinct
+        experiment runs with method variants that aren't part of the main
+        protocol output); pass them explicitly if they don't live at the
+        default paths above.
+
+        Missing input files are skipped with a message rather than failing
+        the whole run. Returns a mapping of figure name -> saved path (or
+        None if skipped)."""
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        filenames = CrossDatasetVisualizer._SCENARIO_FIGURE_FILENAMES
+
+        jobs = [
+            ("ablation_components", lambda sp: CrossDatasetVisualizer.plot_ablation_components(
+                csv_youtube=ablation_csv_youtube, csv_taxi=ablation_csv_taxi,
+                savepath=sp, show=show)),
+            ("sensitivity_curves", lambda sp: CrossDatasetVisualizer.plot_sensitivity_curves(
+                csv_youtube=sensitivity_csv_youtube, csv_taxi=sensitivity_csv_taxi,
+                savepath=sp, show=show)),
+            ("temporal_scale_robustness",
+             lambda sp: self.plot_temporal_scale_robustness(savepath=sp, show=show)),
+            ("granularity_trend",
+             lambda sp: self.plot_granularity_trend(savepath=sp, show=show)),
+        ]
+        results: dict = {}
+        for name, fn in jobs:
+            savepath = out_dir / filenames[name]
+            try:
+                results[name] = fn(savepath)
+                print("saved:", results[name])
+            except (FileNotFoundError, ValueError) as e:
+                results[name] = None
+                print("skipped", name, "-", e)
+        return results
 
     # ── Summary table ─────────────────────────────────────────────────────────
 
