@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python scripts/generate_paper_figures.py --help)"
+      "Bash(python scripts/generate_paper_figures.py --help)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('evaluation/cross_dataset_visualizer.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('scripts/generate_paper_figures.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('scripts/generate_paper_figures.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python scripts/generate_paper_figures.py --youtube scratch_e2e/youtube --yellow-taxi-h scratch_e2e/yellow_taxi_h --yellow-taxi-30m scratch_e2e/yellow_taxi_30m --yellow-taxi-5m scratch_e2e/yellow_taxi_5m --out scratch_e2e/out --group-by method)",
+      "Bash(find results *)",
+      "Bash(ls results *)",
+      "Bash(head -1 \"results/tables/ablation_youtube_20260605_005043.csv\")",
+      "Bash(head -1 \"results/tables/sensitivity_youtube_20260607_174943.csv\")"
     ]
   }
 }
