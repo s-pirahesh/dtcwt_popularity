@@ -10,10 +10,19 @@ Three assessment models from Chapter 3:
   Section 3-3: DTCWT+AF — Stable DTCWT Model (64-day window)
   Section 3-4: WSPI     — Proposed Method     (64-day window, frozen params)
 
+Optional Group 5 — explicit value-forecasting baselines (defense-gap
+experiment, run ONLY when named in --methods):
+  Persistence, Holt, ARYW, ARIMA
+
 Workflow:
   1. This script  → compute scores + 4-Layer metrics → results/
   2. analyze_results.py → display or --recompute metrics
   3. show_results.py    → textual + graphical display
+
+Selective / cached comparison (no re-run of finished methods):
+  python experiments/prepare_compare_folder.py results/<ds>/main_<ts>
+  python experiments/run_popularity_assessment.py <ds> \
+      --resume results/<ds>/predcmp_<ts> --methods WSPI AF ARIMA Holt
 
 Author: Sajjad
 Date: February 2026
@@ -71,6 +80,42 @@ except ImportError as e:
     WSPIAssessment = None
     METHODS_AVAILABLE = False
 
+# Import explicit forecasting baselines (Group 5 — defense-gap experiment)
+try:
+    from methods.forecasting_baselines import (
+        PersistenceForecast,
+        HoltForecast,
+        ARYWForecast,
+        ARIMAForecast,
+    )
+    FORECASTERS_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Forecasting baselines not available: {e}")
+    PersistenceForecast = HoltForecast = ARYWForecast = ARIMAForecast = None
+    FORECASTERS_AVAILABLE = False
+
+# Import WSPI-F (Group 6 — Level-2 module: coefficient-domain forecasting)
+try:
+    from methods.wspi_forecast import WSPIForecast
+    WSPIF_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: WSPI-F not available: {e}")
+    WSPIForecast = None
+    WSPIF_AVAILABLE = False
+
+# Import WSPI-F2 / WSPI-FT (Group 7 — second-generation Level-2 module)
+try:
+    from methods.wspi_forecast2 import WSPIForecast2
+    WSPIF2_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: WSPI-F2 not available: {e}")
+    WSPIForecast2 = None
+    WSPIF2_AVAILABLE = False
+
+# Group 5, 6 & 7 methods are OPT-IN: they never run unless named in --methods.
+FORECASTING_METHODS = ['Persistence', 'Holt', 'ARYW', 'ARIMA',
+                       'WSPI-F', 'WSPI-F-YW', 'WSPI-F2', 'WSPI-FT']
+
 # Import baselines
 try:
     from baselines import (
@@ -100,6 +145,8 @@ def create_methods_dict(config: EvaluationConfig) -> dict:
       Section 3-2 — DWT+AF   (Trend-Shock Model) (64-day window)
       Section 3-3 — DTCWT+AF (Stable Model)      (64-day window)
       Section 3-4 — WSPI     (Proposed, frozen)  (64-day window)
+      Group 5     — Persistence, Holt, ARYW, ARIMA (explicit forecasters,
+                    opt-in via --methods only)
 
     Note: 'Statistical' (skewness/kurtosis) has been removed from the
     evaluation lineup as it does not belong to the Chapter 3 framework.
@@ -149,9 +196,43 @@ def create_methods_dict(config: EvaluationConfig) -> dict:
         if WSPIAssessment is not None:
             methods['WSPI'] = WSPIAssessment(alpha=1.0, beta=1.0)
 
+    # --- Group 5: Explicit value-forecasting baselines (opt-in) --------------
+    # Score = sum of forecasted next-horizon values, so the horizon must
+    # match the evaluation's prediction horizon.
+    if FORECASTERS_AVAILABLE:
+        horizon = int(getattr(config, 'prediction_horizon', 7) or 7)
+        methods['Persistence'] = PersistenceForecast(horizon=horizon)
+        methods['Holt']        = HoltForecast(horizon=horizon)
+        methods['ARYW']        = ARYWForecast(order=2, horizon=horizon)
+        methods['ARIMA']       = ARIMAForecast(p=1, q=1, horizon=horizon)
+
+    # --- Group 6: WSPI-F — forecasted WSPI (opt-in) --------------------------
+    if WSPIF_AVAILABLE:
+        horizon = int(getattr(config, 'prediction_horizon', 7) or 7)
+        methods['WSPI-F']    = WSPIForecast(predictor='nlms', horizon=horizon)
+        methods['WSPI-F-YW'] = WSPIForecast(predictor='aryw', horizon=horizon)
+
+    # --- Group 7: WSPI-F2 / WSPI-FT — bounded + gated variants (opt-in) ------
+    # WSPI-F2 : AR(2)-YW + clamp + structural gate (reduces to WSPI at g=0)
+    # WSPI-FT : Theil-Sen robust regression + clamp (distinct predictor)
+    # Defaults are frozen in methods/wspi_forecast2.py; the horizon must match
+    # the evaluation horizon exactly, as for every other forecasting method.
+    if WSPIF2_AVAILABLE:
+        horizon = int(getattr(config, 'prediction_horizon', 7) or 7)
+        methods['WSPI-F2'] = WSPIForecast2(
+            predictor='aryw', horizon=horizon,
+            clamp=4.0, phi_d=1.0, use_gate=True, gate_gamma=0.3)
+        methods['WSPI-FT'] = WSPIForecast2(
+            predictor='theilsen', horizon=horizon,
+            clamp=4.0, phi_d=1.0, use_gate=False)
+
     # --- Filter by --methods CLI flag ----------------------------------------
     if config.methods is not None:
         methods = {k: v for k, v in methods.items() if k in config.methods}
+    else:
+        # No explicit selection: exclude opt-in forecasters (Group 5)
+        methods = {k: v for k, v in methods.items()
+                   if k not in FORECASTING_METHODS}
 
     return methods
 
@@ -229,7 +310,7 @@ def run_temporal_evaluation(dataset_name: str,
         incremental:        use IncrementalTemporalEvaluator (crash-safe)
         **kwargs:           forwarded to get_*_config (k_list, etc.)
     """
-    
+
     print("="*70)
     print("EXPERIMENT: TEMPORAL EVALUATION — FROZEN 4-LAYER PROTOCOL")
     print("="*70)
@@ -397,6 +478,10 @@ Chapter 3 methods:
   Section 3-2 : DWT+AF   — Trend-Shock Model   (64-day window)
   Section 3-3 : DTCWT+AF — Stable DTCWT Model  (64-day window)
   Section 3-4 : WSPI     — Proposed Method      (64-day window)
+  Group 5     : Persistence Holt ARYW ARIMA (explicit forecasters, OPT-IN:
+                only run when named in --methods; ARIMA is slow)
+  Group 6     : WSPI-F WSPI-F-YW (forecasted WSPI — coefficient-domain
+                prediction; OPT-IN like Group 5)
 
 Examples:
 
@@ -424,6 +509,12 @@ Examples:
   python run_popularity_assessment.py movielens \\
       --num-items 500 --methods WSPI DTCWT+AF AF
 
+  # Cached comparison: run ONLY the new forecasters, reuse cached results
+  # (first: python experiments/prepare_compare_folder.py results/<ds>/main_<ts>)
+  python run_popularity_assessment.py youtube \\
+      --resume results/youtube/predcmp_<ts> \\
+      --methods WSPI AF Persistence Holt ARYW ARIMA
+
 Window formula:
   num_windows = (end_date - start_date) - window_size - horizon + 1
         """
@@ -449,8 +540,9 @@ Window formula:
                         help='Assessment horizon in days (default: 7)')
 
     parser.add_argument('--methods', type=str, nargs='+', default=None,
-                        help='Methods to evaluate (default: all). '
-                             'Choices: AF EWMA RRD VSE CompoundPop PFRF DWT+AF DTCWT+AF WSPI')
+                        help='Methods to evaluate (default: all EXCEPT opt-in Groups 5-6). '
+                             'Choices: AF EWMA RRD VSE CompoundPop PFRF DWT+AF DTCWT+AF WSPI '
+                             'Persistence Holt ARYW ARIMA WSPI-F WSPI-F-YW')
 
     parser.add_argument('--format', type=str, default='csv',
                         choices=['csv', 'parquet'],
@@ -490,7 +582,11 @@ Window formula:
     if not args.no_parallel:
         from experiments.parallel_engine import run_methods_parallel
         import evaluation.method_configs as _mc
-        method_names = args.methods or list(_mc.METHOD_CONFIGS.keys())
+        # Default lineup EXCLUDES the opt-in Group 5 forecasters, so existing
+        # commands keep their original behaviour (and ARIMA never runs by accident).
+        method_names = args.methods or [
+            m for m in _mc.METHOD_CONFIGS.keys() if m not in FORECASTING_METHODS
+        ]
         run_methods_parallel(
             args.dataset, method_names,
             cores=args.cores, tag='main',
