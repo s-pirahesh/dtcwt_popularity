@@ -1,16 +1,21 @@
 """
 Method-specific configurations for the Frozen Evaluation Protocol.
 
-Four groups of popularity assessment methods:
+Five groups of popularity assessment methods:
   Group 1 — General Baselines:    AF, EWMA, RRD, VSE, CompoundPop, PFRF         (7-slot window)
   Group 2 — DWT Model:            DWT+AF                                       (64-slot window)
   Group 3 — DTCWT Model:          DTCWT+AF                                     (64-slot window)
   Group 4 — WSPI (Proposed):      WSPI                                         (64-slot window)
+  Group 5 — Explicit Forecasters: Persistence, Holt, ARYW, ARIMA               (defense-gap experiment)
 
 Note:
   - LRU removed: it is a cache eviction policy, not a popularity metric.
   - LFU renamed to MeanFreq: clearer description of the actual formula used.
   - New baselines RRD, VSE, CompoundPop added from literature.
+  - Group 5 added for the explicit value-forecasting comparison
+    (ARMA sliding-window approach of Hassine et al. 2017 [25] + naive/
+    smoothing forecasters). These predict future demand values and are
+    scored by the same future-ground-truth protocol.
 
 Author: Sajjad
 """
@@ -113,6 +118,97 @@ METHOD_CONFIGS: Dict[str, MethodConfig] = {
             'Wavelet Structural Popularity Index (Section 3-4): '
             'P = mu_L * exp(clip(alpha*S_L + beta*R - gamma*WE, -3, 3)), '
             'alpha=1.0, beta=0.5, gamma=0.5'
+        )
+    ),
+
+    # =========================================================================
+    # Group 5: Explicit Value-Forecasting Baselines (defense-gap experiment)
+    # These FORECAST next-horizon demand; the score is the sum of forecasts.
+    # Evaluated with the exact same future-ground-truth protocol.
+    # =========================================================================
+    'Persistence': MethodConfig(
+        name='Persistence',
+        window_slots=7,
+        min_observations=3,
+        description='Naive persistence forecast: next horizon repeats last observation'
+    ),
+
+    'Holt': MethodConfig(
+        name='Holt',
+        window_slots=64,
+        min_observations=8,
+        description='Holt double exponential smoothing (level+trend), h-step forecast sum'
+    ),
+
+    'ARYW': MethodConfig(
+        name='ARYW',
+        window_slots=64,
+        min_observations=32,
+        description='AR(2) fitted by Yule-Walker (closed-form), recursive h-step forecast'
+    ),
+
+    'ARIMA': MethodConfig(
+        name='ARIMA',
+        window_slots=64,
+        min_observations=32,
+        description=(
+            'Sliding-window ARMA(1,1) via statsmodels MLE '
+            '[Hassine et al., 2017 — proposal ref 25]; SLOW, run selectively'
+        )
+    ),
+
+    # =========================================================================
+    # Group 6: WSPI-F — Forecasted WSPI (Level-2 module)
+    # Predicts DTCWT trend-band coefficients (persistence-anchored NLMS /
+    # Yule-Walker AR) and scores the FUTURE window. Opt-in via --methods.
+    # =========================================================================
+    'WSPI-F': MethodConfig(
+        name='WSPI-F',
+        window_slots=64,
+        min_observations=32,
+        description=(
+            'Forecasted WSPI: persistence-anchored NLMS on DTCWT trend-band '
+            'coefficient increments (RCCWLMK family), score from extended coeffs'
+        )
+    ),
+
+    'WSPI-F-YW': MethodConfig(
+        name='WSPI-F-YW',
+        window_slots=64,
+        min_observations=32,
+        description=(
+            'Forecasted WSPI, Yule-Walker AR(2) coefficient predictor '
+            '(closed-form, non-adaptive control variant)'
+        )
+    ),
+
+    # =========================================================================
+    # Group 7: WSPI-F2 / WSPI-FT — second-generation Level-2 module.
+    # Same window and min_observations as WSPI so the window sets align
+    # exactly with the cached WSPI / WSPI-F runs (do NOT change these two
+    # numbers: a mismatch silently makes the comparison unfair).
+    # Opt-in via --methods. See methods/wspi_forecast2.py for the diagnosis
+    # that motivated them and for the provable inflation bound.
+    # =========================================================================
+    'WSPI-F2': MethodConfig(
+        name='WSPI-F2',
+        window_slots=64,
+        min_observations=32,
+        description=(
+            'Gated forecasted WSPI: AR(2) Yule-Walker coefficient predictor '
+            'with multiplicative clamp (c=4) and structural gate '
+            'g=(R*(1-WE))^0.3; geometric blend, reduces EXACTLY to WSPI at g=0'
+        )
+    ),
+
+    'WSPI-FT': MethodConfig(
+        name='WSPI-FT',
+        window_slots=64,
+        min_observations=32,
+        description=(
+            'Robust forecasted WSPI: Theil-Sen median-of-slopes regression on '
+            'the DTCWT trend-band coefficients with multiplicative clamp (c=4); '
+            '29% breakdown point, so one burst coefficient cannot drag the trend'
         )
     ),
 }
