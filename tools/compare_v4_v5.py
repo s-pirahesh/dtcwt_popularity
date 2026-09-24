@@ -24,6 +24,15 @@ RUNS = {
         v4=R / 'yellow_taxi/predcmp_20260830_001817_hourly/comparison/main_summary.csv',
         v5=R / 'revision_v5/T1.4_protocol_v5/taxi_hourly/comparison/summary_all_windows.csv',
         j2=R / 'revision_v5/T1.4_protocol_v5/ablation_dtcwt_J2/taxi_hourly/comparison/summary_all_windows.csv'),
+    # V4 paper values for 30/5 min come from the main_20260620 runs (tex line 354: 0.573, 0.728)
+    'taxi_30min': dict(
+        v4=R / 'yellow_taxi/main_20260620_092517_30min/comparison/main_summary.csv',
+        v5=R / 'revision_v5/T1.4_protocol_v5/taxi_30min/comparison/summary_all_windows.csv',
+        j2=R / 'revision_v5/T1.4_protocol_v5/ablation_dtcwt_J2/taxi_30min/comparison/summary_all_windows.csv'),
+    'taxi_5min': dict(
+        v4=R / 'yellow_taxi/main_20260620_170044_5min/comparison/main_summary.csv',
+        v5=R / 'revision_v5/T1.4_protocol_v5/taxi_5min/comparison/summary_all_windows.csv',
+        j2=R / 'revision_v5/T1.4_protocol_v5/ablation_dtcwt_J2/taxi_5min/comparison/summary_all_windows.csv'),
 }
 METRICS = ['ndcg@10', 'coverage@10', 'kendall_tau', 'spearman_rho', 'rsi@10', 'robustness_distortion']
 METHODS = ['AF', 'EWMA', 'RRD', 'VSE', 'CompoundPop', 'PFRF', 'DWT+AF', 'DTCWT+AF', 'WSPI']
