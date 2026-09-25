@@ -43,6 +43,8 @@ def main():
     ap.add_argument('--level', type=int, default=3, help='J for the three wavelet-based methods')
     ap.add_argument('--no-robustness', action='store_true')
     ap.add_argument('--seed', type=int, default=42)
+    ap.add_argument('--causal-universe', action='store_true',
+                    help='item catalogue from past data only (T1.5); default: whole-file filter')
     a = ap.parse_args()
 
     wo = {}
@@ -53,14 +55,16 @@ def main():
     if not data.is_absolute():
         data = ROOT / data
     fe = ProtocolV5Evaluator.from_csv(data, dataset_min_obs=a.min_obs, seed=a.seed,
-                                      robustness=not a.no_robustness)
+                                      robustness=not a.no_robustness,
+                                      causal_universe=a.causal_universe)
     methods = build_v5_methods(level=a.level, window_override=wo, names=a.methods)
     out = Path(a.out)
     if not out.is_absolute():
         out = ROOT / out
     res = fe.run(methods, out_dir=out,
                  extra_meta=dict(data=str(a.data), dataset_min_obs=a.min_obs,
-                                 window_override=wo, level=a.level))
+                                 window_override=wo, level=a.level,
+                                 causal_universe=a.causal_universe))
     ids = set.intersection(*[set(df['window_id']) for df in res.values()])
     print(f'\ncommon windows: {len(ids)}')
     print('method        W    windows  ndcg@10  rho      rsi@10   robust  ties')

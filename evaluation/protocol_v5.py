@@ -203,11 +203,21 @@ class ProtocolV5Evaluator(FastEvaluator):
     """Dense, exact-W evaluator with stable tie-breaking (protocol V5)."""
 
     def __init__(self, data: pd.DataFrame, dataset_min_obs: int, seed: int = 42,
-                 robustness: bool = True, **kw):
+                 robustness: bool = True, causal_universe: bool = False, **kw):
+        """causal_universe=False (default): the item catalogue is fixed once from
+        the whole file (total count >= dataset_min_obs), as in V4 and the T1.4 /
+        T2.1 runs.  causal_universe=True (T1.5, decision of 24 Sep 2026): every
+        item of the file is kept, and an item can enter window k only if its
+        total count over all slots BEFORE the test slot k is >= dataset_min_obs.
+        No full-period statistic is used.  The per-window eligibility rule
+        (min_observations rows in the training slice) is unchanged."""
         kw.pop('mode', None)
         kw.pop('rsi_by_item', None)
         kw.pop('tie_info', None)
-        super().__init__(data, dataset_min_obs, mode='dense', seed=seed,
+        self.causal_universe = bool(causal_universe)
+        self.universe_min_count = dataset_min_obs
+        super().__init__(data, 0 if self.causal_universe else dataset_min_obs,
+                         mode='dense', seed=seed,
                          rsi_by_item=True, robustness=robustness, tie_info=True, **kw)
 
     @classmethod
@@ -277,12 +287,19 @@ class ProtocolV5Evaluator(FastEvaluator):
         prev: Dict[int, set] = {}
         recs = []
         W = fm.window_slots
+        # causal catalogue: running total count over slots [0, k) (T1.5)
+        cum = np.zeros(len(self.items)) if self.causal_universe else None
         for k in range(self.num_slots + 1):
+            if cum is not None and k > 0:
+                cum += self.V[:, k - 1]
             lo, hi = self.window_bounds(k, W)
             if self.any_cum[hi] - self.any_cum[lo] == 0 or not self.any_row[k]:
                 continue
             observed = self.C[:, hi] - self.C[:, lo]
-            idx = np.where(observed >= fm.min_obs)[0]
+            ok = observed >= fm.min_obs
+            if cum is not None:
+                ok &= cum >= self.universe_min_count
+            idx = np.where(ok)[0]
             if len(idx) < 2:
                 continue
             X = self._matrix(idx, k, W)
@@ -339,6 +356,11 @@ class ProtocolV5Evaluator(FastEvaluator):
             md = out_dir / 'metadata'
             md.mkdir(parents=True, exist_ok=True)
             meta = dict(protocol='v5', mode='dense', seed=self.seed, rsi_by_item=True,
+                        causal_universe=self.causal_universe,
+                        universe_rule=('total count before the test slot >= %d'
+                                       % self.universe_min_count if self.causal_universe else
+                                       'total count over the whole file >= %d'
+                                       % self.universe_min_count),
                         tie_rule='stable sort, ties by fixed item order (item ids sorted as str)',
                         nonfinite_rule='ranked last',
                         robustness=self.robustness, slot_minutes=self.slot.total_seconds() / 60,
