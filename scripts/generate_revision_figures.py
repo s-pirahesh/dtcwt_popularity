@@ -67,6 +67,17 @@ Figures
       N=64) and equal window N=64; one column per scenario.  WSPI, DTCWT+AF,
       RRD and AF highlighted, the other methods grey with their name.
 
+  T3.6_shift_invariance  (task T3.6 / E5, SI figure)
+      input: <results>/T3.6_shift_invariance/shift_summary.csv and
+             <results>/T3.6_shift_invariance/synthetic/synthetic_{scores,summary}.csv
+      Row 1: real data, every 64-slot window of every eligible item shifted
+      circularly by s = 0..7 (content fixed, periodic boundary): mean coefficient
+      of variation of the band energies, DTCWT against DWT, 4 scenarios.
+      Row 2: synthetic event on a fixed background moved towards the newest
+      slot, settings of each method: (e) example curves (repetition 0, 3-slot
+      burst, recent part); (f) share of steps in which the score falls although
+      the event got newer, WSPI, DWT-WSPI, DTCWT+AF, DWT+AF, SMA, EWMA-eq.
+
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_revision_figures.py --results results\revision_v5 ^
@@ -589,6 +600,121 @@ def fig_t35_spike_size(results, out):
     return files, msg
 
 
+# ------------------------------------------------------------------ T3.6 (E5)
+T36_BANDS = [('cv_E_L', 'lowpass'), ('cv_E_1', 'level 1'), ('cv_E_2', 'level 2'),
+             ('cv_E_3', 'level 3')]
+T36_TR = {'DTCWT': '#2a78d6', 'DWT': '#b5b4ae'}
+T36_METHODS = {                    # method: (colour, marker, line style)
+    'WSPI':     ('#2a78d6', 'o', '-'),
+    'DWT-WSPI': ('#2a78d6', 'o', ':'),
+    'DTCWT+AF': ('#1baf7a', '^', '-'),
+    'DWT+AF':   ('#1baf7a', '^', ':'),
+    'SMA':      ('#eb6834', 's', '-'),
+    'EWMA-eq':  ('#4a3aa7', 'D', '-'),
+}
+T36_SETTINGS = [('spike', 'middle'), ('burst3', 'middle'), ('spike', 'recent'), ('burst3', 'recent')]
+
+
+def fig_t36_shift_invariance(results, out):
+    """Controlled shift-invariance test (E5): real data (circular shift) and a
+    synthetic moving event (settings of the index)."""
+    root = results / 'T3.6_shift_invariance'
+    src_a = root / 'shift_summary.csv'
+    syn = root / 'synthetic'
+    if not src_a.exists() and not (syn / 'synthetic_summary.csv').exists():
+        return None, f'input missing: {src_a} and {syn}'
+    fig = plt.figure(figsize=(17, 8.6))
+    gs = fig.add_gridspec(2, 4, height_ratios=[1, 1.05], hspace=0.42, wspace=0.28)
+    missing, notes = [], []
+    # ---- row 1: real data, circular shift
+    a = pd.read_csv(src_a) if src_a.exists() else pd.DataFrame()
+    for c, (sc, title) in enumerate(SCENARIOS):
+        ax = fig.add_subplot(gs[0, c])
+        style_axes(ax)
+        ax.set_title(f'({chr(97 + c)}) {title}', fontsize=10.5, color=INK)
+        g = a[a['scenario'] == sc] if len(a) else a
+        if g.empty:
+            missing.append(sc)
+            ax.text(0.5, 0.5, 'no data yet', transform=ax.transAxes, ha='center', color=INK2)
+            continue
+        x = np.arange(len(T36_BANDS))
+        for j, (tr, col) in enumerate(T36_TR.items()):
+            y = [float(g[(g['transform'] == tr) & (g['metric'] == m)]['mean'].iloc[0]) for m, _ in T36_BANDS]
+            ax.bar(x + (j - 0.5) * 0.38, y, width=0.36, color=col, label=tr, zorder=3)
+        ax.set_xticks(x)
+        ax.set_xticklabels([b for _, b in T36_BANDS], fontsize=8)
+        if c == 0:
+            ax.set_ylabel('CV of band energy over\ncircular shifts s = 0..7', color=INK2, fontsize=9)
+        r3 = g[(g['metric'] == 'cv_E_3')]
+        if len(r3) == 2:
+            notes.append(f"{sc}: cv_E_3 DTCWT {float(r3[r3['transform'] == 'DTCWT']['mean'].iloc[0]):.3f}, "
+                         f"DWT {float(r3[r3['transform'] == 'DWT']['mean'].iloc[0]):.3f}")
+    # ---- row 2 left: example (repetition 0, burst3, recent)
+    ax = fig.add_subplot(gs[1, 0:2])
+    style_axes(ax)
+    ax.set_title('(e) Synthetic 3-slot burst moving towards the present (recent part of the '
+                 'window; repetition 0)', fontsize=10, color=INK)
+    f = syn / 'synthetic_scores.csv'
+    if f.exists():
+        d = pd.read_csv(f)
+        d = d[(d['repetition'] == 0) & (d['shape'] == 'burst3') & (d['age'] == 'recent')]
+        for m, (col, mk, ls) in T36_METHODS.items():
+            h = d[d['method'] == m].sort_values('shift')
+            if h.empty:
+                continue
+            y = np.log(h['score'].to_numpy() / h['score'].iloc[0])
+            ax.plot(h['shift'], y, color=col, marker=mk, ls=ls, lw=1.6, ms=5, label=m, zorder=3)
+        ax.axhline(0, color='#b5b4ae', lw=0.8, zorder=1)
+        ax.set_xlabel('shift s (slots towards the newest slot)', color=INK2)
+        ax.set_ylabel('log(score(s) / score(0))', color=INK2, fontsize=9)
+        ax.legend(ncol=3, frameon=False, fontsize=8, loc='upper left')
+    else:
+        missing.append('synthetic_scores')
+    # ---- row 2 right: share of wrong-direction steps
+    ax = fig.add_subplot(gs[1, 2:4])
+    style_axes(ax)
+    ax.set_title('(f) Share of steps in which the score falls although the event got newer '
+                 '(mean, 95% CI, 500 repetitions)', fontsize=10, color=INK)
+    f = syn / 'synthetic_summary.csv'
+    if f.exists():
+        s = pd.read_csv(f)
+        s = s[(s['kind'] == 'score') & (s['metric'] == 'share_wrong')]
+        x = np.arange(len(T36_SETTINGS))
+        w = 0.8 / len(T36_METHODS)
+        for j, (m, (col, mk, ls)) in enumerate(T36_METHODS.items()):
+            y, lo, hi = [], [], []
+            for shp, age in T36_SETTINGS:
+                r = s[(s['shape'] == shp) & (s['age'] == age) & (s['name'] == m)]
+                y.append(float(r['mean'].iloc[0]) if len(r) else np.nan)
+                lo.append(float(r['ci_low'].iloc[0]) if len(r) else np.nan)
+                hi.append(float(r['ci_high'].iloc[0]) if len(r) else np.nan)
+            y, lo, hi = map(np.asarray, (y, lo, hi))
+            xx = x + (j - (len(T36_METHODS) - 1) / 2) * w
+            ax.bar(xx, y, width=w * 0.92, color=col, alpha=1.0 if ls == '-' else 0.45,
+                   hatch=None if ls == '-' else '//', edgecolor=SURF, label=m, zorder=3)
+            ax.errorbar(xx, y, yerr=[y - lo, hi - y], fmt='none', ecolor=INK2, lw=0.8, zorder=4)
+        ax.set_xticks(x)
+        ax.set_xticklabels([f'{"spike" if a_ == "spike" else "3-slot burst"}\n{b_} part'
+                            for a_, b_ in T36_SETTINGS], fontsize=8)
+        ax.set_ylim(0, 1)
+        ax.set_ylabel('share of the 8 steps', color=INK2, fontsize=9)
+        ax.legend(ncol=3, frameon=False, fontsize=8, loc='upper left')
+        r = s[(s['shape'] == 'burst3') & (s['age'] == 'recent')]
+        notes.append('burst3/recent share_wrong: ' + ', '.join(
+            f"{n} {float(v):.3f}" for n, v in zip(r['name'], r['mean'])))
+    else:
+        missing.append('synthetic_summary')
+    h = [Patch(color=c, label=t) for t, c in T36_TR.items()]
+    fig.legend(handles=h, loc='upper right', ncol=2, frameon=False, fontsize=9,
+               bbox_to_anchor=(0.99, 1.0))
+    fig.suptitle('Controlled shift test: (a-d) real 64-slot windows shifted circularly '
+                 '(content fixed); (e-f) synthetic event with the settings of each method',
+                 fontsize=11, color=INK, x=0.45)
+    files = save(fig, out, 'T3.6_shift_invariance')
+    msg = '; '.join(notes) + (f'; MISSING: {", ".join(missing)}' if missing else '')
+    return files, msg
+
+
 FIGURES = {
     'T2.2_window_curves': fig_t22_window_curves,   # SI figure of the paper
     'T2.3_tradeoff': fig_t23_tradeoff,             # kept in the program only, not in the paper
@@ -596,6 +722,7 @@ FIGURES = {
     'T2.4_delay_ecdf': fig_t24_delay_ecdf,          # SI (E11 delay distribution)
     'T3.2_param_heatmap': fig_t32_param_heatmap,    # SI (E3 alpha x beta grid)
     'T3.5_spike_size': fig_t35_spike_size,          # SI (E4 spike size)
+    'T3.6_shift_invariance': fig_t36_shift_invariance,  # SI (E5 shift test)
 }
 
 
