@@ -49,6 +49,15 @@ Figures
       Share of entries in the method's Top-10 within d slots; rows = default
       and equal-64 configurations; 4 scenarios.
 
+  T3.2_param_heatmap  (task T3.2 / E3, SI figure)
+      input: <results>/T3.2_param_grid/grid_summary.csv (part = test) and
+             <results>/T3.2_param_grid/selection/selection.csv
+      WSPI (N=64, J=3) over the alpha x beta grid on the test part (last 70 %
+      of the common windows).  Rows: NDCG@10, RSI@10, robustness (Delta Rank);
+      one column per scenario.  One blue scale per panel, darker = better
+      (reversed for Delta Rank).  Square = default (1, 1); circle = the
+      configuration chosen on the tuning part by the pre-registered 30/70 rule.
+
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_revision_figures.py --results results\revision_v5 ^
@@ -416,11 +425,92 @@ def fig_t24_delay_ecdf(results, out):
     return save(fig, out, 'T2.4_delay_ecdf'), 'ok'
 
 
+# ------------------------------------------------------------ figure T3.2 (E3)
+T32_ROOT = 'T3.2_param_grid'
+T32_ROWS = [('ndcg@10_mean', 'NDCG@10', False, '{:.4f}'),
+            ('rsi@10_mean', 'RSI@10', False, '{:.4f}'),
+            ('robustness_distortion_mean', 'robustness $\\Delta$Rank', True, '{:.1f}')]
+T32_LIGHT, T32_DARK = '#eef4fb', '#1c4f8f'
+
+
+def fig_t32_param_heatmap(results, out):
+    """alpha x beta heat maps of WSPI on the test part (SI figure)."""
+    from matplotlib.colors import LinearSegmentedColormap, to_rgb
+    src = results / T32_ROOT / 'grid_summary.csv'
+    sel = results / T32_ROOT / 'selection' / 'selection.csv'
+    if not src.exists():
+        return None, f'input missing: {src}'
+    d = pd.read_csv(src)
+    d = d[d.part == 'test']
+    chosen = {}
+    if sel.exists():
+        sv = pd.read_csv(sel)
+        sv = sv[sv.param == 'alpha_beta']
+        chosen = {r.scenario: (r.selected_alpha, r.selected_beta) for r in sv.itertuples()}
+    scen = [(k, t) for k, t in SCENARIOS if k in set(d.scenario)]
+    if not scen:
+        return None, 'no scenario in grid_summary.csv'
+    cmap = LinearSegmentedColormap.from_list('t32', [T32_LIGHT, T32_DARK])
+    fig, axes = plt.subplots(len(T32_ROWS), len(scen), figsize=(4.3 * len(scen), 11.2),
+                             squeeze=False)
+    notes = []
+    for c, (sc, title) in enumerate(scen):
+        s = d[d.scenario == sc]
+        al = sorted(s.alpha.unique())
+        be = sorted(s.beta.unique())
+        for r, (col, lab, low_better, fmt) in enumerate(T32_ROWS):
+            ax = axes[r, c]
+            M = s.pivot(index='beta', columns='alpha', values=col).reindex(index=be, columns=al)
+            v = M.to_numpy(dtype=float)
+            vmin, vmax = np.nanmin(v), np.nanmax(v)
+            z = (v - vmin) / (vmax - vmin) if vmax > vmin else np.zeros_like(v)
+            if low_better:
+                z = 1.0 - z
+            ax.imshow(z, cmap=cmap, vmin=0, vmax=1, origin='lower', aspect='equal')
+            for i in range(len(be)):
+                for j in range(len(al)):
+                    ax.text(j, i, fmt.format(v[i, j]), ha='center', va='center', fontsize=5.6,
+                            color=SURF if z[i, j] > 0.6 else INK)
+            ax.set_xticks(range(len(al)))
+            ax.set_xticklabels([f'{x:g}' for x in al], fontsize=7.5, color=INK2)
+            ax.set_yticks(range(len(be)))
+            ax.set_yticklabels([f'{x:g}' for x in be], fontsize=7.5, color=INK2)
+            for sp in ax.spines.values():
+                sp.set_visible(False)
+            ax.tick_params(length=0)
+            j0, i0 = al.index(1.0), be.index(1.0)
+            ax.add_patch(plt.Rectangle((j0 - 0.5, i0 - 0.5), 1, 1, fill=False, ec=INK, lw=1.8))
+            if sc in chosen:
+                ja, ib = al.index(chosen[sc][0]), be.index(chosen[sc][1])
+                ax.plot(ja, ib, marker='o', ms=19, mfc='none', mec=INK, mew=1.4)
+            ax.set_title((f'{title}\n' if r == 0 else '') +
+                         f'{lab}: {fmt.format(vmin)} to {fmt.format(vmax)}',
+                         fontsize=9.5 if r else 10.5, color=INK)
+            if r == len(T32_ROWS) - 1:
+                ax.set_xlabel(r'$\alpha$ (weight of R)', color=INK2)
+            if c == 0:
+                ax.set_ylabel(r'$\beta$ (weight of $W_E$)', color=INK2)
+        n = int(s.n_windows.iloc[0])
+        notes.append(f'{sc}: {n} test windows')
+    h = [plt.Line2D([], [], marker='s', ms=10, mfc='none', mec=INK, lw=0, mew=1.8,
+                    label=r'default $\alpha=\beta=1$'),
+         plt.Line2D([], [], marker='o', ms=10, mfc='none', mec=INK, lw=0, mew=1.4,
+                    label='chosen on the first 30 % (tuning part)')]
+    fig.legend(handles=h, loc='lower center', ncol=2, frameon=False, fontsize=9,
+               bbox_to_anchor=(0.5, 0.0))
+    fig.suptitle(r'WSPI ($N=64$, $J=3$) over the $\alpha\times\beta$ grid, mean over the test part '
+                 '(last 70 % of the common windows); darker = better within each panel',
+                 fontsize=11, color=INK)
+    fig.tight_layout(rect=(0, 0.03, 1, 0.97))
+    return save(fig, out, 'T3.2_param_heatmap'), '; '.join(notes)
+
+
 FIGURES = {
     'T2.2_window_curves': fig_t22_window_curves,   # SI figure of the paper
     'T2.3_tradeoff': fig_t23_tradeoff,             # kept in the program only, not in the paper
     'T2.4_surge_examples': fig_t24_surge_examples,  # main text (E11 examples)
     'T2.4_delay_ecdf': fig_t24_delay_ecdf,          # SI (E11 delay distribution)
+    'T3.2_param_heatmap': fig_t32_param_heatmap,    # SI (E3 alpha x beta grid)
 }
 
 
