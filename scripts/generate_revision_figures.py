@@ -78,6 +78,15 @@ Figures
       burst, recent part); (f) share of steps in which the score falls although
       the event got newer, WSPI, DWT-WSPI, DTCWT+AF, DWT+AF, SMA, EWMA-eq.
 
+  T3.7_feature_relation  (task T3.7 / E7, SI figure)
+      input: <results>/T3.7_feature_relation/<scenario>/density.csv and pooled_summary.csv
+      Density (log colour, 100 x 100 cells) of R against WE over all WSPI
+      item-windows of each scenario, with the bounds that the identity
+      WE log2(J+1) = h(R) + (1-R) H(q) puts on WE for a given R: h(R)/2 (all
+      detail energy in one band) and (h(R) + (1-R) log2 3)/2 (detail energy spread
+      evenly over the three bands).  Spearman correlation and eta^2(WE | R) in
+      each panel.
+
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_revision_figures.py --results results\revision_v5 ^
@@ -715,6 +724,68 @@ def fig_t36_shift_invariance(results, out):
     return files, msg
 
 
+def fig_t37_feature_relation(results, out):
+    """R against WE over all WSPI item-windows (E7): density of the item-windows
+    and the bounds that the identity WE log2(J+1) = h(R) + (1-R) H(q) puts on WE
+    for a given R (J = 3)."""
+    from matplotlib.colors import LinearSegmentedColormap, LogNorm
+    root = results / 'T3.7_feature_relation'
+    have = [(sc, t) for sc, t in SCENARIOS if (root / sc / 'density.csv').exists()]
+    if not have:
+        return None, f'input missing: {root}/<scenario>/density.csv'
+    cmap = LinearSegmentedColormap.from_list('t37', ['#eaf2fc', '#2a78d6', '#0d2f5c'])
+    r = np.linspace(1e-6, 1 - 1e-6, 400)
+    h = -(r * np.log2(r) + (1 - r) * np.log2(1 - r))
+    lower, upper = h / 2.0, (h + (1 - r) * np.log2(3.0)) / 2.0
+    fig, axes = plt.subplots(1, 4, figsize=(17, 4.4), sharey=True)
+    notes, missing = [], []
+    for c, (sc, title) in enumerate(SCENARIOS):
+        ax = axes[c]
+        style_axes(ax)
+        ax.set_title(f'({chr(97 + c)}) {title}', fontsize=10.5, color=INK)
+        f = root / sc / 'density.csv'
+        if not f.exists():
+            missing.append(sc)
+            ax.text(0.5, 0.5, 'no data yet', transform=ax.transAxes, ha='center', color=INK2)
+            continue
+        d = pd.read_csv(f)
+        nb = int(round(1.0 / float((d['r_hi'] - d['r_lo']).iloc[0])))
+        H = np.full((nb, nb), np.nan)
+        i = np.clip(np.round(d['r_lo'].to_numpy() * nb).astype(int), 0, nb - 1)
+        j = np.clip(np.round(d['we_lo'].to_numpy() * nb).astype(int), 0, nb - 1)
+        H[j, i] = d['count'].to_numpy()
+        edges = np.linspace(0, 1, nb + 1)
+        pm = ax.pcolormesh(edges, edges, H, cmap=cmap, shading='flat',
+                           norm=LogNorm(vmin=1, vmax=np.nanmax(H)), zorder=2)
+        ax.plot(r, lower, color=INK, lw=1.2, zorder=3,
+                label='lower bound: detail energy in one band')
+        ax.plot(r, upper, color=INK, lw=1.2, ls='--', zorder=3,
+                label='upper bound: detail energy spread evenly')
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel('R (share of energy in the trend band)', color=INK2)
+        if c == 0:
+            ax.set_ylabel('WE (normalised wavelet entropy)', color=INK2)
+        ps = root / sc / 'pooled_summary.csv'
+        if ps.exists():
+            q = pd.read_csv(ps).iloc[0]
+            ax.text(0.97, 0.97, f"Spearman {q['sp_R_WE']:.3f}\n$\\eta^2$(WE | R) {q['eta2_WE_given_R']:.3f}\n"
+                    f"n = {int(q['n_item_windows']):,}", transform=ax.transAxes, ha='right', va='top',
+                    fontsize=8.5, color=INK, bbox=dict(fc=SURF, ec=GRID, lw=0.6))
+            notes.append(f"{sc}: sp {q['sp_R_WE']:.4f}, eta2 {q['eta2_WE_given_R']:.4f}")
+        cb = fig.colorbar(pm, ax=ax, fraction=0.046, pad=0.02)
+        cb.ax.tick_params(labelsize=7, colors=INK2)
+        if c == 3:
+            cb.set_label('item-windows per cell (log)', color=INK2, fontsize=8)
+    axes[0].legend(loc='lower left', frameon=False, fontsize=8)
+    fig.suptitle('R against WE over all WSPI item-windows (N = 64, J = 3); lines: the range of WE '
+                 'for a given R, from WE log2(J+1) = h(R) + (1-R) H(q)', fontsize=10.5, color=INK)
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    files = save(fig, out, 'T3.7_feature_relation')
+    msg = '; '.join(notes) + (f'; MISSING: {", ".join(missing)}' if missing else '')
+    return files, msg
+
+
 FIGURES = {
     'T2.2_window_curves': fig_t22_window_curves,   # SI figure of the paper
     'T2.3_tradeoff': fig_t23_tradeoff,             # kept in the program only, not in the paper
@@ -723,6 +794,7 @@ FIGURES = {
     'T3.2_param_heatmap': fig_t32_param_heatmap,    # SI (E3 alpha x beta grid)
     'T3.5_spike_size': fig_t35_spike_size,          # SI (E4 spike size)
     'T3.6_shift_invariance': fig_t36_shift_invariance,  # SI (E5 shift test)
+    'T3.7_feature_relation': fig_t37_feature_relation,  # SI (E7 R and WE)
 }
 
 
