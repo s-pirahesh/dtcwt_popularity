@@ -58,6 +58,15 @@ Figures
       (reversed for Delta Rank).  Square = default (1, 1); circle = the
       configuration chosen on the tuning part by the pre-registered 30/70 rule.
 
+  T3.5_spike_size  (task T3.5 / E4, SI figure)
+      input: <results>/T3.5_robustness/robustness_summary.csv
+      Rank displacement (Delta Rank, log scale) against the spike size
+      (2, 5, 10, 20, 50 x the 64-slot mean; last slot, one slot) under the
+      common perturbation of E4 (same targets and spike for every method,
+      5 seeds).  Rows: default configuration (baselines N=7, wavelet-based
+      N=64) and equal window N=64; one column per scenario.  WSPI, DTCWT+AF,
+      RRD and AF highlighted, the other methods grey with their name.
+
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_revision_figures.py --results results\revision_v5 ^
@@ -505,12 +514,88 @@ def fig_t32_param_heatmap(results, out):
     return save(fig, out, 'T3.2_param_heatmap'), '; '.join(notes)
 
 
+# ----------------------------------------------------------- figure T3.5 (E4)
+T35_SIZES = [2, 5, 10, 20, 50]
+T35_ROWS = [('default', 'default: baselines N=7, wavelet-based N=64'),
+            ('eq64', 'equal window: all methods N=64')]
+T35_HIGHLIGHT = {                 # method: (colour, marker, lw, ms)
+    'WSPI':     ('#2a78d6', 'o', 2.4, 8),
+    'DTCWT+AF': ('#1baf7a', '^', 1.6, 7),
+    'RRD':      ('#eb6834', 'D', 1.6, 6),
+    'AF':       ('#4a3aa7', 's', 1.6, 6),
+}
+
+
+def fig_t35_spike_size(results, out):
+    """Delta Rank against spike size, common perturbation (E4)."""
+    src = results / 'T3.5_robustness' / 'robustness_summary.csv'
+    if not src.exists():
+        return None, f'input missing: {src}'
+    d = pd.read_csv(src)
+    d = d[d.condition.isin([f'size{z}' for z in T35_SIZES])].copy()
+    d['size'] = d.condition.str[4:].astype(int)
+    fig, axes = plt.subplots(2, 4, figsize=(17, 8.2), sharex=True)
+    missing, notes = [], []
+    for c, (sc, title) in enumerate(SCENARIOS):
+        for r, (cfg, rlab) in enumerate(T35_ROWS):
+            ax = axes[r, c]
+            style_axes(ax)
+            g = d[(d.scenario == sc) & (d.config == cfg)]
+            if r == 0:
+                ax.set_title(title, fontsize=11, color=INK)
+            if c == 0:
+                ax.set_ylabel(f'{rlab}\n\u0394Rank (log scale)', color=INK2, fontsize=9)
+            if r == 1:
+                ax.set_xlabel('spike size (x mean of the last 64 slots)', color=INK2)
+            if g.empty:
+                missing.append(f'{sc}/{cfg}')
+                ax.text(0.5, 0.5, 'no data yet', transform=ax.transAxes, ha='center',
+                        color=INK2)
+                continue
+            order = [m for m in g.method.unique() if m not in T35_HIGHLIGHT] + \
+                    [m for m in T35_HIGHLIGHT if m in set(g.method)]
+            for m in order:
+                h = g[g.method == m].sort_values('size')
+                y = h['dr_mean'].clip(lower=0.1)
+                if m in T35_HIGHLIGHT:
+                    col, mk, lw, ms = T35_HIGHLIGHT[m]
+                    z = 4 if m == 'WSPI' else 3
+                else:
+                    col, mk, lw, ms, z = GREY, '.', 0.9, 6, 2
+                ax.plot(h['size'], y, color=col, lw=lw, marker=mk, ms=ms,
+                        mec=SURF, mew=1.0, zorder=z)
+                if m not in T35_HIGHLIGHT:
+                    ax.annotate(m, (h['size'].iloc[-1], y.iloc[-1]), xytext=(4, -3),
+                                textcoords='offset points', fontsize=7, color=INK2)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xticks(T35_SIZES)
+            ax.set_xticklabels([str(z) for z in T35_SIZES])
+            ax.set_xlim(1.7, 75)
+            w = g[(g.method == 'WSPI') & (g['size'] == 10)]
+            if len(w):
+                notes.append(f"{sc}/{cfg}: WSPI 10x {float(w['dr_mean'].iloc[0]):.2f}")
+    h = [plt.Line2D([], [], color=v[0], marker=v[1], lw=v[2], ms=v[3] * 0.85, label=m)
+         for m, v in T35_HIGHLIGHT.items()]
+    h += [plt.Line2D([], [], color=GREY, marker='.', lw=0.9, label='other methods (name at 50x)')]
+    fig.legend(handles=h, loc='lower center', ncol=5, frameon=False, fontsize=9,
+               bbox_to_anchor=(0.5, 0.0))
+    fig.suptitle('Rank displacement of 50 low-activity items against spike size (spike in the last '
+                 'slot, one slot); same items and spike for every method; mean of 5 seeds',
+                 fontsize=11, color=INK)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.97))
+    files = save(fig, out, 'T3.5_spike_size')
+    msg = '; '.join(notes) + (f'; MISSING: {", ".join(missing)}' if missing else '')
+    return files, msg
+
+
 FIGURES = {
     'T2.2_window_curves': fig_t22_window_curves,   # SI figure of the paper
     'T2.3_tradeoff': fig_t23_tradeoff,             # kept in the program only, not in the paper
     'T2.4_surge_examples': fig_t24_surge_examples,  # main text (E11 examples)
     'T2.4_delay_ecdf': fig_t24_delay_ecdf,          # SI (E11 delay distribution)
     'T3.2_param_heatmap': fig_t32_param_heatmap,    # SI (E3 alpha x beta grid)
+    'T3.5_spike_size': fig_t35_spike_size,          # SI (E4 spike size)
 }
 
 
