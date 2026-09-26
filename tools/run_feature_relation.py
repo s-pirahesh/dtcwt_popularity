@@ -34,7 +34,11 @@ Design (decided with Sajjad, 27 Sep 2026, chat 14)
         pc_WE_y_muR             WE after mu and R    (unique part of WE)
         pc_D_y_muR              D after mu and R     (the part of WE that R does not fix)
         mean_R, mean_WE, mean_D, n_valid, n_zero, ndcg@10 (control)
-    Windows with fewer than 10 valid items get NaN statistics (none expected).
+    Windows with fewer than 10 valid items get NaN statistics.  When the next-slot
+    count is the same for every valid item, the statistics that involve y are NaN;
+    a partial correlation is NaN when nothing is left after the controls (relative
+    residual energy <= 1e-12).  Before this rule (fixed 27 Sep 2026, chat 14) such
+    a case returned rounding noise (YouTube window 277).
   * Pooled over all item-windows of the scenario (descriptive):
         quantiles of R, WE, D; share_R_gt_half; Pearson / Spearman of R and WE,
         R and log mu, WE and log mu, R and D; eta2_WE_given_R (correlation ratio,
@@ -95,6 +99,7 @@ from stats_report import cbb_means, cbb_starts, percentile_ci  # noqa: E402
 WINDOW, LEVEL, MIN_OBS, FIRST_WINDOW = 64, 3, 32, 32
 BIORT, QSHIFT = 'near_sym_a', 'qshift_a'
 MIN_VALID = 10
+RESID_TOL = 1e-12                          # relative residual energy below which a partial corr is NaN
 ETA_BINS, MI_BINS, DENS_BINS = 50, 20, 100
 QUANTILES = (0.01, 0.10, 0.25, 0.50, 0.75, 0.90, 0.99)
 B_BOOT, SEED = 10000, 42
@@ -109,6 +114,8 @@ DATASETS = {  # scenario folder -> (block, block_sens), T1.6 (tracker section E)
 WINDOW_STATS = ['sp_R_WE', 'pe_R_WE', 'sp_R_logmu', 'sp_WE_logmu', 'sp_R_D', 'sp_mu_y',
                 'pc_R_y_mu', 'pc_WE_y_mu', 'pc_S_y_mu', 'pc_R_y_muWE', 'pc_WE_y_muR',
                 'pc_D_y_muR', 'mean_R', 'mean_WE', 'mean_D']
+Y_STATS = ['sp_mu_y', 'pc_R_y_mu', 'pc_WE_y_mu', 'pc_S_y_mu', 'pc_R_y_muWE', 'pc_WE_y_muR',
+           'pc_D_y_muR']
 PROTOCOL_COLUMNS = ['window_id', 'timestamp', 'num_items', 'n_valid', 'n_zero', 'ndcg@10'] + WINDOW_STATS
 
 
@@ -193,6 +200,10 @@ def partial_corr(x, y, controls) -> float:
     A = np.column_stack([np.ones(len(x))] + list(controls))
     rx = x - A @ np.linalg.lstsq(A, x, rcond=None)[0]
     ry = y - A @ np.linalg.lstsq(A, y, rcond=None)[0]
+    for v, r in ((x, rx), (y, ry)):          # nothing left after the controls -> undefined
+        vc = v - np.mean(v)
+        if vc @ vc == 0 or r @ r <= RESID_TOL * (vc @ vc):
+            return float('nan')
     return corr(rx, ry)
 
 
@@ -206,6 +217,7 @@ def window_stats(f: dict, y: np.ndarray) -> dict:
     R, WE, D, mu, yy = f['R'][ok], f['WE'][ok], f['D'][ok], f['mu'][ok], y[ok]
     rR, rW, rD, rM, rY = ranks(R), ranks(WE), ranks(D), ranks(mu), ranks(yy)
     rS = ranks(R - WE)
+    y_const = bool(np.all(rY == rY[0]))       # same next-slot count for every item
     out.update(sp_R_WE=corr(rR, rW), pe_R_WE=corr(R, WE),
                sp_R_logmu=corr(rR, rM), sp_WE_logmu=corr(rW, rM), sp_R_D=corr(rR, rD),
                sp_mu_y=corr(rM, rY),
@@ -215,6 +227,8 @@ def window_stats(f: dict, y: np.ndarray) -> dict:
                pc_WE_y_muR=partial_corr(rW, rY, [rM, rR]),
                pc_D_y_muR=partial_corr(rD, rY, [rM, rR]),
                mean_R=float(R.mean()), mean_WE=float(WE.mean()), mean_D=float(D.mean()))
+    if y_const:                               # no ranking of the next slot: y statistics undefined
+        out.update({c: float('nan') for c in Y_STATS})
     return out
 
 

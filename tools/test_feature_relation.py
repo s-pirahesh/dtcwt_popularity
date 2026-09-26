@@ -133,6 +133,12 @@ def main():
     small = {k: v[:8] for k, v in f.items()}
     ws2 = fr.window_stats(small, y[:8])
     check('5 < MIN_VALID -> NaN', all(np.isnan(ws2[c]) for c in fr.WINDOW_STATS))
+    ws3 = fr.window_stats(f, np.full(40, 3.0))
+    check('5 constant next slot -> y statistics NaN, others kept',
+          all(np.isnan(ws3[c]) for c in fr.Y_STATS) and
+          all(np.isfinite(ws3[c]) for c in fr.WINDOW_STATS if c not in fr.Y_STATS))
+    xx = rng.normal(size=50)
+    check('5 partial corr NaN when the control explains y', np.isnan(fr.partial_corr(xx, 2 * xx + 1, [xx])))
 
     # 6. full run on synthetic data: windows and NDCG@10 equal to the protocol run of WSPI
     tmp = Path(tempfile.mkdtemp(prefix='t37_'))
