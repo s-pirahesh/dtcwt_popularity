@@ -1035,7 +1035,12 @@ def v4_tests(results, config, scenarios, metrics=MAIN_METRICS):
     out = []
     for sc in scenarios:
         t = _stats_rows(results, config, sc, 'paired_tests')
-        out.append(t[t['metric'].isin(metrics)].assign(config=config))
+        t = t[t['metric'].isin(metrics)].assign(config=config)
+        if config != 'default' and not sc.startswith('movielens'):
+            # T2.2 sweep statistics keep the scenario in run_group and the
+            # window folder (W064) in scenario; align them with the other rows.
+            t = t.assign(run_group=t['scenario'], scenario=sc)
+        out.append(t)
     return pd.concat(out, ignore_index=True)
 
 
