@@ -44,6 +44,12 @@ Figures
       WSPI; rule in evaluation/responsiveness.select_examples).  Row 1: real
       count; row 2: rank of the item for WSPI, AF(7), DTCWT+AF(64), RRD(64).
 
+  T2.4_surge_examples_2col  (task T4.6, main-text Figure 10 of paper V5)
+      Same input, examples and panels as T2.4_surge_examples, laid out for the
+      page width: 2 columns (typical, worst case) x 2 scenarios (YouTube on
+      top, taxi hourly below), each example as count panel over rank panel.
+      Added in chat 23 (27 Sep 2026); the 4-column figure is unchanged.
+
   T2.4_delay_ecdf  (task T2.4 / E11, SI figure)
       input: <results>/T2.4_responsiveness/<scenario>/<config>/delays.csv
       Share of entries in the method's Top-10 within d slots; rows = default
@@ -440,6 +446,78 @@ def fig_t24_surge_examples(results, out):
                bbox_to_anchor=(0.5, 0.0))
     fig.tight_layout(rect=(0, 0.05, 1, 1))
     files = save(fig, out, 'T2.4_surge_examples')
+    return files, '; '.join(notes)
+
+
+def fig_t24_surge_examples_2col(results, out):
+    """Main-text Figure 10 of paper V5 (T4.6): the four examples of
+    T2.4_surge_examples in a 2-column layout. Rows: YouTube count, YouTube
+    rank, taxi count, taxi rank; columns: typical entry, worst case for WSPI.
+    Same data, same selection rule and same drawing as the 4-column figure."""
+    root = results / T24_ROOT
+    blocks = []
+    for sc, title in T24_EXAMPLE_SCEN:
+        tf = root / sc / 'examples' / 'example_traces.csv'
+        ef = root / sc / 'examples' / 'example_events.csv'
+        if not (tf.exists() and ef.exists()):
+            return None, f'input missing: {tf}'
+        tr, ev = pd.read_csv(tf), pd.read_csv(ef)
+        row = []
+        for kind, klab in T24_EXAMPLE_KIND:
+            e = ev[ev.example == kind]
+            if e.empty:
+                return None, f'example {kind} missing in {ef}'
+            row.append((title, klab, e.iloc[0], tr[tr.example == kind]))
+        blocks.append(row)
+    fig = plt.figure(figsize=(7.4, 9.0), layout='constrained')
+    subs = fig.subfigures(2, 1, hspace=0.03)
+    axes = [sf.subplots(2, 2, sharex='col', gridspec_kw={'height_ratios': [1, 1.25]})
+            for sf in subs]
+    notes = []
+    for b, row in enumerate(blocks):
+        for c, (title, klab, e, t) in enumerate(row):
+            t0, R = int(e.t0), int(e.run_len)
+            base = t[(t.config == 'default') & (t.method == 'WSPI')].sort_values('window_id')
+            x = base.window_id.to_numpy() - t0
+            ax = axes[b][0, c]
+            ax2 = axes[b][1, c]
+            style_axes(ax)
+            ax.axvspan(-0.5, R - 0.5, color='#e9e6f7', zorder=0, lw=0)
+            ax.plot(x, base['count'], color=INK, lw=1.2, zorder=3)
+            ax.axvline(0, color=INK2, lw=0.8, ls=':')
+            ax.set_title(f'{title}: {klab}\n'
+                         f'item {e.item_id}; delay WSPI {int(e.delay_WSPI)}, AF {int(e.delay_AF)} slots',
+                         fontsize=8.5, color=INK)
+            ax.tick_params(labelbottom=False)
+            if base['count'].max() >= 1e4:     # YouTube: 400k instead of an offset label
+                ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: '0' if v == 0 else f'{v / 1e3:.0f}k'))
+            if c == 0:
+                ax.set_ylabel('real count\nper slot', color=INK2, fontsize=8.5)
+            style_axes(ax2)
+            ax2.axvspan(-0.5, R - 0.5, color='#e9e6f7', zorder=0, lw=0)
+            ax2.axhline(10, color=INK2, lw=0.9, ls='--', zorder=1)
+            ax2.axvline(0, color=INK2, lw=0.8, ls=':')
+            ax2.plot(x, base['truth_rank'].clip(upper=T24_RANK_CAP), color=GREY, lw=1.0, zorder=2)
+            for cfg, m, lab, col, mk, lw in T24_LINES:
+                g = t[(t.config == cfg) & (t.method == m)].sort_values('window_id')
+                ax2.plot(g.window_id - t0, g['rank'].clip(upper=T24_RANK_CAP), color=col,
+                         lw=lw * 0.85, marker=mk, ms=2.6, mec=SURF, mew=0.4,
+                         zorder=4 if m == 'WSPI' else 3)
+            ax2.set_yscale('log')
+            ax2.set_ylim(T24_RANK_CAP * 1.15, 0.85)
+            ax2.set_yticks([1, 3, 10, 30, 100])
+            ax2.set_yticklabels(['1', '3', '10', '30', '100+'])
+            ax2.set_xlabel('slots from entry (t0 = 0)', color=INK2, fontsize=8.5)
+            if c == 0:
+                ax2.set_ylabel('rank of the\nitem (log)', color=INK2, fontsize=8.5)
+            notes.append(f"{title}/{klab}: item {e.item_id}, t0={t0}, run={R}, "
+                         f"delay WSPI {int(e.delay_WSPI)}, AF {int(e.delay_AF)}")
+    h = [plt.Line2D([], [], color=v[3], marker=v[4], lw=v[5] * 0.85, ms=4, label=v[2]) for v in T24_LINES]
+    h += [plt.Line2D([], [], color=GREY, lw=1.0, label='true rank'),
+          plt.Line2D([], [], color=INK2, ls='--', lw=0.9, label='Top-10 boundary'),
+          Patch(color='#e9e6f7', label='item in the true Top-10')]
+    fig.legend(handles=h, loc='outside lower center', ncol=4, frameon=False, fontsize=8)
+    files = save(fig, out, 'T2.4_surge_examples_2col')
     return files, '; '.join(notes)
 
 
@@ -1345,6 +1423,7 @@ FIGURES = {
     'T2.2_window_curves': fig_t22_window_curves,   # SI figure of the paper
     'T2.3_tradeoff': fig_t23_tradeoff,             # kept in the program only, not in the paper
     'T2.4_surge_examples': fig_t24_surge_examples,  # main text (E11 examples)
+    'T2.4_surge_examples_2col': fig_t24_surge_examples_2col,  # main text, Figure 10 of V5 (T4.6)
     'T2.4_delay_ecdf': fig_t24_delay_ecdf,          # SI (E11 delay distribution)
     'T3.2_param_heatmap': fig_t32_param_heatmap,    # SI (E3 alpha x beta grid)
     'T3.5_spike_size': fig_t35_spike_size,          # SI (E4 spike size)
