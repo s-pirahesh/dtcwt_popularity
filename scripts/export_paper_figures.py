@@ -14,6 +14,11 @@ that no scaling is needed and the text keeps its size:
   * fonts are embedded as TrueType (Type 42), not Type 3;
   * PDF (vector) and PNG (600 dpi) are written with the paper file names.
 
+Figures 6 and 7 keep the T3.10 layout (date axis, rolling mean of one period)
+but draw every one of the nine methods in its own V4 colour (METHOD_COLORS and
+line widths of evaluation/visualizer.py) instead of five coloured and four grey
+lines (decision of Sajjad, chat 27).
+
 Nothing in generate_revision_figures.py is changed: its functions are called
 unchanged; only plt.subplots / plt.figure (size), FontProperties.set_size
 (font clip), Legend (number of legend columns) and the save functions
@@ -34,6 +39,7 @@ matplotlib version, md5 of every file).  Nothing is written to results.
 Figure 1 is TikZ (V5/source/fig/fig1_pipeline.tex) and is not built here.
 """
 import argparse
+import importlib.util
 import hashlib
 import json
 import sys
@@ -43,6 +49,8 @@ from pathlib import Path
 
 import matplotlib
 matplotlib.use('Agg')
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib import font_manager, legend as mlegend
@@ -61,12 +69,61 @@ PAPER_FIGURES = {
     'fig3': (g.fig_t310_fig3, 0.92, 2.9, 5),
     'fig4': (g.fig_t310_fig4, 0.92, 2.9, 5),
     'fig5': (g.fig_t310_fig5, 0.92, 2.9, 5),
-    'fig6': (g.fig_t310_fig6, 0.92, 2.5, 3),
-    'fig7': (g.fig_t310_fig7, 0.92, 2.5, 3),
+    'fig6': (lambda r, o: fig_time_all_colours(
+        r, o, 'youtube_hourly', 'T3.10_fig6_youtube_rsi_time',
+        'YouTube Hourly — RSI@10 over the common evaluation windows'), 0.92, 2.6, 5),
+    'fig7': (lambda r, o: fig_time_all_colours(
+        r, o, 'taxi_hourly', 'T3.10_fig7_taxi_rsi_time',
+        'NYC Yellow Taxi Hourly — RSI@10 over the common evaluation windows'), 0.92, 2.6, 5),
     'fig8': (g.fig_t310_fig8, 1.00, 2.7, 3),
     'fig_movielens': (g.fig_t310_movielens, 0.85, 4.1, 5),
     'fig_surge': (g.fig_t24_surge_examples_2col, 0.95, 7.6, 4),
 }
+
+
+REPO = Path(__file__).resolve().parent.parent
+
+
+def _v4_line_palette():
+    """Colours and line widths of the V4 line charts (evaluation/visualizer.py:
+    METHOD_COLORS and _lw), read from that file inside an rc_context so that its
+    global rcParams do not leak into the other figures."""
+    with matplotlib.rc_context():
+        spec = importlib.util.spec_from_file_location(
+            'v4_visualizer', REPO / 'evaluation' / 'visualizer.py')
+        vis = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(vis)
+        return dict(vis.METHOD_COLORS), {m: vis._lw(m) for m in vis.METHOD_COLORS}
+
+
+def fig_time_all_colours(results, out, scenario, name, title):
+    """Figures 6 and 7: the T3.10 figure (common windows, date axis, rolling mean
+    of one period, same axes and title), but every one of the nine methods is
+    drawn in its own V4 colour (no grey group).  Decision of Sajjad, chat 27:
+    only the colours change."""
+    try:
+        df, n = g.v4_window_series(results, 'default', scenario)
+    except (FileNotFoundError, KeyError, ValueError) as e:
+        return None, f'input missing or inconsistent: {e}'
+    colours, widths = _v4_line_palette()
+    roll = g.TIME_ROLL[scenario]
+    fig, ax = plt.subplots(figsize=(12, 4.6))
+    g._v4_axes(ax)
+    ax.xaxis.grid(True, alpha=0.9, linewidth=1.0, color='white')
+    order = g.V4_BASELINES + ['DWT+AF', 'DTCWT+AF', 'WSPI']   # WSPI drawn last (on top)
+    for k, m in enumerate(order):
+        ax.plot(df['time'], df[m].rolling(roll, center=True, min_periods=roll // 2).mean(),
+                color=colours[m], lw=widths[m] * 0.6, zorder=3 + k, label=m)
+    ax.set_ylabel(f'RSI@10  (rolling mean, {roll} {g.TIME_UNIT[scenario]})', fontsize=10)
+    ax.set_ylim(None, 1.01)
+    ax.set_title(title, fontsize=10.5)
+    leg = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.10), ncol=5,
+                    frameon=False, fontsize=9)
+    for t in leg.get_texts():
+        if t.get_text() in g.V4_WAVELET:
+            t.set_color(g.V4_PURPLE)
+            t.set_fontweight('bold')
+    return g._save_v4(fig, out, name), f'{n} common windows, rolling mean {roll} (centred); V4 colours'
 
 
 def _clip(size):
