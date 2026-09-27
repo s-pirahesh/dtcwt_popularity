@@ -97,6 +97,35 @@ Figures
       (batch 1e4), with the exact size of the DTCWT coefficients.  Hardware and
       versions from bench/metadata/bench_run.json in the title.
 
+  T3.10_fig2 ... T3.10_fig8  (task T3.10, main-text Figures 2-8 of the paper)
+      Rebuilt from the causal protocol-V5 runs with the look of paper V4
+      (colours, grey axes, hatched wavelet-based bars of
+      evaluation/cross_dataset_visualizer.py).  Default configuration
+      (baselines 7, wavelet-based 64), common windows of all nine methods.
+      input: <results>/T1.5_causal_universe/T1.4_protocol_v5/<scenario>/
+             comparison/summary_common_windows.csv and protocol/*_protocol.csv;
+             95 % block-bootstrap CI from <results>/T1.6_stats/causal/all_method_summary.csv
+             (the mean there is checked against the summary; mismatch = stop).
+        fig2 NDCG@10, fig3 Spearman rho, fig4 RSI@10, fig5 Delta Rank (log scale):
+             grouped bars, 4 scenarios x 9 methods, whiskers = 95 % CI.
+        fig6 YouTube, fig7 NYC Taxi hourly: window-by-window RSI@10, centred
+             rolling mean of one period (24 h, 168 h); WSPI, DTCWT+AF, DWT+AF,
+             AF, RRD in colour, the other baselines grey; x axis = date (UTC).
+        fig8 taxi granularity: (a) RSI@10, (b) Delta Rank, (c) NDCG@10 for WSPI,
+             DTCWT+AF and the best baseline of each point (PFRF excluded).
+
+  T3.10_fig_movielens  (task T3.10, paper Subsection 4.10)
+      input: <results>/T3.9_movielens/default/movielens_{daily,weekly}/comparison/
+             summary_common_windows.csv + <results>/T1.6_stats/T3.9_movielens/
+      2 x 2 bars (NDCG@10, rho, RSI@10, Delta Rank log), groups daily/weekly.
+
+  T3.10_si_movielens_rsi_time  (task T3.10, SI and thesis)
+      Window-by-window RSI@10 on MovieLens, rolling 28 days / 13 weeks.
+
+  Tables of T3.10 (LaTeX) come from scripts/generate_revision_tables.py and the
+  thesis-only figures from scripts/generate_thesis_figures.py; both import the
+  loaders v4_values / v4_tests / v4_window_series of this file.
+
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_revision_figures.py --results results\revision_v5 ^
@@ -893,6 +922,420 @@ def fig_t38_runtime(results, out):
     return files, '; '.join(notes)
 
 
+# =================================================================== T3.10
+# Main-text figures of the paper rebuilt from the causal protocol-V5 runs,
+# with the visual style of paper V4 (evaluation/cross_dataset_visualizer.py:
+# Paired colours, light-grey axes, hatched wavelet-based bars).  The style
+# constants are copied here, not imported, because importing that module
+# changes the global matplotlib style of every other figure of this program.
+# Added in task T3.10 (chat 17, 27 Sep 2026); decisions in 07_Task_Tracker.md
+# section "e".  The same loaders are used by scripts/generate_revision_tables.py
+# and scripts/generate_thesis_figures.py, so figures and tables share numbers.
+
+V4_BASELINES = ['AF', 'CompoundPop', 'EWMA', 'PFRF', 'RRD', 'VSE']
+V4_WAVELET = ['DWT+AF', 'DTCWT+AF', 'WSPI']
+V4_ORDER = V4_BASELINES + V4_WAVELET
+V4_COLORS = {'AF': '#A6CEE3', 'CompoundPop': '#B2DF8A', 'EWMA': '#FDBF6F',
+             'PFRF': '#CAB2D6', 'RRD': '#FB9A99', 'VSE': '#FFFF99',
+             'DWT+AF': '#FF8C00', 'DTCWT+AF': '#4682B4', 'WSPI': '#C71585',
+             # extra methods of the equal-window runs (SI and thesis only)
+             'SMA': '#6A3D9A', 'EWMA-eq': '#B15928', 'Holt': '#8C8C8C'}
+V4_BG, V4_HATCH, V4_EDGE, V4_EDGE_LW = '#EAEAF2', '//', '#222222', 1.2
+V4_PURPLE, V4_DPI = '#7E1C9F', 300
+V4_SCENARIOS = [('youtube_hourly', 'YouTube Hourly'),
+                ('taxi_hourly', 'NYC Yellow Taxi Hourly'),
+                ('taxi_30min', 'NYC Yellow Taxi 30m'),
+                ('taxi_5min', 'NYC Yellow Taxi 5m')]
+ML_SCENARIOS = [('movielens_daily', 'MovieLens Daily'),
+                ('movielens_weekly', 'MovieLens Weekly')]
+MAIN_METRICS = ['ndcg@10', 'spearman_rho', 'rsi@10', 'robustness_distortion']
+V4_YLABEL = {'ndcg@10': 'NDCG@10  (higher is better ↑)',
+             'spearman_rho': 'Spearman ρ  (higher is better ↑)',
+             'rsi@10': 'RSI@10  (higher is better ↑)',
+             'robustness_distortion': 'ΔRank  (lower is better ↓, log scale)'}
+V4_SHORT = {'ndcg@10': 'NDCG@10', 'spearman_rho': 'Spearman ρ',
+            'rsi@10': 'RSI@10', 'robustness_distortion': 'ΔRank'}
+# rolling-mean length of the window-by-window figures = one natural period
+# (YouTube 1 day, taxi 1 week = the bootstrap blocks of T1.6; MovieLens 4 weeks
+# and 13 weeks = the sensitivity blocks of T3.9)
+TIME_ROLL = {'youtube_hourly': 24, 'taxi_hourly': 168,
+             'movielens_daily': 28, 'movielens_weekly': 13}
+TIME_UNIT = {'youtube_hourly': 'hours', 'taxi_hourly': 'hours',
+             'movielens_daily': 'days', 'movielens_weekly': 'weeks'}
+# window-by-window figures: these are drawn in colour, other baselines grey
+TIME_HILITE = {'WSPI': ('#C71585', 2.4), 'DTCWT+AF': ('#4682B4', 1.6),
+               'DWT+AF': ('#FF8C00', 1.3), 'AF': ('#33A02C', 1.1),
+               'RRD': ('#E31A1C', 1.1)}
+
+
+def v4_summary_path(results, config, scenario):
+    """comparison/summary_common_windows.csv of one run (paper configuration)."""
+    if scenario.startswith('movielens'):
+        base = results / 'T3.9_movielens' / config / scenario
+        if config == 'equal64':
+            base = base / 'W064'
+    elif config == 'default':
+        base = results / 'T1.5_causal_universe' / 'T1.4_protocol_v5' / scenario
+    elif config == 'equal64':
+        base = results / 'T2.2_window_sweep' / scenario / 'W064'
+    else:
+        raise ValueError(config)
+    return base / 'comparison' / 'summary_common_windows.csv'
+
+
+def v4_protocol_dir(results, config, scenario):
+    return v4_summary_path(results, config, scenario).parent.parent / 'protocol'
+
+
+def _stats_rows(results, config, scenario, kind):
+    """Rows of the T1.6 statistics (kind = method_summary | paired_tests)."""
+    name = f'all_{kind}.csv'
+    if scenario.startswith('movielens'):
+        d = pd.read_csv(results / 'T1.6_stats' / 'T3.9_movielens' / name)
+        return d[(d['run_group'] == config) & (d['scenario'] == scenario)]
+    if config == 'default':
+        d = pd.read_csv(results / 'T1.6_stats' / 'causal' / name)
+        return d[(d['run_group'] == 'T1.4_protocol_v5') & (d['scenario'] == scenario)]
+    # T2.2 sweep statistics: run_group = scenario, scenario = window folder
+    d = pd.read_csv(results / 'T1.6_stats' / 'T2.2_window_sweep' / name)
+    return d[(d['run_group'] == scenario) & (d['scenario'] == 'W064')]
+
+
+def v4_values(results, config, scenarios, metrics=MAIN_METRICS):
+    """Mean, 95 % block-bootstrap CI (T1.6) and ties share for every method.
+
+    The mean of the statistics file is checked against the run's own
+    summary_common_windows.csv (relative difference <= 1e-9); a mismatch stops
+    the program.  Returns a long DataFrame (config, scenario, method, metric,
+    mean, ci_low, ci_high, n_windows, ties_top21_share, block, summary_mean,
+    rel_diff)."""
+    rows = []
+    for sc in scenarios:
+        summ = pd.read_csv(v4_summary_path(results, config, sc)).set_index('method')
+        st = _stats_rows(results, config, sc, 'method_summary')
+        if st.empty:
+            raise FileNotFoundError(f'no T1.6 statistics for {config}/{sc}')
+        for _, r in st[st['metric'].isin(metrics)].iterrows():
+            m, met = r['method'], r['metric']
+            sm = float(summ.loc[m, f'{met}_mean'])
+            rel = abs(sm - r['mean']) / max(abs(sm), 1e-12)
+            if rel > 1e-9:
+                raise ValueError(f'{config}/{sc}/{m}/{met}: statistics mean {r["mean"]} '
+                                 f'!= summary mean {sm}')
+            rows.append(dict(config=config, scenario=sc, method=m, metric=met,
+                             mean=r['mean'], ci_low=r['ci_low'], ci_high=r['ci_high'],
+                             n_windows=int(r['n_windows']),
+                             ties_top21_share=float(summ.loc[m, 'ties_top21_share']),
+                             block=r['block'], summary_mean=sm, rel_diff=rel))
+    return pd.DataFrame(rows)
+
+
+def v4_tests(results, config, scenarios, metrics=MAIN_METRICS):
+    """Paired tests against WSPI (T1.6): verdict, Holm block p, Cliff's delta."""
+    out = []
+    for sc in scenarios:
+        t = _stats_rows(results, config, sc, 'paired_tests')
+        out.append(t[t['metric'].isin(metrics)].assign(config=config))
+    return pd.concat(out, ignore_index=True)
+
+
+def _v4_axes(ax):
+    ax.set_facecolor(V4_BG)
+    ax.set_axisbelow(True)
+    ax.yaxis.grid(True, alpha=0.9, linewidth=1.0, color='white')
+    ax.xaxis.grid(False)
+    for sp in ('top', 'right'):
+        ax.spines[sp].set_visible(False)
+    ax.tick_params(axis='x', length=0)
+
+
+def _v4_legend(fig_or_ax, methods, anchor=(0.5, -0.10), ncol=None, **kw):
+    handles = []
+    for m in methods:
+        pk = dict(facecolor=V4_COLORS[m], label=m)
+        if m in V4_WAVELET:
+            pk.update(edgecolor=V4_EDGE, linewidth=V4_EDGE_LW, hatch=V4_HATCH)
+        handles.append(Patch(**pk))
+    leg = fig_or_ax.legend(handles=handles, loc='upper center', bbox_to_anchor=anchor,
+                           fontsize=9, frameon=False, ncol=ncol or len(methods),
+                           title='Method', title_fontsize=9, handlelength=1.4,
+                           columnspacing=1.0, **kw)
+    for text, m in zip(leg.get_texts(), methods):
+        if m in V4_WAVELET:
+            text.set_color(V4_PURPLE)
+            text.set_fontweight('bold')
+    return leg
+
+
+def _v4_bar_panel(ax, vals, groups, metric, methods=V4_ORDER, width=0.085):
+    """One V4-style grouped bar panel with 95 % CI whiskers.
+    groups = [(scenario id, label)]; vals = v4_values() rows of one config."""
+    v = vals[vals['metric'] == metric].set_index(['scenario', 'method'])
+    centers = np.arange(len(groups), dtype=float)
+    offsets = (np.arange(len(methods)) - (len(methods) - 1) / 2.0) * width
+    _v4_axes(ax)
+    for i, m in enumerate(methods):
+        xs = centers + offsets[i]
+        ys = np.array([v.loc[(g, m), 'mean'] for g, _ in groups])
+        lo = np.array([v.loc[(g, m), 'ci_low'] for g, _ in groups])
+        hi = np.array([v.loc[(g, m), 'ci_high'] for g, _ in groups])
+        kw = dict(width=width, color=V4_COLORS[m], zorder=3)
+        if m in V4_WAVELET:
+            kw.update(edgecolor=V4_EDGE, linewidth=V4_EDGE_LW, hatch=V4_HATCH)
+        else:
+            kw.update(edgecolor='white', linewidth=0.4)
+        ax.bar(xs, ys, **kw)
+        ax.errorbar(xs, ys, yerr=[ys - lo, hi - ys], fmt='none', ecolor='#333333',
+                    elinewidth=0.8, capsize=1.6, zorder=4)
+    ax.set_xticks(centers)
+    ax.set_xticklabels([lab for _, lab in groups], fontsize=10)
+    ax.set_xlim(centers[0] - 0.55, centers[-1] + 0.55)
+    if metric == 'robustness_distortion':
+        ax.set_yscale('log')
+        lo_all = v['ci_low'].min()
+        ax.set_ylim(10 ** np.floor(np.log10(max(lo_all, 1e-3) * 0.8)),
+                    v['ci_high'].max() * 1.6)
+        ax.yaxis.grid(True, which='major', alpha=0.9, linewidth=1.0, color='white')
+    else:
+        ax.set_ylim(0, 1.10)
+
+
+def _save_v4(fig, out, name):
+    for ext in ('pdf', 'png'):
+        fig.savefig(out / f'{name}.{ext}', dpi=V4_DPI, bbox_inches='tight')
+    plt.close(fig)
+    return [f'{name}.pdf', f'{name}.png']
+
+
+def _fig_t310_bars(results, out, metric, name):
+    try:
+        vals = v4_values(results, 'default', [s for s, _ in V4_SCENARIOS])
+    except (FileNotFoundError, KeyError) as e:
+        return None, f'input missing: {e}'
+    fig, ax = plt.subplots(figsize=(12, 5.5))
+    _v4_bar_panel(ax, vals, V4_SCENARIOS, metric)
+    ax.set_ylabel(V4_YLABEL[metric], fontsize=10)
+    _v4_legend(ax, V4_ORDER)
+    w = vals[(vals['metric'] == metric) & (vals['method'] == 'WSPI')]
+    nwin = ', '.join(f'{s}={n}' for s, n in zip(w['scenario'], w['n_windows']))
+    return _save_v4(fig, out, name), (f'default configuration (baselines 7, wavelet-based 64), '
+                                      f'common windows {nwin}; whiskers = 95% block-bootstrap CI (T1.6)')
+
+
+def fig_t310_fig2(results, out):
+    """Paper Figure 2: NDCG@10, four scenarios, nine methods."""
+    return _fig_t310_bars(results, out, 'ndcg@10', 'T3.10_fig2_ndcg10')
+
+
+def fig_t310_fig3(results, out):
+    """Paper Figure 3: Spearman rho."""
+    return _fig_t310_bars(results, out, 'spearman_rho', 'T3.10_fig3_spearman')
+
+
+def fig_t310_fig4(results, out):
+    """Paper Figure 4: RSI@10."""
+    return _fig_t310_bars(results, out, 'rsi@10', 'T3.10_fig4_rsi10')
+
+
+def fig_t310_fig5(results, out):
+    """Paper Figure 5: Delta Rank (log scale; values span 4 to about 215)."""
+    return _fig_t310_bars(results, out, 'robustness_distortion', 'T3.10_fig5_deltarank')
+
+
+def v4_window_series(results, config, scenario, metric='rsi@10', methods=V4_ORDER):
+    """Window-by-window values on the common windows of all methods.
+    Returns (DataFrame index=window_id with a 'time' column + one column per
+    method, n_common).  The number of common windows is checked against
+    summary_common_windows.csv."""
+    pdir = v4_protocol_dir(results, config, scenario)
+    frames = {}
+    for m in methods:
+        d = pd.read_csv(pdir / f'{m}_protocol.csv', usecols=['window_id', 'timestamp', metric])
+        frames[m] = d.set_index('window_id')
+    common = sorted(set.intersection(*(set(f.index) for f in frames.values())))
+    summ = pd.read_csv(v4_summary_path(results, config, scenario))
+    n_expected = int(summ['n_windows'].iloc[0])
+    if len(common) != n_expected:
+        raise ValueError(f'{scenario}: {len(common)} common windows, summary says {n_expected}')
+    df = pd.DataFrame({m: frames[m].loc[common, metric].to_numpy() for m in methods},
+                      index=pd.Index(common, name='window_id'))
+    ts = frames['WSPI'].loc[common, 'timestamp']
+    df.insert(0, 'time', pd.to_datetime(ts.to_numpy(), unit='ms', utc=True))
+    return df, len(common)
+
+
+def _v4_time_panel(ax, df, roll, unit, methods=V4_ORDER):
+    _v4_axes(ax)
+    ax.xaxis.grid(True, alpha=0.9, linewidth=1.0, color='white')
+    others = [m for m in methods if m not in TIME_HILITE]
+    for m in others:
+        ax.plot(df['time'], df[m].rolling(roll, center=True, min_periods=roll // 2).mean(),
+                color='#9A9A9A', lw=0.8, alpha=0.8, zorder=2)
+    for m in [m for m in ['AF', 'RRD', 'DWT+AF', 'DTCWT+AF', 'WSPI'] if m in methods]:
+        c, lw = TIME_HILITE[m]
+        ax.plot(df['time'], df[m].rolling(roll, center=True, min_periods=roll // 2).mean(),
+                color=c, lw=lw, zorder=5 if m == 'WSPI' else 3, label=m)
+    ax.plot([], [], color='#9A9A9A', lw=0.8, label='Other baselines (' + ', '.join(others) + ')')
+    ax.set_ylabel(f'RSI@10  (rolling mean, {roll} {unit})', fontsize=10)
+    ax.set_ylim(None, 1.01)
+
+
+def _fig_t310_time(results, out, scenario, name, title):
+    try:
+        df, n = v4_window_series(results, 'default', scenario)
+    except (FileNotFoundError, KeyError, ValueError) as e:
+        return None, f'input missing or inconsistent: {e}'
+    roll = TIME_ROLL[scenario]
+    fig, ax = plt.subplots(figsize=(12, 4.6))
+    _v4_time_panel(ax, df, roll, TIME_UNIT[scenario])
+    ax.set_title(title, fontsize=10.5)
+    leg = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.10), ncol=6,
+                    frameon=False, fontsize=9)
+    for t in leg.get_texts():
+        if t.get_text() in V4_WAVELET:
+            t.set_color(V4_PURPLE)
+            t.set_fontweight('bold')
+    return _save_v4(fig, out, name), f'{n} common windows, rolling mean {roll} (centred)'
+
+
+def fig_t310_fig6(results, out):
+    """Paper Figure 6: window-by-window RSI@10, YouTube (rolling mean 24 h)."""
+    return _fig_t310_time(results, out, 'youtube_hourly', 'T3.10_fig6_youtube_rsi_time',
+                          'YouTube Hourly — RSI@10 over the common evaluation windows')
+
+
+def fig_t310_fig7(results, out):
+    """Paper Figure 7: window-by-window RSI@10, NYC Taxi hourly (rolling mean 168 h)."""
+    return _fig_t310_time(results, out, 'taxi_hourly', 'T3.10_fig7_taxi_rsi_time',
+                          'NYC Yellow Taxi Hourly — RSI@10 over the common evaluation windows')
+
+
+def v4_best_traditional(vals, scenario, metric, exclude=('PFRF',)):
+    """Best baseline (PFRF excluded, as in V4) for one scenario and metric."""
+    v = vals[(vals['scenario'] == scenario) & (vals['metric'] == metric)
+             & vals['method'].isin([m for m in V4_BASELINES if m not in exclude])]
+    r = v.loc[v['mean'].idxmin()] if metric == 'robustness_distortion' else v.loc[v['mean'].idxmax()]
+    return r
+
+
+def fig_t310_fig8(results, out):
+    """Paper Figure 8: effect of temporal granularity (taxi hourly, 30 min, 5 min).
+    Panels (a) RSI@10, (b) Delta Rank, (c) NDCG@10 (added in T3.10 for the
+    accuracy-stability frame).  Lines: WSPI, DTCWT+AF and the best baseline of
+    each granularity (PFRF excluded), whose name is written at the point."""
+    gran = V4_SCENARIOS[1:]
+    try:
+        vals = v4_values(results, 'default', [s for s, _ in gran])
+    except (FileNotFoundError, KeyError) as e:
+        return None, f'input missing: {e}'
+    x = np.arange(len(gran))
+    styles = {'WSPI': dict(color=V4_COLORS['WSPI'], ls='-', lw=2.6, marker='o', ms=7.5,
+                           markeredgecolor=V4_EDGE, markeredgewidth=0.9, zorder=6),
+              'DTCWT+AF': dict(color=V4_COLORS['DTCWT+AF'], ls='--', lw=2.0, marker='s', ms=6.5,
+                               markeredgecolor=V4_EDGE, markeredgewidth=0.7, zorder=5),
+              'Best traditional': dict(color='#888888', ls=':', lw=1.9, marker='^', ms=6.5, zorder=4)}
+    panels = [('rsi@10', '(a) Temporal stability', '{:.3f}', False),
+              ('robustness_distortion', '(b) Noise robustness', '{:.2f}', True),
+              ('ndcg@10', '(c) Ranking quality', '{:.3f}', True)]
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.8))
+    for ax, (met, title, fmt, below) in zip(axes, panels):
+        _v4_axes(ax)
+        v = vals[vals['metric'] == met].set_index(['scenario', 'method'])
+        series = {}
+        for m in ('WSPI', 'DTCWT+AF'):
+            series[m] = [v.loc[(s, m)] for s, _ in gran]
+        best = [v4_best_traditional(vals, s, met) for s, _ in gran]
+        series['Best traditional'] = best
+        for name, rows in series.items():
+            ys = np.array([r['mean'] for r in rows])
+            lo = np.array([r['ci_low'] for r in rows])
+            hi = np.array([r['ci_high'] for r in rows])
+            ax.plot(x, ys, label=name, **styles[name])
+            ax.errorbar(x, ys, yerr=[ys - lo, hi - ys], fmt='none',
+                        ecolor=styles[name]['color'], elinewidth=1.0, capsize=3, zorder=3)
+        for xi, r in zip(x, series['WSPI']):
+            ax.annotate(fmt.format(r['mean']), (xi, r['mean']), textcoords='offset points',
+                        xytext=(0, -16 if below else 9), ha='center', fontsize=8.5,
+                        color=V4_COLORS['WSPI'], fontweight='bold')
+        for xi, r in zip(x, best):
+            ax.annotate(r['method'], (xi, r['mean']), textcoords='offset points',
+                        xytext=(8, 4), ha='left', fontsize=7.5, color='#555555')
+        ax.set_xticks(x)
+        ax.set_xticklabels(['Hourly', '30-min', '5-min'], fontsize=10)
+        ax.set_xlim(x[0] - 0.35, x[-1] + 0.45)
+        ylab = V4_YLABEL[met].replace(', log scale', '')
+        ax.set_ylabel(ylab, fontsize=10)
+        ax.set_title(title, fontsize=10.5)
+        if met == 'robustness_distortion':
+            ax.set_ylim(0, max(max(r['ci_high'] for r in rows) for rows in series.values()) * 1.15)
+        else:
+            lo_all = min(min(r['ci_low'] for r in rows) for rows in series.values())
+            hi_all = max(max(r['ci_high'] for r in rows) for rows in series.values())
+            pad = (hi_all - lo_all) * 0.25
+            ax.set_ylim(lo_all - pad, hi_all + pad)
+    h, lab = axes[0].get_legend_handles_labels()
+    leg = fig.legend(h, lab, loc='upper center', bbox_to_anchor=(0.5, 0.02), ncol=3,
+                     frameon=False, fontsize=9, handlelength=2.2, columnspacing=2.0)
+    for t in leg.get_texts():
+        if t.get_text() in ('WSPI', 'DTCWT+AF'):
+            t.set_color(V4_PURPLE)
+            t.set_fontweight('bold')
+    fig.suptitle('NYC Yellow Taxi — effect of temporal granularity', fontsize=11)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.97))
+    return _save_v4(fig, out, 'T3.10_fig8_granularity'), \
+        'default configuration; best traditional = best of the six baselines except PFRF at each point; whiskers = 95% CI'
+
+
+def ml_bars_figure(results, out, config, name, methods=V4_ORDER):
+    """2 x 2 bar figure on MovieLens (daily and weekly) for one configuration."""
+    vals = v4_values(results, config, [s for s, _ in ML_SCENARIOS])
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8.4))
+    groups = [(s, lab.replace('MovieLens ', '')) for s, lab in ML_SCENARIOS]
+    for ax, met, tag in zip(axes.ravel(), MAIN_METRICS, 'abcd'):
+        _v4_bar_panel(ax, vals, groups, met, methods=methods, width=0.8 / len(methods))
+        ax.set_ylabel(V4_YLABEL[met], fontsize=9.5)
+        ax.set_title(f'({tag}) {V4_SHORT[met]}', fontsize=10.5)
+    _v4_legend(fig, methods, anchor=(0.5, 0.02))
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    w = vals[(vals['metric'] == 'ndcg@10') & (vals['method'] == 'WSPI')]
+    return _save_v4(fig, out, name), \
+        f'{config}; common windows ' + ', '.join(f'{s}={n}' for s, n in zip(w['scenario'], w['n_windows']))
+
+
+def fig_t310_movielens(results, out):
+    """Paper figure fig:movielens (Subsection 4.10): default configuration,
+    NDCG@10, rho, RSI@10, Delta Rank (log), daily and weekly, 95 % CI."""
+    try:
+        return ml_bars_figure(results, out, 'default', 'T3.10_fig_movielens')
+    except (FileNotFoundError, KeyError) as e:
+        return None, f'input missing: {e}'
+
+
+def fig_t310_ml_rsi_time(results, out):
+    """SI (and thesis) figure: window-by-window RSI@10 on MovieLens, default
+    configuration; rows daily (rolling 28 days) and weekly (rolling 13 weeks)."""
+    try:
+        data = [(s, lab) + v4_window_series(results, 'default', s) for s, lab in ML_SCENARIOS]
+    except (FileNotFoundError, KeyError, ValueError) as e:
+        return None, f'input missing or inconsistent: {e}'
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8.2))
+    msg = []
+    for ax, (s, lab, df, n) in zip(axes, data):
+        _v4_time_panel(ax, df, TIME_ROLL[s], TIME_UNIT[s])
+        ax.set_title(f'{lab} — RSI@10 over the common evaluation windows', fontsize=10.5)
+        msg.append(f'{s}: {n} windows, rolling {TIME_ROLL[s]}')
+    h, lab = axes[0].get_legend_handles_labels()
+    leg = fig.legend(h, lab, loc='upper center', bbox_to_anchor=(0.5, 0.02), ncol=6,
+                     frameon=False, fontsize=9)
+    for t in leg.get_texts():
+        if t.get_text() in V4_WAVELET:
+            t.set_color(V4_PURPLE)
+            t.set_fontweight('bold')
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    return _save_v4(fig, out, 'T3.10_si_movielens_rsi_time'), '; '.join(msg)
+
+
+
 FIGURES = {
     'T2.2_window_curves': fig_t22_window_curves,   # SI figure of the paper
     'T2.3_tradeoff': fig_t23_tradeoff,             # kept in the program only, not in the paper
@@ -903,6 +1346,15 @@ FIGURES = {
     'T3.6_shift_invariance': fig_t36_shift_invariance,  # SI (E5 shift test)
     'T3.7_feature_relation': fig_t37_feature_relation,  # SI (E7 R and WE)
     'T3.8_runtime': fig_t38_runtime,                    # SI (E9 runtime and memory)
+    'T3.10_fig2': fig_t310_fig2,                        # main text, Figure 2 (NDCG@10)
+    'T3.10_fig3': fig_t310_fig3,                        # main text, Figure 3 (Spearman rho)
+    'T3.10_fig4': fig_t310_fig4,                        # main text, Figure 4 (RSI@10)
+    'T3.10_fig5': fig_t310_fig5,                        # main text, Figure 5 (Delta Rank)
+    'T3.10_fig6': fig_t310_fig6,                        # main text, Figure 6 (YouTube over time)
+    'T3.10_fig7': fig_t310_fig7,                        # main text, Figure 7 (taxi over time)
+    'T3.10_fig8': fig_t310_fig8,                        # main text, Figure 8 (granularity)
+    'T3.10_fig_movielens': fig_t310_movielens,          # main text, Subsection 4.10
+    'T3.10_si_movielens_rsi_time': fig_t310_ml_rsi_time,  # SI + thesis
 }
 
 
