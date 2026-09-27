@@ -87,6 +87,16 @@ Figures
       evenly over the three bands).  Spearman correlation and eta^2(WE | R) in
       each panel.
 
+  T3.8_runtime  (task T3.8 / E9, SI figure)
+      input: <results>/T3.8_runtime/bench/runtime_grid.csv and
+             <results>/T3.8_runtime/memory/tracemalloc_grid.csv
+      Measured cost of the nine protocol-V5 scorers on one CPU core (median of
+      10 repeats, band = IQR): (a) time to score all M items against M, default
+      windows (baselines 7, wavelet-based 64); (b) microseconds per item-window
+      against N (M = 1e4); (c) peak traced working memory per item against N
+      (batch 1e4), with the exact size of the DTCWT coefficients.  Hardware and
+      versions from bench/metadata/bench_run.json in the title.
+
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_revision_figures.py --results results\revision_v5 ^
@@ -786,6 +796,103 @@ def fig_t37_feature_relation(results, out):
     return files, msg
 
 
+T38_STYLE = {   # method: colour, marker, line style, line width
+    'WSPI':        ('#2a78d6', 'o', '-', 2.4),
+    'DTCWT+AF':    ('#1baf7a', '^', '-', 1.6),
+    'DWT+AF':      ('#1baf7a', 'v', ':', 1.6),
+    'AF':          ('#6f6e69', 's', '-', 1.1),
+    'EWMA':        ('#6f6e69', 'D', '--', 1.1),
+    'RRD':         ('#9a9994', 'P', '-', 1.1),
+    'VSE':         ('#9a9994', 'X', '--', 1.1),
+    'CompoundPop': ('#b9b8b2', '*', '-', 1.1),
+    'PFRF':        ('#b9b8b2', 'h', '--', 1.1),
+}
+T38_BASE = ['AF', 'EWMA', 'RRD', 'VSE', 'CompoundPop', 'PFRF']
+
+
+def fig_t38_runtime(results, out):
+    """Measured cost of the nine protocol-V5 scorers (E9), one CPU core.
+    (a) time to score all M items against M, default windows (baselines 7,
+    wavelet-based 64); (b) microseconds per item-window against N, M = 1e4;
+    (c) traced working memory per item against N, batch 1e4."""
+    root = results / 'T3.8_runtime'
+    gf, tf = root / 'bench' / 'runtime_grid.csv', root / 'memory' / 'tracemalloc_grid.csv'
+    if not gf.exists():
+        return None, f'input missing: {gf}'
+    g = pd.read_csv(gf)
+    t = pd.read_csv(tf) if tf.exists() else None
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.6))
+    notes = []
+    ax = axes[0]
+    style_axes(ax)
+    for m, (col, mk, ls, lw) in T38_STYLE.items():
+        nd = 7 if m in T38_BASE else 64
+        d = g[(g['method'] == m) & (g['N'] == nd)].sort_values('M')
+        if d.empty:
+            continue
+        ax.plot(d['M'], d['median_s'], color=col, marker=mk, ls=ls, lw=lw, ms=5,
+                label=f'{m} (N={nd})', zorder=3 if m == 'WSPI' else 2)
+        ax.fill_between(d['M'], d['q1_s'], d['q3_s'], color=col, alpha=0.15, lw=0)
+        big = d[d['M'] == d['M'].max()]
+        if len(big):
+            notes.append(f"{m}: {float(big['median_s'].iloc[0]):.3g} s for M={int(big['M'].iloc[0]):,}")
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel('number of items M (log)', color=INK2)
+    ax.set_ylabel('time to score all items, one window (s, log)', color=INK2)
+    ax.set_title('(a) Time against the number of items', fontsize=10.5, color=INK)
+    ax.legend(loc='upper left', frameon=False, fontsize=7.5)
+    ax = axes[1]
+    style_axes(ax)
+    Mb = 10_000 if (g['M'] == 10_000).any() else int(g['M'].max())
+    for m, (col, mk, ls, lw) in T38_STYLE.items():
+        d = g[(g['method'] == m) & (g['M'] == Mb)].sort_values('N')
+        if d.empty:
+            continue
+        ax.plot(d['N'], d['us_per_item_median'], color=col, marker=mk, ls=ls, lw=lw, ms=5, label=m,
+                zorder=3 if m == 'WSPI' else 2)
+    ax.set_xscale('log', base=2)
+    ax.set_yscale('log')
+    ax.set_xlabel('window length N (log2)', color=INK2)
+    ax.set_ylabel('microseconds per item-window (log)', color=INK2)
+    ax.set_title(f'(b) Cost per item against N (M = {Mb:,})', fontsize=10.5, color=INK)
+    ax = axes[2]
+    style_axes(ax)
+    if t is not None:
+        Bb = 10_000 if (t['batch'] == 10_000).any() else int(t['batch'].max())
+        for m, (col, mk, ls, lw) in T38_STYLE.items():
+            d = t[(t['method'] == m) & (t['batch'] == Bb)].sort_values('N')
+            if d.empty:
+                continue
+            ax.plot(d['N'], d['traced_peak_bytes_per_item'], color=col, marker=mk, ls=ls, lw=lw, ms=5,
+                    label=m, zorder=3 if m == 'WSPI' else 2)
+        c = t[(t['method'] == 'WSPI') & (t['batch'] == Bb)].sort_values('N')
+        if len(c):
+            ax.plot(c['N'], c['coef_bytes_per_item'], color=INK, ls='-.', lw=1.0,
+                    label='DTCWT coefficients (exact)')
+        ax.set_xscale('log', base=2)
+        ax.set_yscale('log')
+        ax.set_title(f'(c) Working memory per item (batch {Bb:,})', fontsize=10.5, color=INK)
+        ax.legend(loc='upper left', frameon=False, fontsize=7.5)
+    else:
+        ax.text(0.5, 0.5, 'no memory data yet', transform=ax.transAxes, ha='center', color=INK2)
+        ax.set_title('(c) Working memory per item', fontsize=10.5, color=INK)
+    ax.set_xlabel('window length N (log2)', color=INK2)
+    ax.set_ylabel('peak traced bytes per item (log)', color=INK2)
+    hw = root / 'bench' / 'metadata' / 'bench_run.json'
+    sub = ''
+    if hw.exists():
+        h = json.loads(hw.read_text(encoding='utf-8')).get('hardware', {})
+        v = h.get('versions', {})
+        sub = (f"{h.get('cpu_name', '')}, one thread; Python {v.get('python', '')}, "
+               f"NumPy {v.get('numpy', '')}, dtcwt {v.get('dtcwt', '')}")
+    fig.suptitle('Measured cost of the nine methods (median of 10 repeats, band = IQR)'
+                 + (f'\n{sub}' if sub else ''), fontsize=10.5, color=INK)
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    files = save(fig, out, 'T3.8_runtime')
+    return files, '; '.join(notes)
+
+
 FIGURES = {
     'T2.2_window_curves': fig_t22_window_curves,   # SI figure of the paper
     'T2.3_tradeoff': fig_t23_tradeoff,             # kept in the program only, not in the paper
@@ -795,6 +902,7 @@ FIGURES = {
     'T3.5_spike_size': fig_t35_spike_size,          # SI (E4 spike size)
     'T3.6_shift_invariance': fig_t36_shift_invariance,  # SI (E5 shift test)
     'T3.7_feature_relation': fig_t37_feature_relation,  # SI (E7 R and WE)
+    'T3.8_runtime': fig_t38_runtime,                    # SI (E9 runtime and memory)
 }
 
 
