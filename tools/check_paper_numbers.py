@@ -473,22 +473,32 @@ def plain(s):
     return s.replace('\\\\', '').strip()
 
 
+HEAD_SCEN = {'YouTube\\(1h)': 'youtube_hourly', 'Taxi\\Hourly': 'taxi_hourly', 'Taxi\\30min': 'taxi_30min',
+             'Taxi\\5min': 'taxi_5min', 'MovieLens\\(1d)': 'movielens_daily', 'MovieLens\\(1w)': 'movielens_weekly'}
+PANEL_MET = {'NDCG@10': NDCG, 'Spearman $\\rho$': RHO, 'RSI@10': RSI, '$\\Delta$Rank': DR}
+
+
 def table_main(E, label, cfg):
+    """Tables 8 and 9 (layout of task T4.12): one panel per metric (row '\\textit{<metric> <arrow>}'),
+    one column per scenario (column heads \\shortstack{...} as in Table 5)."""
     tag = 'main'
-    mets = [NDCG, RHO, RSI, DR]
-    sc = None
-    means = {}
+    ls = E.lines[tag]
+    i0 = next(i for i, l in enumerate(ls) if f'\\label{{{label}}}' in l)
+    head = next(ls[k] for k in range(i0, len(ls)) if ls[k].startswith('Method &'))
+    scen = [HEAD_SCEN[h.replace(chr(92) * 2, chr(92))] for h in re.findall(r'\\shortstack\{([^}]*)\}', head)]
+    assert scen == M6, (label, scen)
+    met = None
     for k in body_lines(E, tag, label):
-        l = E.lines[tag][k]
-        m = re.search(r'\\textit\{([^}]*)\}', l)
+        l = ls[k]
+        m = re.search(r'\\textit\{([^}]*?) \$\\(?:up|down)arrow\$\}', l)
         if '\\multicolumn' in l and m:
-            sc = SCEN_LABEL[m.group(1)]
+            met = PANEL_MET[m.group(1)]
             continue
         if '&' not in l:
             continue
         toks, raw = E.cells(tag, k)
         meth = plain(raw[0])
-        for j, met in enumerate(mets):
+        for j, sc in enumerate(scen):
             ts = toks[j + 1]
             assert len(ts) == 1, (k, ts)
             apply_spec(ts[0], R(lambda sc=sc, meth=meth, met=met: V(sc, meth, met, cfg)), f'{label} cell')
@@ -775,7 +785,7 @@ def rules_main_text_1(E):
     t('(168, 336 and 2,016 slots)', *[D('bootstrap block', (lambda sc=sc: V(sc, 'WSPI', NDCG, col='block'))) for sc in M4[1:]])
     t('the block is 7 days for daily data and 4 weeks for weekly data', D('bootstrap block', lambda: V('movielens_daily', 'WSPI', NDCG, col='block')), D('bootstrap block', lambda: V('movielens_weekly', 'WSPI', NDCG, col='block')))
     t('(ML-32M) [43] adds', X('dataset name ML-32M'), X('citation'))
-    t('(ML-32M) [43], a public', X('dataset name ML-32M'), X('citation'))
+    t('ML-32M is a public', X('dataset name ML-32M'))
     t('(CC0, version 2) [44]', D('dataset version on Kaggle'), X('citation'))
     t('about 1,500 videos uploaded in April 2018 on 7 May 2018', X('from the Kaggle dataset description (no CSV)'), X('from the Kaggle dataset description (no CSV)'),
       D('first snapshot, day', lambda: ytime('raw_first_time', 'day')), D('first snapshot, year', lambda: ytime('raw_first_time', 'year')))
@@ -800,18 +810,19 @@ def rules_main_text_1(E):
     t('$N\\in\\{7,16,32,64,128\\}$, with a simple', *[D('window length of the sweep', (lambda k=k: S(sorted(load(SW).window.astype(int).unique())[k], f'{SW} sorted unique window [{k}]', (SW,)))) for k in range(5)])
 def rules_main_text_2(E):
     t = lambda anchor, *specs, **kw: E.text('main', anchor, list(specs), **kw)
-    t('(0.9651 to 0.9897, against 0.8888 to 0.9446 for WSPI)',
-      R(lambda: smin([V(sc, 'RRD', RSI, 'equal64') for sc in M4])), R(lambda: smax([V(sc, 'RRD', RSI, 'equal64') for sc in M4])),
-      R(lambda: smin([V(sc, 'WSPI', RSI, 'equal64') for sc in M4])), R(lambda: smax([V(sc, 'WSPI', RSI, 'equal64') for sc in M4])))
-    for cfg, a in [('default', 'YouTube Hourly 649, NYC Yellow Taxi Hourly 7,983, NYC Yellow Taxi 30m 15,998, NYC Yellow Taxi 5m 96,145'),
-                   ('equal64', 'YouTube Hourly 652, NYC Yellow Taxi Hourly 7,983, NYC Yellow Taxi 30m 15,998, NYC Yellow Taxi 5m 96,148')]:
+    t('(0.9493 to 0.9897, against 0.8619 to 0.9446 for WSPI)',
+      R(lambda: smin([V(sc, 'RRD', RSI, 'equal64') for sc in M6])), R(lambda: smax([V(sc, 'RRD', RSI, 'equal64') for sc in M6])),
+      R(lambda: smin([V(sc, 'WSPI', RSI, 'equal64') for sc in M6])), R(lambda: smax([V(sc, 'WSPI', RSI, 'equal64') for sc in M6])))
+    # Tables 8 and 9, six scenarios (T4.12)
+    for cfg, a in [('default', 'YouTube Hourly 649, NYC Yellow Taxi Hourly 7,983, NYC Yellow Taxi 30m 15,998, NYC Yellow Taxi 5m 96,145, MovieLens Daily 9,356, MovieLens Weekly 1,312'),
+                   ('equal64', 'YouTube Hourly 652, NYC Yellow Taxi Hourly 7,983, NYC Yellow Taxi 30m 15,998, NYC Yellow Taxi 5m 96,148, MovieLens Daily 9,357, MovieLens Weekly 1,312')]:
         t(a, R(lambda cfg=cfg: nwin('youtube_hourly', cfg)), R(lambda cfg=cfg: nwin('taxi_hourly', cfg)), D('slot', slot('taxi_30min')), R(lambda cfg=cfg: nwin('taxi_30min', cfg)),
-          D('slot', slot('taxi_5min')), R(lambda cfg=cfg: nwin('taxi_5min', cfg)))
-    for cfg, anchor, meths in [('default', 'PFRF (1.00), VSE (0.88), RRD (0.88), CompoundPop (0.37), AF (0.20)', ['PFRF', 'VSE', 'RRD', 'CompoundPop', 'AF']),
-                               ('equal64', 'PFRF (1.00), VSE (0.30), RRD (0.26)', ['PFRF', 'VSE', 'RRD'])]:
-        t(anchor, *[R(lambda m=m, cfg=cfg: smax([V(sc, m, NDCG, cfg, 'ties_top21_share') for sc in M4])) for m in meths])
+          D('slot', slot('taxi_5min')), R(lambda cfg=cfg: nwin('taxi_5min', cfg)), R(lambda cfg=cfg: nwin('movielens_daily', cfg)), R(lambda cfg=cfg: nwin('movielens_weekly', cfg)))
+    for cfg, anchor, meths in [('default', 'PFRF (1.00), VSE (0.99), RRD (0.99), CompoundPop (0.74), AF (0.43)', ['PFRF', 'VSE', 'RRD', 'CompoundPop', 'AF']),
+                               ('equal64', 'PFRF (1.00), VSE (0.63), RRD (0.57), CompoundPop (0.12)', ['PFRF', 'VSE', 'RRD', 'CompoundPop'])]:
+        t(anchor, *[R(lambda m=m, cfg=cfg: smax([V(sc, m, NDCG, cfg, 'ties_top21_share') for sc in M6])) for m in meths])
         df = load(VA)
-        d = df[(df.config == cfg) & (df.scenario.isin(M4)) & (df.metric == NDCG)]
+        d = df[(df.config == cfg) & (df.scenario.isin(M6)) & (df.metric == NDCG)]
         over = sorted(d[d.method.isin(ALL9)].groupby('method').ties_top21_share.max().loc[lambda x: x >= 0.10].index)
         E.marks.append(dict(file='main', line=0, item=f'tie footnote {cfg}: methods with share >= 0.10', expected=', '.join(over),
                             found=', '.join(sorted(meths)), status='ok' if over == sorted(meths) else 'mismatch', source=f'{VA} ties_top21_share'))
@@ -825,12 +836,15 @@ def rules_main_text_2(E):
     t('(0.8734 and 0.8657) and DTCWT+AF at 5 minutes (0.8029)', R(lambda: V('taxi_hourly', 'DWT+AF', RHO)), R(lambda: V('taxi_30min', 'DWT+AF', RHO)), D('slot', slot('taxi_5min')), R(lambda: V('taxi_5min', 'DTCWT+AF', RHO)))
     t('from 0.8652 (hourly) to 0.8577 (30 minutes) and 0.7971 (5 minutes)', R(lambda: V('taxi_hourly', 'WSPI', RHO)), R(lambda: V('taxi_30min', 'WSPI', RHO)), D('slot', slot('taxi_30min')),
       R(lambda: V('taxi_5min', 'WSPI', RHO)), D('slot', slot('taxi_5min')))
-    t('WSPI has the highest value on YouTube (0.9456) and on the 5-minute taxi data (0.9072)', R(lambda: V('youtube_hourly', 'WSPI', RSI)), D('slot', slot('taxi_5min')), R(lambda: V('taxi_5min', 'WSPI', RSI)))
+    t('WSPI has the highest value on YouTube (0.9456), on the 5-minute taxi data (0.9072) and on daily MovieLens data (0.8619)', R(lambda: V('youtube_hourly', 'WSPI', RSI)), D('slot', slot('taxi_5min')), R(lambda: V('taxi_5min', 'WSPI', RSI)), R(lambda: V('movielens_daily', 'WSPI', RSI)))
+    t('DTCWT+AF is higher (0.9247 against 0.9051)', R(lambda: V('movielens_weekly', 'DTCWT+AF', RSI)), R(lambda: V('movielens_weekly', 'WSPI', RSI)))
     t('(0.8909 against 0.8888, and 0.8962 against 0.8956)', R(lambda: V('taxi_hourly', 'DTCWT+AF', RSI)), R(lambda: V('taxi_hourly', 'WSPI', RSI)), R(lambda: V('taxi_30min', 'DTCWT+AF', RSI)), R(lambda: V('taxi_30min', 'WSPI', RSI)))
     t('except PFRF on YouTube (0.9440)', R(lambda: V('youtube_hourly', 'PFRF', RSI)))
-    t('RRD, with 0.9144 on YouTube and 0.8180, 0.8576 and 0.8545', *[R(lambda sc=sc: V(sc, 'RRD', RSI)) for sc in M4])
-    t('37.12 on YouTube, and 20.40, 12.60 and 7.03 on the hourly, 30-minute and 5-minute taxi data', *[R(lambda sc=sc: V(sc, 'WSPI', DR)) for sc in M4], D('slot', slot('taxi_30min')), D('slot', slot('taxi_5min')))
-    t('with 96.02, 35.98, 26.83 and 15.61', *[R(lambda sc=sc: V(sc, 'DTCWT+AF', DR)) for sc in M4])
+    t('RRD, with 0.9144 on YouTube, 0.8180, 0.8576 and 0.8545 on the three taxi granularities and 0.7803 on daily MovieLens data; on weekly MovieLens data it is VSE (0.8675)',
+      *[R(lambda sc=sc: V(sc, 'RRD', RSI)) for sc in M4 + ['movielens_daily']], R(lambda: V('movielens_weekly', 'VSE', RSI)))
+    t('37.12 on YouTube, 20.40, 12.60 and 7.03 on the hourly, 30-minute and 5-minute taxi data, and 276.03 and 560.48 on daily and weekly MovieLens data',
+      *[R(lambda sc=sc: V(sc, 'WSPI', DR)) for sc in M4], D('slot', slot('taxi_30min')), D('slot', slot('taxi_5min')), *[R(lambda sc=sc: V(sc, 'WSPI', DR)) for sc in ML])
+    t('with 96.02, 35.98, 26.83, 15.61, 435.23 and 1032.16', *[R(lambda sc=sc: V(sc, 'DTCWT+AF', DR)) for sc in M6])
     t('(NDCG@10 = 0.1389 on YouTube and 0.4576 on the hourly taxi data)', D('metric cut-off K=10'), R(lambda: V('youtube_hourly', 'PFRF', NDCG)), R(lambda: V('taxi_hourly', 'PFRF', NDCG)))
     t('raised $\\log\\mu_L$ by 1.03 on average and lowered $\\alpha R-\\beta W_E$ by 0.42', R(lambda: rb('youtube_hourly', 'default', 'WSPI', 'size10', 'dlogmu_mean')), R(lambda: -rb('youtube_hourly', 'default', 'WSPI', 'size10', 'dexpo_mean')))
     t('with spikes of 2 to 50 times the mean', D('smallest spike size (condition size2)'), D('largest spike size (condition size50)'))
@@ -927,12 +941,15 @@ def rules_main_text_3(E):
     t('from 1 January 1998 to 12 October 2023', D('start day', lambda: mp_date('start', 'day')), D('start year', lambda: mp_date('start', 'year')),
       D('end day', lambda: mp_date('end', 'day')), D('end year', lambda: mp_date('end', 'year')))
     t('(47 days in 1997)', Raw('longest gap without ratings in 1997: 1997-07-24 to 1997-09-08 (UTC days), counted read-only from data/raw/movielens/ratings.csv in chat 29; no result file; kept by decision of chat 29'), X('year'))
-    t('with a threshold of 24 ratings', D('item threshold', lambda: Q(DS, 'min_obs', dataset='movielens_daily')))
     gp = lambda fn: fn([Q(GP, c, file=f) for f in ['daily', 'weekly'] for c in ['wavelet_W64_min32_eligible_median', 'baseline_W7_min3_eligible_median']])
     t('each window ranks about 1,000 to 4,100 movies (median)', R(lambda: gp(smin), op='approx'), R(lambda: gp(smax), op='approx'))
-    t('its NDCG@10 was 0.003 below the best method, DTCWT+AF', D('metric cut-off K=10'), R(lambda: V('movielens_daily', 'DTCWT+AF', NDCG) - V('movielens_daily', 'WSPI', NDCG)))
-    t('(0.0003 above DTCWT+AF)', R(lambda: V('movielens_weekly', 'WSPI', RHO) - V('movielens_weekly', 'DTCWT+AF', RHO)))
-    t('the NDCG@10 of WSPI was 0.014 below the best method, DWT+AF', D('metric cut-off K=10'), R(lambda: V('movielens_weekly', 'DWT+AF', NDCG) - V('movielens_weekly', 'WSPI', NDCG)))
+    # Section 4.3, MovieLens sentences (T4.12)
+    t('DTCWT+AF on daily data (0.8672, 0.003 above WSPI) and DWT+AF on weekly data (0.9768, 0.014 above WSPI)',
+      R(lambda: V('movielens_daily', 'DTCWT+AF', NDCG)), R(lambda: V('movielens_daily', 'DTCWT+AF', NDCG) - V('movielens_daily', 'WSPI', NDCG)),
+      R(lambda: V('movielens_weekly', 'DWT+AF', NDCG)), R(lambda: V('movielens_weekly', 'DWT+AF', NDCG) - V('movielens_weekly', 'WSPI', NDCG)))
+    t('granularities (0.5711 and 0.8131; on weekly data 0.0003 above DTCWT+AF)', R(lambda: V('movielens_daily', 'WSPI', RHO)), R(lambda: V('movielens_weekly', 'WSPI', RHO)),
+      R(lambda: V('movielens_weekly', 'WSPI', RHO) - V('movielens_weekly', 'DTCWT+AF', RHO)))
+    t('on daily MovieLens data (at most 0.5711)', R(lambda: smax([V('movielens_daily', m, RHO) for m in ALL9])))
     t('and 54\\% of the ratings in this period', P(lambda: Q(YR, 'share_on_user_first_day', year='all')))
     t('has a median of 8 ratings', R(lambda: Q(GP, 'count_rank10_per_slot_median', file='daily')))
 def rules_main_text_4(E):
@@ -1043,7 +1060,7 @@ def set_ref(t, ok, what, rule):
 
 
 def rules_refs(E, secs, tabs, figs, nbib):
-    SEC = re.compile(r'(?:Sections?|Subsections?)(?:~|\\ | )+(\d+(?:\.\d+)?(?:(?:\s*,\s*|\s+and\s*~?|~and~)\d+(?:\.\d+)?)*)')
+    SEC = re.compile(r'(?:Sections?|Subsections?)(?:~|\\ | )+(\d+(?:\.\d+)?(?:(?:\s*,\s*|\s+and\s*~?|~and~|\s+to\s+)\d+(?:\.\d+)?)*)')
     TF = re.compile(r'(Tables?|Figures?)~(\d+)(?:(?:~and~|\s+and~?)(\d+))?')
     CIT = re.compile(r'\[(\d+(?:,\d+)*)\]')
     for tag, ls in E.lines.items():

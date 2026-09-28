@@ -389,11 +389,6 @@ def _():
     return _dr_low(M6)
 
 
-@check('dr_low4', 'default config: WSPI has the lowest dRank of the eight methods other than PFRF')
-def _():
-    return _dr_low(M4)
-
-
 @check('sym_ndcg3', 'extension modes, WSPI: symmetric gives the highest NDCG@10 (want 3 of 4)')
 def _():
     d = C.load(PD)
@@ -483,28 +478,23 @@ def _rsi_base(scen):
     return over(cases, 'all', [VA, TA])
 
 
-@check('rsi_gt_base4', 'default: WSPI RSI@10 above each of the six baselines; block test significant except PFRF on YouTube (n.s.)')
-def _():
-    return _rsi_base(M4)
-
-
 @check('rsi_gt_base6', 'default, six scenarios: WSPI RSI@10 above each of the six baselines; significant except PFRF on YouTube (n.s.)')
 def _():
     return _rsi_base(M6)
 
 
-@check('rrd_rsi_eq4', 'equal window: RRD has a higher RSI@10 than WSPI')
+@check('rrd_rsi_eq6', 'equal window, six scenarios: RRD has a higher RSI@10 than WSPI')
 def _():
     cases = [(SL[sc], val('equal64', sc, 'RRD', RSI) > val('equal64', sc, 'WSPI', RSI),
               f"{val('equal64', sc, 'RRD', RSI):.4f} vs {val('equal64', sc, 'WSPI', RSI):.4f}, {vd('equal64', sc, RSI, 'RRD')}")
-             for sc in M4]
+             for sc in M6]
     return over(cases, 'all', [VA, TA])
 
 
-@check('acc_gt_long_eq4', 'equal window: WSPI NDCG@10 and rho significantly above RRD, VSE and CompoundPop')
+@check('acc_gt_long_eq6', 'equal window, six scenarios: WSPI NDCG@10 and rho significantly above RRD, VSE and CompoundPop')
 def _():
     cases = [(f'{SL[sc]} {met} {m}', vd('equal64', sc, met, m) == 'ref_better', vd('equal64', sc, met, m))
-             for sc in M4 for met in (NDCG, RHO) for m in LONG3]
+             for sc in M6 for met in (NDCG, RHO) for m in LONG3]
     return over(cases, 'all', [TA])
 
 
@@ -532,51 +522,52 @@ def _():
     return over(cases, 'all', [TA])
 
 
-@check('taxi_rho_all', 'taxi, default: WSPI rho significantly above each of the six baselines')
+@check('tm_rho_all', 'taxi and MovieLens, default: WSPI rho significantly above each of the six baselines')
 def _():
-    cases = [(f'{SL[sc]} {b}', vd('default', sc, RHO, b) == 'ref_better', vd('default', sc, RHO, b)) for sc in TAXI3 for b in BASE6]
+    cases = [(f'{SL[sc]} {b}', vd('default', sc, RHO, b) == 'ref_better', vd('default', sc, RHO, b)) for sc in TAXI3 + ML for b in BASE6]
     return over(cases, 'all', [TA])
 
 
-@check('rrd_most_stable', 'default: RRD has the highest RSI@10 of the five baselines other than PFRF')
+@check('most_stable_base6', 'default: highest RSI@10 of the five baselines other than PFRF = RRD (YouTube, taxi, ML daily), VSE (ML weekly)')
 def _():
     cases = []
-    for sc in M4:
+    for sc in M6:
         b, v = best('default', sc, RSI, BASE5)
-        cases.append((SL[sc], b == 'RRD', f'{b} {v[b]:.4f}'))
+        want = 'VSE' if sc == 'movielens_weekly' else 'RRD'
+        cases.append((SL[sc], b == want, f'{b} {v[b]:.4f}'))
     return over(cases, 'all', [VA])
 
 
-@check('taxi_top2', 'taxi, default: the two highest RSI@10 of the nine are WSPI and DTCWT+AF')
+@check('tm_top2', 'taxi and MovieLens, default: the two highest RSI@10 of the nine are WSPI and DTCWT+AF')
 def _():
     cases = []
-    for sc in TAXI3:
+    for sc in TAXI3 + ML:
         v = {m: val('default', sc, m, RSI) for m in ALL9}
         top = sorted(v, key=v.get, reverse=True)[:2]
         cases.append((SL[sc], set(top) == {'WSPI', 'DTCWT+AF'}, str(top)))
     return over(cases, 'all', [VA])
 
 
-@check('dr_sig_all', 'default: WSPI dRank significantly lower than each method other than PFRF')
+@check('dr_sig_all', 'default, six scenarios: WSPI dRank significantly lower than each method other than PFRF')
 def _():
     cases = [(f'{SL[sc]} {m}', vd('default', sc, DR, m) == 'ref_better', vd('default', sc, DR, m))
-             for sc in M4 for m in ALL9 if m not in ('WSPI', 'PFRF')]
+             for sc in M6 for m in ALL9 if m not in ('WSPI', 'PFRF')]
     return over(cases, 'all', [TA])
 
 
-@check('pfrf_lowest', 'default: PFRF has the lowest dRank of the nine')
+@check('pfrf_lowest', 'default, six scenarios: PFRF has the lowest dRank of the nine')
 def _():
     cases = []
-    for sc in M4:
+    for sc in M6:
         b, v = best('default', sc, DR, ALL9)
         cases.append((SL[sc], b == 'PFRF', f'{b} {v[b]:.2f}'))
     return over(cases, 'all', [VA])
 
 
-@check('pfrf_tied', 'default: share of windows in which PFRF has tied scores among the top 21 (nearly every window: at least 0.999 in each scenario)')
+@check('pfrf_tied', 'default, six scenarios: share of windows in which PFRF has tied scores among the top 21 (nearly every window: at least 0.999 in each scenario)')
 def _():
     cases = []
-    for sc in M4:
+    for sc in M6:
         s = float(C.V(sc, 'PFRF', RSI, 'default', 'ties_top21_share').value)
         cases.append((SL[sc], s >= 0.999, f'{s:g}'))
     return over(cases, 'all', [VA])
@@ -835,12 +826,33 @@ def _():
     return over(cases, 'all', [AB])
 
 
-@check('ml_daily_best', 'MovieLens daily, default: WSPI highest rho and RSI@10 of the nine and lowest dRank except PFRF')
+@check('ml_daily_ndcg', 'MovieLens daily, default: WSPI NDCG@10 significantly above each of the six baselines')
 def _():
-    sc = 'movielens_daily'
-    r, s = best('default', sc, RHO, ALL9)[0], best('default', sc, RSI, ALL9)[0]
-    d = best('default', sc, DR, [m for m in ALL9 if m != 'PFRF'])[0]
-    return over([('rho', r == 'WSPI', r), ('RSI@10', s == 'WSPI', s), ('dRank', d == 'WSPI', d)], 'all', [VA])
+    cases = [(b, vd('default', 'movielens_daily', NDCG, b) == 'ref_better', vd('default', 'movielens_daily', NDCG, b)) for b in BASE6]
+    return over(cases, 'all', [TA])
+
+
+@check('ml_ndcg_best', 'MovieLens, default: highest NDCG@10 of the nine = DTCWT+AF (daily), DWT+AF (weekly)')
+def _():
+    cases = [(SL[sc], best('default', sc, NDCG, ALL9)[0] == w, best('default', sc, NDCG, ALL9)[0])
+             for sc, w in (('movielens_daily', 'DTCWT+AF'), ('movielens_weekly', 'DWT+AF'))]
+    return over(cases, 'all', [VA])
+
+
+@check('ml_rho_best', 'MovieLens, default: WSPI has the highest rho of the nine (daily and weekly)')
+def _():
+    cases = [(SL[sc], best('default', sc, RHO, ALL9)[0] == 'WSPI', best('default', sc, RHO, ALL9)[0]) for sc in ML]
+    return over(cases, 'all', [VA])
+
+
+@check('rsi_best_wspi3', 'default: WSPI has the highest RSI@10 of the nine on YouTube, taxi 5m and ML daily; DTCWT+AF on ML weekly, significant')
+def _():
+    cases = [(SL[sc], best('default', sc, RSI, ALL9)[0] == 'WSPI', best('default', sc, RSI, ALL9)[0])
+             for sc in ('youtube_hourly', 'taxi_5min', 'movielens_daily')]
+    b = best('default', 'movielens_weekly', RSI, ALL9)[0]
+    v = vd('default', 'movielens_weekly', RSI, 'DTCWT+AF')
+    cases.append(('ML weekly', b == 'DTCWT+AF' and v == 'ref_worse', f'{b}, {v}'))
+    return over(cases, 'all', [VA, TA])
 
 
 @check('daily_cycle_most', 'hourly and 30-minute taxi entries: share whose zone has another entry one day earlier or later, within one hour (most = above one half)')
@@ -1241,7 +1253,7 @@ def _():
 
 @check('props2_ml', 'limiting properties of MovieLens listed (text)')
 def _():
-    return _markers('main', 'Two properties of this dataset limit the claim.', ['First,', 'Second,'], ['Third,'])
+    return _markers('main', 'Two properties of this dataset limit what it can show.', ['First,', 'Second,'], ['Third,'])
 
 
 @check('dwt_props3', 'DTCWT properties listed (text)')
@@ -1430,7 +1442,9 @@ def rules_main(E):
     T('including the four-aspect evaluation protocol and all baselines', [Struct('aspects4', '4'), D('code release')])
     T('exact library versions used for all reported runs', [D('versions of the run metadata, checked by check_paper_numbers.py')])
     # results 4.3
-    T('WSPI is evaluated together with eight competing methods in four scenarios', [Count('n_competitors', '8'), Count('n_scen4', '4')])
+    T('WSPI is evaluated together with eight competing methods in six scenarios', [Count('n_competitors', '8'), Count('n_scen6', '6')])
+    T('NYC Yellow Taxi data at three granularities (hourly', [Count('n_taxi', '3')])
+    T('and MovieLens data at two (daily and weekly)', [Count('n_ml', '2')])
     T('We report two configurations', [Count('n_configs', '2')])
     T('the six conventional baselines use a 7-slot window and the three wavelet-based methods a 64-slot window',
       [Count('n_base', '6'), Count('n_wav', '3')])
@@ -1440,39 +1454,45 @@ def rules_main(E):
     T('the moving-average reference in both tables', [D('Tables 8 and 9')])
     T('the three wavelet-based methods in stronger colors', [Count('n_wav', '3')])
     T('The two tables show one pattern', [D('Tables 8 and 9'), L(PLAIN)])
-    T(r'It has the lowest $\Delta$Rank of all methods except PFRF in all four scenarios, and a higher RSI@10 than all six baselines',
-      [Claim('dr_low4', 'lowest except PFRF'), Claim('dr_low4', 'all 4'), Count('n_scen4', '4'),
-       Claim('rsi_gt_base4', 'all 6, significant except PFRF YouTube'), Count('n_base', '6')])
-    T('RRD has a higher RSI@10 in all four scenarios', [Claim('rrd_rsi_eq4', 'all 4'), Count('n_scen4', '4')])
-    T('RRD, VSE and CompoundPop in all four scenarios', [Claim('acc_gt_long_eq4', 'all 4'), Count('n_scen4', '4')])
+    T(r'It has the lowest $\Delta$Rank of all methods except PFRF in all six scenarios, and a higher RSI@10 than all six baselines',
+      [Claim('dr_low6', 'lowest except PFRF'), Claim('dr_low6', 'all 6'), Count('n_scen6', '6'),
+       Claim('rsi_gt_base6', 'all 6, significant except PFRF YouTube'), Count('n_base', '6')])
+    T('RRD has a higher RSI@10 in all six scenarios', [Claim('rrd_rsi_eq6', 'all 6'), Count('n_scen6', '6')])
+    T('RRD, VSE and CompoundPop in all six scenarios', [Claim('acc_gt_long_eq6', 'all 6'), Count('n_scen6', '6')])
     T('WSPI is therefore not the most stable method in every setting. It is more',
       [Claim('not_most_stable', 'not highest in some setting')] * 2)
     E.claim('main', 'AF has the highest NDCG@10 on YouTube and on the hourly and 30-minute taxi data', 'af_best_ndcg', 'YouTube, 1h, 30m')
-    T(r'in 10\% or more of the windows of at least one scenario (largest share): PFRF (1.00), VSE (0.88)',
+    T(r'in 10\% or more of the windows of at least one scenario (largest share): PFRF (1.00), VSE (0.99)',
       [D('footnote rule of the table generator; the list is checked by check_paper_numbers.py')])
     T('equal window of 64 slots for all methods', [Count('eq64_all', 'all 64')])
-    T(r'in 10\% or more of the windows of at least one scenario (largest share): PFRF (1.00), VSE (0.30)',
+    T(r'in 10\% or more of the windows of at least one scenario (largest share): PFRF (1.00), VSE (0.63)',
       [D('footnote rule of the table generator; the list is checked by check_paper_numbers.py')])
     T('every method except PFRF has a significantly higher NDCG@10 than WSPI', [Claim('taxi_ndcg_all', 'all 7 x 3')])
     T('which suits a one-slot horizon', [Count('horizon_one', '1')])
-    T('NDCG@10 in the four scenarios', [Count('n_scen4', '4')])
+    T('NDCG@10 in the four YouTube and taxi scenarios', [Count('n_scen4', '4')])
+    T('On daily data WSPI is significantly more accurate than all six baselines', [Claim('ml_daily_ndcg', 'all 6'), Count('n_base', '6')])
+    E.claim('main', 'On MovieLens a wavelet-based method ranks best: DTCWT+AF on daily data', 'ml_ndcg_best', 'DTCWT+AF daily, DWT+AF weekly')
     T('Spearman correlation between each ranking', [L(DIST)])
-    T(r'higher $\rho$ than all six baselines at all three granularities',
-      [Claim('taxi_rho_all', 'all 6'), Count('n_base', '6'), Claim('taxi_rho_all', 'all 3'), Count('n_taxi', '3')])
+    T(r'higher $\rho$ than all six baselines in every scenario',
+      [Claim('tm_rho_all', 'all 6'), Count('n_base', '6'), Claim('tm_rho_all', 'all 5')])
+    T(r'WSPI has the highest $\rho$ of all nine methods at both granularities',
+      [Claim('ml_rho_best', 'highest of nine'), Count('n_methods', '9'), Claim('ml_rho_best', 'both')])
+    T(r'All methods have a low $\rho$ on daily MovieLens data (at most', [D('the nine methods; the bound is checked by check_paper_numbers.py'), L(BOUND)])
     T('The two accuracy metrics thus disagree', [D('NDCG@10 and rho')])
     T('WSPI orders the whole list better', [L(PLAIN)])
-    T(r'Spearman $\rho$ in the four scenarios', [Count('n_scen4', '4')])
-    T('All six baselines have a significantly lower RSI@10 than WSPI', [Claim('rsi_gt_base4', 'all 6, except PFRF YouTube'), Count('n_base', '6')])
-    T('The most stable baseline apart from PFRF is RRD', [Claim('rrd_most_stable', 'RRD in all 4')])
+    T(r'Spearman $\rho$ in the four YouTube and taxi scenarios', [Count('n_scen4', '4')])
+    E.claim('main', 'WSPI has the highest value on YouTube (0.9456), on the 5-minute taxi data', 'rsi_best_wspi3', 'WSPI 3, DTCWT+AF ML weekly significant')
+    T('All six baselines have a significantly lower RSI@10 than WSPI', [Claim('rsi_gt_base6', 'all 6, except PFRF YouTube'), Count('n_base', '6')])
+    T('The most stable baseline apart from PFRF is RRD', [Claim('most_stable_base6', 'RRD 5, VSE ML weekly')])
     T('on the three taxi granularities', [Count('n_taxi', '3')])
-    T('the two DTCWT-based methods have the two highest values in every granularity',
-      [D('WSPI and DTCWT+AF'), Claim('taxi_top2', 'top 2'), Claim('taxi_top2', 'all 3')])
+    T('the two DTCWT-based methods have the two highest values in every scenario',
+      [D('WSPI and DTCWT+AF'), Claim('tm_top2', 'top 2'), Claim('tm_top2', 'all 5')])
     T('shift-invariance is one source of this stability, but not the only one', [L(CONCL), L(CONCL)])
-    T('RSI@10 in the four scenarios', [Count('n_scen4', '4')])
-    T(r'WSPI has the lowest $\Delta$Rank of all methods except PFRF in all four scenarios: 37.12',
-      [Claim('dr_low4', 'lowest except PFRF'), Claim('dr_low4', 'all 4'), Count('n_scen4', '4')])
-    T('All these differences are significant. The next method', [Claim('dr_sig_all', 'all 7 x 4')])
-    T(r'PFRF has the lowest $\Delta$Rank of all methods, but', [Claim('pfrf_lowest', 'all 4')])
+    T('RSI@10 in the four YouTube and taxi scenarios', [Count('n_scen4', '4')])
+    T(r'WSPI has the lowest $\Delta$Rank of all methods except PFRF in all six scenarios: 37.12',
+      [Claim('dr_low6', 'lowest except PFRF'), Claim('dr_low6', 'all 6'), Count('n_scen6', '6')])
+    T('All these differences are significant. The next method', [Claim('dr_sig_all', 'all 7 x 6')])
+    T(r'PFRF has the lowest $\Delta$Rank of all methods, but', [Claim('pfrf_lowest', 'all 6')])
     T('tied among the top 21 items in nearly every window', [Claim('pfrf_tied', 'nearly every window')])
     T('Two terms of the index react to a spike in opposite directions', [Claim('spike_opposite', 'opposite signs')])
     T('The test above uses one spike size, one position and one duration', [D('main-table test: 10x, last slot, one slot (Table 4)')] * 3)
@@ -1482,7 +1502,7 @@ def rules_main(E):
     T('A six-slot burst', [Count('dur6', '6')])
     T('are computed over the whole window. This penalty', [D(DEF)])
     T('RRD was more robust than WSPI in every setting', [Claim('rrd_eq_more_robust', 'every condition x scenario')])
-    T(r'under a $10\times$ spike in the four scenarios', [Count('n_scen4', '4')])
+    T(r'under a $10\times$ spike in the four YouTube and taxi scenarios', [Count('n_scen4', '4')])
     T('for most of the period', [Claim('yt_fig_most', 'most')])
     T('lies above WSPI in about half of the plotted period', [Claim('yt_fig_half', 'about half')])
     T('lie close together at the top during the whole year', [Claim('taxi_fig_top', 'whole year')])
@@ -1564,14 +1584,11 @@ def rules_main(E):
     T('over all splits', [L(PLAIN)])
     T('without both terms', [D(DEF)])
     T('the accuracy--stability balance of each dataset', [L(DIST)])
-    # 4.10 MovieLens
+    # MovieLens paragraph of 4.2 and the MovieLens figure (T4.12)
     T('Each rating counts as one interaction with a movie', [D(DEF), D(DEF)])
     T('The data are used at two granularities', [Count('n_ml', '2')])
-    T('All settings are the same as for the other datasets', [Claim('config_same', 'same')])
-    T('the same nine methods, window lengths', [Count('n_methods', '9')])
     T('because each window ranks about', [L(DIST)])
-    T(r'the lowest $\Delta$Rank of all methods except PFRF; its NDCG@10 was 0.003', [Claim('ml_daily_best', 'rho, RSI, dRank')])
-    T('Two properties of this dataset limit the claim', [Struct('props2_ml', '2')])
+    T('Two properties of this dataset limit what it can show', [Struct('props2_ml', '2')])
     # 4.11 responsiveness and failure cases
     T('how fast each method follows genuine entries into the true Top-10. An entry', [L(DIST)])
     T('stays there for at least six consecutive slots, and was outside it in the six slots before',
@@ -1685,7 +1702,7 @@ def rules_si(E):
     T('columns: the four scenarios', [Count('n_scen4', '4')])
     T('Darker cells are better within each panel; the panel title gives the range, and each cell gives its mean', [L(DIST), L(DIST)])
     T('The values of the one-dimensional slices', [L(PLAIN)])
-    T('applies all methods to MovieLens with no tuning', [D('the nine methods of the paper')])
+    T('behind Tables~8 and~9 of the main text, for all six scenarios', [Count('n_scen6', 'all 6')] * 2)
     T(r'WSPI had a higher NDCG@10 and $\rho$ than all of them', [Claim('si_ml_eq_acc', 'all 3 x 2 x 2')])
     E.claim('si', 'had a higher RSI@10 than WSPI on MovieLens', 'si_ml_eq_rsi', 'SMA, RRD, VSE higher')
     T('how fast each method follows genuine entries', [L(DIST)])

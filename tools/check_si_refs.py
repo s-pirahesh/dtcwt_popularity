@@ -30,23 +30,22 @@ import re
 import sys
 from pathlib import Path
 
-EXPECTED_SI = {
+EXPECTED_SI = {   # numbers after task T4.12 (chat 31): MovieLens in the main results
     'tab:padding': 'S1', 'tab:si_features': 'S2', 'tab:si_levels': 'S3', 'tab:yt_gap': 'S4',
-    'tab:si_ci_default': 'S5', 'tab:si_tests_default': 'S6', 'tab:si_ci_equal64': 'S7',
-    'tab:si_tests_equal64': 'S8', 'tab:si_decomp': 'S9', 'tab:si_robust_default': 'S10',
-    'tab:si_robust_equal64': 'S11', 'tab:si_hardware': 'S12', 'tab:si_runtime_grid': 'S13',
-    'tab:si_memory': 'S14', 'tab:si_runtime_real': 'S15', 'tab:si_ablation': 'S16',
-    'tab:si_fusion': 'S17', 'tab:si_selection': 'S18', 'tab:movielens': 'S19',
-    'tab:si_ml_profile': 'S20', 'tab:movielens_equal64': 'S21', 'tab:movielens_tests': 'S22',
-    'tab:si_resp_strict': 'S23', 'tab:si_rsi_truth': 'S24',
-    'fig:si_window': 'S1', 'fig:si_features': 'S2', 'fig:si_spike': 'S3', 'fig:si_runtime': 'S4',
-    'fig:si_shift': 'S5', 'fig:si_grid': 'S6', 'fig:si_ml_time': 'S7', 'fig:si_delay': 'S8',
+    'tab:si_ml_profile': 'S5', 'tab:si_ci_default': 'S6', 'tab:si_tests_default': 'S7',
+    'tab:si_ci_equal64': 'S8', 'tab:si_tests_equal64': 'S9', 'tab:si_decomp': 'S10',
+    'tab:si_robust_default': 'S11', 'tab:si_robust_equal64': 'S12', 'tab:si_hardware': 'S13',
+    'tab:si_runtime_grid': 'S14', 'tab:si_memory': 'S15', 'tab:si_runtime_real': 'S16',
+    'tab:si_ablation': 'S17', 'tab:si_fusion': 'S18', 'tab:si_selection': 'S19',
+    'tab:si_resp_strict': 'S20', 'tab:si_rsi_truth': 'S21',
+    'fig:si_window': 'S1', 'fig:si_features': 'S2', 'fig:si_ml_time': 'S3', 'fig:si_spike': 'S4',
+    'fig:si_runtime': 'S5', 'fig:si_shift': 'S6', 'fig:si_grid': 'S7', 'fig:si_delay': 'S8',
 }
 # numbers of the paper written as text in the SI: (kind, number) -> label in the paper
 EXPECTED_MAIN = {
     ('Table', '5'): 'tab:data', ('Table', '6'): 'tab:config', ('Table', '8'): 'tab:main_default',
     ('Table', '9'): 'tab:main_equal64', ('Table', '12'): 'tab:ablation', ('Table', '13'): 'tab:sens',
-    ('Table', '14'): 'tab:resp', ('Figure', '9'): 'fig:movielens',
+    ('Table', '14'): 'tab:resp',
 }
 
 LABEL = re.compile(r'\\newlabel\{((?:tab|fig|sec|subsec):[^}]*)\}\{\{([^}]*)\}')
@@ -97,7 +96,7 @@ def main():
         check(f'SI label {lab} = {num}', si_lab.get(lab) == num, f'found {si_lab.get(lab)}')
     si_tab = {v for k, v in si_lab.items() if k.startswith('tab:')}
     si_fig = {v for k, v in si_lab.items() if k.startswith('fig:')}
-    check('SI tables are S1..S24 without gaps', si_tab == {f'S{i}' for i in range(1, 25)}, str(sorted(si_tab)))
+    check('SI tables are S1..S21 without gaps', si_tab == {f'S{i}' for i in range(1, 22)}, str(sorted(si_tab)))
     check('SI figures are S1..S8 without gaps', si_fig == {f'S{i}' for i in range(1, 9)}, str(sorted(si_fig)))
 
     # 2. paper -> SI

@@ -5,8 +5,12 @@ Seventeen SI tables are built here directly from the result CSVs under
 ``results/revision_v5``.  No number is typed by hand and no number is computed
 beyond selection, rounding and the few derived quantities named below (a range,
 a ratio, a weighted share); each of these is written to the control CSV.
-The seven SI tables made in task T3.10 (Tables S5-S8, S19, S21, S22) are not
-built here; they are used unchanged from Response/Tables.
+The SI tables of intervals and paired tests (S6-S9) are made by
+scripts/generate_t412_tables.py (six scenarios, task T4.12) and are not built here.
+
+Numbers after task T4.12 (chat 31, MovieLens in the main results; the SI is
+numbered by first citation): the file names below keep the numbers of T4.10,
+the second column gives the printed number.
 
 Added for paper V5 (chat 28, 28 Sep 2026; plan: Reports/R27_T4.10a_SI_Plan.md,
 sections 3-5).  No existing file of the project is changed or imported.
@@ -17,26 +21,26 @@ Tables (file name -> SI number, label)
   S02_features.tex         S2   tab:si_features        relation of R and W_E (T3.7)
   S03_levels.tex           S3   tab:si_levels          decomposition level J (T3.1)
   S04_yt_gap.tex           S4   tab:yt_gap             YouTube collection gap (T3.11)
-  S09_decomposition.tex    S9   tab:si_decomp          change of the WSPI terms under perturbation (T3.5)
-  S10_robust_default.tex   S10  tab:si_robust_default  wider perturbations, default configuration (T3.5)
-  S11_robust_equal64.tex   S11  tab:si_robust_equal64  wider perturbations, equal window of 64 (T3.5)
-  S12_hardware.tex         S12  tab:si_hardware        hardware and software of the cost study (T3.8)
-  S13_runtime_grid.tex     S13  tab:si_runtime_grid    scoring time per item (T3.8)
-  S14_memory.tex           S14  tab:si_memory          memory (T3.8)
-  S15_runtime_real.tex     S15  tab:si_runtime_real    run time on the real data (T3.8)
-  S16_ablation.tex         S16  tab:si_ablation        eight ablation variants, four scenarios (T3.3)
-  S17_fusion.tex           S17  tab:si_fusion          four fusion functions (T3.3)
-  S18_selection.tex        S18  tab:si_selection       30/70 selection of alpha, beta and J (T3.2)
-  S20_ml_profile.tex       S20  tab:si_ml_profile      MovieLens data profile (T3.9)
-  S23_resp_strict.tex      S23  tab:si_resp_strict     responsiveness, strict entry rule (T2.4)
-  S24_rsi_truth.tex        S24  tab:si_rsi_truth       RSI@10 and the visible change of the truth (T2.4)
+  S09_decomposition.tex    S10  tab:si_decomp          change of the WSPI terms under perturbation (T3.5)
+  S10_robust_default.tex   S11  tab:si_robust_default  wider perturbations, default configuration (T3.5)
+  S11_robust_equal64.tex   S12  tab:si_robust_equal64  wider perturbations, equal window of 64 (T3.5)
+  S12_hardware.tex         S13  tab:si_hardware        hardware and software of the cost study (T3.8)
+  S13_runtime_grid.tex     S14  tab:si_runtime_grid    scoring time per item (T3.8)
+  S14_memory.tex           S15  tab:si_memory          memory (T3.8)
+  S15_runtime_real.tex     S16  tab:si_runtime_real    run time on the real data (T3.8)
+  S16_ablation.tex         S17  tab:si_ablation        eight ablation variants, four scenarios (T3.3)
+  S17_fusion.tex           S18  tab:si_fusion          four fusion functions (T3.3)
+  S18_selection.tex        S19  tab:si_selection       30/70 selection of alpha, beta and J (T3.2)
+  S20_ml_profile.tex       S5   tab:si_ml_profile      MovieLens data profile (T3.9)
+  S23_resp_strict.tex      S20  tab:si_resp_strict     responsiveness, strict entry rule (T2.4)
+  S24_rsi_truth.tex        S21  tab:si_rsi_truth       RSI@10 and the visible change of the truth (T2.4)
 
 Markers
 -------
   \blacktriangle / \triangledown after a value: significantly better / worse than
   the reference of the table (WSPI; symmetric extension in S1; J = 3 in S3),
   block Wilcoxon test with Holm correction (verdict column of the T1.6 statistics).
-  \dagger in S16 and S17 (as in Table 12 of the paper): NOT significantly
+  \dagger in S17 and S18 (as in Table 12 of the paper): NOT significantly
   different from the full index / the exponential form.
 
 Other output (same folder, CSV and JSON only)
@@ -403,7 +407,7 @@ COND = [('size2', r'$2\times$'), ('size5', r'$5\times$'), ('size10', r'$10\times
 
 
 def t_decomp(c):
-    c.table = 'S9'
+    c.table = 'S10'
     r = c.read('T3.5_robustness/robustness_summary.csv')
     w = r[(r.method == 'WSPI') & (r.config == 'default')]
     y = w[(w.scenario == 'youtube_hourly') & (w.condition == 'size10')].iloc[0]
@@ -432,7 +436,7 @@ def t_decomp(c):
 
 
 def t_robust(c, config):
-    c.table = 'S10' if config == 'default' else 'S11'
+    c.table = 'S11' if config == 'default' else 'S12'
     r = c.read('T3.5_robustness/robustness_summary.csv')
     t = c.read('T1.6_stats/T3.5_robustness/all_paired_tests.csv')
     conds = [('size10', r'$10\times$ last'), ('pos_middle', 'Middle'), ('pos_first', 'First'),
@@ -461,7 +465,7 @@ def t_robust(c, config):
            r'first or a random slot of the 64-slot window, lasting 3 or 6 slots, and continuous Poisson '
            r'or Gaussian noise (SNR 10 and 0\,dB). ' + UP + ' / ' + DOWN +
            r': significantly better / worse than WSPI (block Wilcoxon test, Holm correction, $\alpha=0.05$). '
-           r'Spike sizes are shown in Supplementary Fig.~S3.')
+           r'Spike sizes are shown in Supplementary Fig.~S4.')
     L = head(cap, 'tab:si_robust_' + ('default' if config == 'default' else 'equal64'),
              'l' + 'r' * len(conds), sep='3pt')
     L.append('Method & ' + ' & '.join(lab for _, lab in conds) + r'\\')
@@ -503,7 +507,7 @@ def t_robust(c, config):
 
 # ---------------------------------------------------------------- cost (T3.8)
 def t_hardware(c):
-    c.table = 'S12'
+    c.table = 'S13'
     b = c.read('T3.8_runtime/bench/metadata/bench_run.json')
     m = c.read('T3.8_runtime/memory/metadata/memory_run.json')
     h, hm = b['hardware'], m.get('hardware', {})
@@ -524,7 +528,7 @@ def t_hardware(c):
             ('Repeats', f'{b["repeats"]} (median and interquartile range reported)'),
             ('Batch size for large catalogues', f'{b["chunk"]:,} items'),
             ('Seed', str(b['seed']))]
-    cap = 'Hardware and software of the cost measurements (Section 4.7 and Supplementary Tables S13 to S15).'
+    cap = 'Hardware and software of the cost measurements (Section 4.7 and Supplementary Tables S14 to S16).'
     L = head(cap, 'tab:si_hardware', 'll', size=r'\small')
     L.append(r'Item & Value\\')
     L.append(r'\midrule')
@@ -534,7 +538,7 @@ def t_hardware(c):
 
 
 def t_runtime_grid(c):
-    c.table = 'S13'
+    c.table = 'S14'
     g = c.read('T3.8_runtime/bench/runtime_grid.csv')
     Ms = sorted(g.M.unique())
     w = g[(g.method == 'WSPI') & (g.N == 64) & (g.M == 10000)].us_per_item_median.iloc[0]
@@ -565,7 +569,7 @@ def t_runtime_grid(c):
 
 
 def t_memory(c):
-    c.table = 'S14'
+    c.table = 'S15'
     tm = c.read('T3.8_runtime/memory/tracemalloc_grid.csv')
     rs = c.read('T3.8_runtime/memory/rss_grid.csv')
     Ns = [7, 32, 64, 128, 256]
@@ -605,7 +609,7 @@ def t_memory(c):
 
 
 def t_runtime_real(c):
-    c.table = 'S15'
+    c.table = 'S16'
     r = c.read('T3.8_runtime/real_summary_all.csv')
     w = r[(r.method == 'WSPI') & (r.scenario == 'taxi_5min')].iloc[0]
     c.check('WSPI 5-minute taxi score share', round(w.score_share, 3), 0.339)
@@ -678,7 +682,7 @@ def _ablation(c, family, variants, label, cap):
 
 
 def t_ablation(c):
-    c.table = 'S16'
+    c.table = 'S17'
     cap = (r'Ablation of the WSPI components in all four scenarios ($N=64$, $J=3$, $\alpha=\beta=1$); mean '
            r'[95\% block-bootstrap confidence interval] over the common windows. DWT: db4 with symmetric '
            r'extension. ' + DAG + r' Not significantly different from the full index '
@@ -687,7 +691,7 @@ def t_ablation(c):
 
 
 def t_fusion(c):
-    c.table = 'S17'
+    c.table = 'S18'
     cap = (r'Fusion function: four ways to combine the same features with unit weights ($N=64$, $J=3$); mean '
            r'[95\% block-bootstrap confidence interval] over the common windows. The product form ranks items '
            r'like the geometric mean. ' + DAG + r' Not significantly different from the exponential form '
@@ -697,7 +701,7 @@ def t_fusion(c):
 
 # ---------------------------------------------------------------- S18 selection
 def t_selection(c):
-    c.table = 'S18'
+    c.table = 'S19'
     s = c.read('T3.2_param_grid/selection/selection.csv')
     cap = (r'Selection of $(\alpha,\beta)$ and $J$ with the 30/70 split. On the tuning part (first 30\% of the '
            r'common windows) a setting is admissible if its NDCG@10 is at least 0.99 times the best; the '
@@ -732,7 +736,7 @@ def t_selection(c):
 
 # ---------------------------------------------------------------- S20 MovieLens profile
 def t_ml_profile(c):
-    c.table = 'S20'
+    c.table = 'S5'
     g = c.read('T3.9_movielens/data_prep/granularity_profile.csv').set_index('file')
     y = c.read('T3.9_movielens/data_prep/year_profile.csv')
     j = c.read('T3.9_movielens/data_prep/prep_summary.json')
@@ -781,7 +785,7 @@ RESP_COLS = [('WSPI', 'default'), ('DTCWT+AF', 'default'), ('DWT+AF', 'default')
 
 
 def t_resp_strict(c):
-    c.table = 'S23'
+    c.table = 'S20'
     s = c.read('T2.4_responsiveness/responsiveness_summary.csv')
     main = s[(s.variant == 'main') & (s.config == 'default') & (s.method == 'WSPI')].set_index('scenario')
     c.check('main variant YouTube WSPI miss rate (Table 14)', round(main.loc['youtube_hourly'].miss_rate, 3), 0.312)
@@ -809,7 +813,7 @@ def t_resp_strict(c):
 
 
 def t_rsi_truth(c):
-    c.table = 'S24'
+    c.table = 'S21'
     f = c.read('T2.4_responsiveness/all_rsi_failures.csv')
     d = f[f.config == 'default']
     af = d[d.method == 'AF'].set_index('scenario')
