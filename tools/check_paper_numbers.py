@@ -1138,6 +1138,13 @@ def si_table_files(si_dir, sources):
         b = hashlib.md5(src.read_bytes()).hexdigest() if src else ''
         rows.append(dict(file='si/' + f.name, md5=a, generator_output=('/'.join(src.parts[src.parts.index('Response'):]) if 'Response' in src.parts else str(src)) if src else 'not found', same=a == b))
     return rows
+# PyWavelets 1.9.0 is the version installed for all V5 runs, but its generated
+# pywt/version.py still says '1.8.0' (checked against the official cp312 win_amd64
+# wheel of 1.9.0, git_revision c7bca20).  The run metadata therefore record 1.8.0;
+# the paper, the SI and requirements.txt give the installed version.
+PYWT_INSTALLED = {'1.8.0': '1.9.0'}
+
+
 # ------------------------------------------------------------------ main
 def main():
     global RESULTS
@@ -1156,7 +1163,7 @@ def main():
     nbib = len(re.findall(r'\\bibitem\{', a.main.read_text(encoding='utf-8')))
     bench = load(BJ)['hardware']['versions']
     versions = {'python': bench['python'], 'numpy': bench['numpy'], 'pandas': bench['pandas'], 'scipy': bench['scipy'],
-                'pywavelets': bench['pywt'], 'dtcwt': bench['dtcwt'],
+                'pywavelets': PYWT_INSTALLED.get(bench['pywt'], bench['pywt']), 'dtcwt': bench['dtcwt'],
                 'matplotlib': json.loads(a.figures_json.read_text(encoding='utf-8'))['matplotlib']}
 
     # 1. tables, cell by cell

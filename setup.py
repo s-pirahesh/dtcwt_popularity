@@ -15,7 +15,7 @@ else:
 # Read requirements
 requirements_path = Path(__file__).parent / "requirements.txt"
 if requirements_path.exists():
-    with open(requirements_path, 'r') as f:
+    with open(requirements_path, 'r', encoding='utf-8') as f:
         requirements = [
             line.strip() for line in f 
             if line.strip() and not line.startswith('#')
@@ -35,25 +35,23 @@ else:
 
 setup(
     name='dtcwt-popularity',
-    version='3.1.0',
-    author='Sajjad',
-    author_email='',  # Add your email
+    version='4.0.0',
+    author='Sajjad Pirahesh',
+    author_email='pirahesh@phd.tabrizu.ac.ir',
     description='DTCWT-based Data Popularity Assessment for Distributed Systems',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='',  # Add repository URL
+    url='https://github.com/s-pirahesh/dtcwt_popularity',
+    license='MIT',
     packages=find_packages(),
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
         'Topic :: Scientific/Engineering :: Information Analysis',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.12',
     ],
-    python_requires='>=3.7',
+    python_requires='>=3.12',
     install_requires=requirements,
     extras_require={
         'deep-learning': ['tensorflow>=2.8.0'],

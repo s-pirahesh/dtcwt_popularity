@@ -1047,6 +1047,13 @@ def rules_words(E):
 # RULES_WORDS_END
 
 
+# PyWavelets 1.9.0 is the version installed for all V5 runs, but its generated
+# pywt/version.py still says '1.8.0' (checked against the official cp312 win_amd64
+# wheel of 1.9.0, git_revision c7bca20).  The run metadata therefore record 1.8.0;
+# the paper, the SI and requirements.txt give the installed version.
+PYWT_INSTALLED = {'1.8.0': '1.9.0'}
+
+
 # ------------------------------------------------------------------ main
 def main():
     ap = argparse.ArgumentParser(description='Check every number and number word of the response letter (T5.1)')
@@ -1060,7 +1067,7 @@ def main():
     global VERSIONS
     bench = C.load(C.BJ)['hardware']['versions']
     VERSIONS = {'Python': bench['python'], 'NumPy': bench['numpy'], 'pandas': bench['pandas'], 'SciPy': bench['scipy'],
-                'PyWavelets': bench['pywt'], 'dtcwt': bench['dtcwt'],
+                'PyWavelets': PYWT_INSTALLED.get(bench['pywt'], bench['pywt']), 'dtcwt': bench['dtcwt'],
                 'Matplotlib': json.loads(a.figures_json.read_text(encoding='utf-8'))['matplotlib']}
 
     raw, lines = letter_lines(a.letter)

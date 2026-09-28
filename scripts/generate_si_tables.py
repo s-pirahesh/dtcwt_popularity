@@ -506,6 +506,13 @@ def t_robust(c, config):
 
 
 # ---------------------------------------------------------------- cost (T3.8)
+# PyWavelets 1.9.0 is the version installed for all V5 runs, but its generated
+# pywt/version.py still says '1.8.0' (checked against the official cp312 win_amd64
+# wheel of 1.9.0, git_revision c7bca20).  The run metadata therefore record 1.8.0;
+# the paper, the SI and requirements.txt give the installed version.
+PYWT_INSTALLED = {'1.8.0': '1.9.0'}
+
+
 def t_hardware(c):
     c.table = 'S13'
     b = c.read('T3.8_runtime/bench/metadata/bench_run.json')
@@ -523,7 +530,7 @@ def t_hardware(c):
             ('BLAS', f'{h["blas"]["name"]} {h["blas"]["version"]}'),
             ('Python', f'{v["python"]} ({v["python_impl"]})'),
             ('NumPy / SciPy / pandas', f'{v["numpy"]} / {v["scipy"]} / {v["pandas"]}'),
-            ('PyWavelets / dtcwt', f'{v["pywt"]} / {v["dtcwt"]}'),
+            ('PyWavelets / dtcwt', f'{PYWT_INSTALLED.get(v["pywt"], v["pywt"])} / {v["dtcwt"]}'),
             ('Synthetic data', b['data'].replace('lognormal(1, 1)', r'log-normal ($\mu=1$, $\sigma=1$)')),
             ('Repeats', f'{b["repeats"]} (median and interquartile range reported)'),
             ('Batch size for large catalogues', f'{b["chunk"]:,} items'),
