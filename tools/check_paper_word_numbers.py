@@ -1670,7 +1670,6 @@ def rules_si(E):
     T('The nine methods, their window lengths', [Count('n_methods', '9')])
     T('compares the methods in two configurations', [Count('n_configs', '2')])
     T('mean over the windows common to all methods and all $N$', [D(DEF), D(DEF)])
-    T('Methods other than the four highlighted ones are grey, with their name at $N=128$', [D(FIG)])
     T('Two boundary operations act on the wavelet coefficients', [D('padding and boundary extension (Stage 1)')])
     T('The boundary extension of the transform acts in every window', [D('boundary extension inside the dtcwt library')])
     T('compares five extension modes for the three wavelet-based methods', [Count('n_ext5', '5'), Count('n_wav', '3')])
@@ -1685,7 +1684,6 @@ def rules_si(E):
     T('(spike in the last slot, one slot)', [D('main-table test (Table 4)')])
     T('Every method sees the same items and the same spike', [D('design of the common perturbation (T3.5, R11)')])
     T('mean over the common windows and five seeds', [Count('seeds5', '5')])
-    T(r'Methods other than the four highlighted ones are grey, with their name at $50\times$', [D(FIG)])
     T('reports the measured cost of the nine methods', [Count('n_methods', '9')])
     T('Measured cost of the nine methods on one CPU core', [Count('n_methods', '9'), Count('thread1', '1')])
     T('Time to score all items of one window', [L(PLAIN), L(PLAIN)])
@@ -1710,7 +1708,6 @@ def rules_si(E):
     T('appears in the Top-10 of each method (an entry stays at least six slots in the true Top-10 after at least six slots outside it)',
       [L(DIST), Count('L6', '6'), Count('P6', '6')])
     T('the level at the right end equals one minus the miss rate', [L(PLAIN)])
-    T('Methods other than the four highlighted ones are grey.}', [D(FIG)])
 
 
 # ------------------------------------------------------------------ main

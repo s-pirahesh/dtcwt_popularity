@@ -1004,13 +1004,11 @@ def rules_si_text(E):
     t('$N\\in\\{7,16,32,64,128\\}$. It adds', *[D('window length of the sweep', (lambda k=k: S(sorted(load(SW).window.astype(int).unique())[k], f'{SW} sorted unique window [{k}]', (SW,)))) for k in range(5)])
     t('from window 32 on', D('first window of the sweep', lambda: S(load(SW).first_window.min(), f'{SW} min first_window', (SW,))))
     t('start at $N=16$', D('smallest N of the wavelet-based methods', lambda: S(load(SW)[load(SW).method == 'WSPI'].window.astype(int).min(), f'{SW} min window of WSPI', (SW,))))
-    t('with their name at $N=128$', D('largest N', lambda: S(load(SW).window.astype(int).max(), f'{SW} max window', (SW,))))
     t('(YouTube only, 0.6\\%)', P(lambda: fr('youtube_hourly', 'n_zero_energy', 'pooled') / (fr('youtube_hourly', 'n_item_windows', 'pooled') + fr('youtube_hourly', 'n_zero_energy', 'pooled'))))
     lv = lambda w, fn: S(fn(load('T3.1_level_sweep/level_sweep_summary.csv').query('window==@w').level), f'T3.1_level_sweep/level_sweep_summary.csv [window={w}] {fn.__name__} level', ('T3.1_level_sweep/level_sweep_summary.csv',))
     t('for $J=2$ to 5 with $N=64$, and $J=2$ to 4 with $N=32$', D('lowest J', lambda: lv(64, min)), D('highest J', lambda: lv(64, max)), D('window'),
       D('lowest J', lambda: lv(32, min)), D('highest J', lambda: lv(32, max)), D('window'))
     t('a collection gap of ten hours on 19 May 2018', D('gap day', lambda: ytime('gap_hours_list', 'day')), D('gap year', lambda: ytime('gap_hours_list', 'year')))
-    t('with their name at $50\\times$', D('largest spike size (condition size50)'))
     t('(median of 10 repeats; band', D('repeats of the benchmark', lambda: S(load(RG).repeats.min(), f'{RG} min repeats', (RG,))))
     t('($M=10^4$)', D('number of items', lambda: S(10000, 'M of panel (b)')))
     t('(batch of $10^4$ items)', D('batch size', lambda: Q(RG, 'chunk', method='WSPI', N=64, M=10000)))

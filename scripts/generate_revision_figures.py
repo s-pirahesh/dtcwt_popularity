@@ -158,6 +158,55 @@ ROOT = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------- common style
 INK, INK2, GRID, SURF = '#0b0b0b', '#52514e', '#e6e5e0', '#fcfcfb'
 GREY = '#9a9994'
+
+# Every method in its own colour, in every figure (no grey group of 'other
+# methods'); decision of Sajjad, chat 32.  The nine methods use the V4 colours,
+# markers and line widths of evaluation/visualizer.py (METHOD_COLORS,
+# METHOD_MARKERS, _lw), read inside an rc_context so that its global rcParams do
+# not leak into these figures (the same source as Figures 7 and 8 of the paper,
+# scripts/export_paper_figures.py).  SMA, EWMA-eq and Holt are not in V4 and get
+# colours of their own.
+METHOD_EXTRA = {'SMA': ('#3F51B5', 'P', 1.5), 'EWMA-eq': ('#8BC34A', 'X', 1.5),
+                'Holt': ('#FFC107', '<', 1.5)}
+_V4_STYLE = {}
+
+
+def method_style(m):
+    """(colour, marker, line width) of a method."""
+    if not _V4_STYLE:
+        import importlib.util
+        with matplotlib.rc_context():
+            spec = importlib.util.spec_from_file_location(
+                'v4_visualizer', ROOT / 'evaluation' / 'visualizer.py')
+            vis = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(vis)
+            for k, c in vis.METHOD_COLORS.items():
+                _V4_STYLE[k] = (c, vis.METHOD_MARKERS[k], vis._lw(k))
+        _V4_STYLE.update(METHOD_EXTRA)
+    if m not in _V4_STYLE:
+        raise KeyError(f'no colour defined for method {m}')
+    return _V4_STYLE[m]
+
+
+def method_order(methods):
+    """Legend and drawing order: V4 baselines, the added smoothers, then the three
+    wavelet-based methods with WSPI last (drawn on top)."""
+    ref = ['AF', 'CompoundPop', 'EWMA', 'PFRF', 'RRD', 'VSE', 'SMA', 'EWMA-eq', 'Holt',
+           'DWT+AF', 'DTCWT+AF', 'WSPI']
+    ms = list(methods)
+    extra = [m for m in ms if m not in ref]
+    if extra:
+        raise KeyError(f'unknown methods: {extra}')
+    return [m for m in ref if m in ms]
+
+
+def all_method_handles(methods, marker=True):
+    out = []
+    for m in method_order(methods):
+        c, mk, lw = method_style(m)
+        out.append(plt.Line2D([], [], color=c, marker=mk if marker else None, lw=lw * 0.6,
+                              ms=5, label=m))
+    return out
 SCENARIOS = [('youtube_hourly', 'YouTube (hourly)'),
              ('taxi_hourly', 'NYC Taxi (hourly)'),
              ('taxi_30min', 'NYC Taxi (30 min)'),
@@ -326,21 +375,11 @@ def fig_t22_window_curves(results, out):
         for r, (y, ylab) in enumerate(T22_ROWS):
             ax = axes[r, c]
             style_axes(ax)
-            order = [m for m in s.method.unique() if m not in T23_HIGHLIGHT] + \
-                    [m for m in T23_HIGHLIGHT if m in set(s.method)]
-            for m in order:
+            for k, m in enumerate(method_order(s.method.unique())):
                 g = s[s.method == m].sort_values('window')
-                if m in T23_HIGHLIGHT:
-                    col, mk, lw, ms = T23_HIGHLIGHT[m]
-                    z = 4 if m == 'WSPI' else 3
-                else:
-                    col, mk, lw, ms, z = GREY, '.', 0.9, 6, 2
-                ax.plot(g.window, g[y], color=col, lw=lw, marker=mk, ms=ms,
-                        mec=SURF, mew=1.0, zorder=z)
-                if m not in T23_HIGHLIGHT:
-                    last = g.iloc[-1]
-                    ax.annotate(m, (last.window, last[y]), xytext=(4, -3),
-                                textcoords='offset points', fontsize=7, color=INK2)
+                col, mk, lw = method_style(m)
+                ax.plot(g.window, g[y], color=col, lw=lw * 0.6, marker=mk, ms=5,
+                        mec=SURF, mew=0.6, zorder=3 + k)
             ax.set_xscale('log', base=2)
             ax.set_xticks(T22_N)
             ax.set_xticklabels([str(n) for n in T22_N])
@@ -351,9 +390,7 @@ def fig_t22_window_curves(results, out):
                 ax.set_xlabel('window length N (slots)', color=INK2)
             if c == 0:
                 ax.set_ylabel(ylab, color=INK2)
-    h = [plt.Line2D([], [], color=v[0], marker=v[1], lw=v[2], ms=v[3] * 0.85, label=m)
-         for m, v in T23_HIGHLIGHT.items()]
-    h += [plt.Line2D([], [], color=GREY, marker='.', lw=0.9, label='other methods (name at N=128)')]
+    h = all_method_handles(d.method.unique())
     fig.legend(handles=h, loc='lower center', ncol=5, frameon=False, fontsize=9,
                bbox_to_anchor=(0.5, 0.0))
     fig.suptitle('Accuracy and stability against window length N; wavelet-based methods from N=16; '
@@ -531,6 +568,7 @@ def fig_t24_delay_ecdf(results, out):
             ('equal64', 'equal window N = 64')]
     fig, axes = plt.subplots(2, 4, figsize=(17, 8.2), sharey=True)
     dmax = 24
+    ecdf_methods = set()
     for c, (sc, title) in enumerate(SCENARIOS):
         for r, (cfg, clab) in enumerate(cfgs):
             f = root / sc / cfg / 'delays.csv'
@@ -540,20 +578,14 @@ def fig_t24_delay_ecdf(results, out):
             ax = axes[r, c]
             style_axes(ax)
             n = d.event_id.nunique()
-            hl = {l[1]: (l[3], l[4], l[5]) for l in T24_LINES}
-            ms = [m for m in d.method.unique() if m not in hl] + [m for m in hl if m in set(d.method)]
-            for m in ms:
+            ecdf_methods.update(d.method.unique())
+            for k, m in enumerate(method_order(d.method.unique())):
                 g = d[d.method == m]
                 xs = np.arange(0, dmax + 1)
-                ys = [(g.detected & (g.delay <= k)).sum() / n for k in xs]
-                if m in hl:
-                    col, mk, lw = hl[m]
-                    ax.step(xs, ys, where='post', color=col, lw=lw, zorder=4 if m == 'WSPI' else 3)
-                else:
-                    ax.step(xs, ys, where='post', color=GREY, lw=0.9, zorder=2)
-                    ax.annotate(m, (dmax, ys[-1]), xytext=(2, -3), textcoords='offset points',
-                                fontsize=6.5, color=INK2)
-            ax.set_xlim(0, dmax + 4)
+                ys = [(g.detected & (g.delay <= k2)).sum() / n for k2 in xs]
+                col, mk, lw = method_style(m)
+                ax.step(xs, ys, where='post', color=col, lw=lw * 0.6, zorder=3 + k)
+            ax.set_xlim(0, dmax + 1)
             ax.set_ylim(0, 1.02)
             if r == 0:
                 ax.set_title(f'{title}  ({n} entries)', fontsize=10.5, color=INK)
@@ -561,8 +593,7 @@ def fig_t24_delay_ecdf(results, out):
                 ax.set_xlabel('delay d (slots after entry)', color=INK2)
             if c == 0:
                 ax.set_ylabel(f'share of entries in Top-10 by d\n{clab}', color=INK2, fontsize=9)
-    h = [plt.Line2D([], [], color=v[3], lw=v[5], label=v[1]) for v in T24_LINES]
-    h += [plt.Line2D([], [], color=GREY, lw=0.9, label='other methods')]
+    h = all_method_handles(ecdf_methods, marker=False)
     fig.legend(handles=h, loc='lower center', ncol=5, frameon=False, fontsize=9,
                bbox_to_anchor=(0.5, 0.0))
     fig.suptitle('Delay to bring a genuine entry into the Top-10 (entry: >= 6 slots in the true '
@@ -673,6 +704,7 @@ def fig_t35_spike_size(results, out):
     d['size'] = d.condition.str[4:].astype(int)
     fig, axes = plt.subplots(2, 4, figsize=(17, 8.2), sharex=True)
     missing, notes = [], []
+    spike_methods = set()
     for c, (sc, title) in enumerate(SCENARIOS):
         for r, (cfg, rlab) in enumerate(T35_ROWS):
             ax = axes[r, c]
@@ -689,21 +721,13 @@ def fig_t35_spike_size(results, out):
                 ax.text(0.5, 0.5, 'no data yet', transform=ax.transAxes, ha='center',
                         color=INK2)
                 continue
-            order = [m for m in g.method.unique() if m not in T35_HIGHLIGHT] + \
-                    [m for m in T35_HIGHLIGHT if m in set(g.method)]
-            for m in order:
+            spike_methods.update(g.method.unique())
+            for k, m in enumerate(method_order(g.method.unique())):
                 h = g[g.method == m].sort_values('size')
                 y = h['dr_mean'].clip(lower=0.1)
-                if m in T35_HIGHLIGHT:
-                    col, mk, lw, ms = T35_HIGHLIGHT[m]
-                    z = 4 if m == 'WSPI' else 3
-                else:
-                    col, mk, lw, ms, z = GREY, '.', 0.9, 6, 2
-                ax.plot(h['size'], y, color=col, lw=lw, marker=mk, ms=ms,
-                        mec=SURF, mew=1.0, zorder=z)
-                if m not in T35_HIGHLIGHT:
-                    ax.annotate(m, (h['size'].iloc[-1], y.iloc[-1]), xytext=(4, -3),
-                                textcoords='offset points', fontsize=7, color=INK2)
+                col, mk, lw = method_style(m)
+                ax.plot(h['size'], y, color=col, lw=lw * 0.6, marker=mk, ms=5,
+                        mec=SURF, mew=0.6, zorder=3 + k)
             ax.set_xscale('log')
             ax.set_yscale('log')
             ax.set_xticks(T35_SIZES)
@@ -712,9 +736,7 @@ def fig_t35_spike_size(results, out):
             w = g[(g.method == 'WSPI') & (g['size'] == 10)]
             if len(w):
                 notes.append(f"{sc}/{cfg}: WSPI 10x {float(w['dr_mean'].iloc[0]):.2f}")
-    h = [plt.Line2D([], [], color=v[0], marker=v[1], lw=v[2], ms=v[3] * 0.85, label=m)
-         for m, v in T35_HIGHLIGHT.items()]
-    h += [plt.Line2D([], [], color=GREY, marker='.', lw=0.9, label='other methods (name at 50x)')]
+    h = all_method_handles(spike_methods)
     fig.legend(handles=h, loc='lower center', ncol=5, frameon=False, fontsize=9,
                bbox_to_anchor=(0.5, 0.0))
     fig.suptitle('Rank displacement of 50 low-activity items against spike size (spike in the last '
@@ -1250,15 +1272,10 @@ def v4_window_series(results, config, scenario, metric='rsi@10', methods=V4_ORDE
 def _v4_time_panel(ax, df, roll, unit, methods=V4_ORDER):
     _v4_axes(ax)
     ax.xaxis.grid(True, alpha=0.9, linewidth=1.0, color='white')
-    others = [m for m in methods if m not in TIME_HILITE]
-    for m in others:
+    for k, m in enumerate(method_order(methods)):
+        c, mk, lw = method_style(m)
         ax.plot(df['time'], df[m].rolling(roll, center=True, min_periods=roll // 2).mean(),
-                color='#9A9A9A', lw=0.8, alpha=0.8, zorder=2)
-    for m in [m for m in ['AF', 'RRD', 'DWT+AF', 'DTCWT+AF', 'WSPI'] if m in methods]:
-        c, lw = TIME_HILITE[m]
-        ax.plot(df['time'], df[m].rolling(roll, center=True, min_periods=roll // 2).mean(),
-                color=c, lw=lw, zorder=5 if m == 'WSPI' else 3, label=m)
-    ax.plot([], [], color='#9A9A9A', lw=0.8, label='Other baselines (' + ', '.join(others) + ')')
+                color=c, lw=lw * 0.6, zorder=3 + k, label=m)
     ax.set_ylabel(f'RSI@10  (rolling mean, {roll} {unit})', fontsize=10)
     ax.set_ylim(None, 1.01)
 
