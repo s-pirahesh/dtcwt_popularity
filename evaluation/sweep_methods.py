@@ -14,7 +14,7 @@ New smoothers (all vectorised over items, one row per item, oldest -> newest):
             (alpha = 0.3, gamma = 0.1, horizon h = 7; the settings of the
             predcmp run).  Score = sum_{k=1..h} max(0, l + k b).
 
-Settings approved by Sajjad (25 Sep 2026, chat 5):
+Settings (25 Sep 2026):
   - grid N in {7, 16, 32, 64, 128}; the three wavelet-based methods use J = 3
     and are run only for N >= 16 (J = 3 needs at least 16 samples);
   - min_observations: baselines and the three smoothers 3 rows at every N;

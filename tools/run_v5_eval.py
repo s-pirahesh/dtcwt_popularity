@@ -19,7 +19,7 @@ Examples (from the project root, Windows):
   python tools\run_v5_eval.py ... --window AF=16 EWMA=16 RRD=16 VSE=16 CompoundPop=16 PFRF=16
 
 Dataset min-obs of the V4 runs: youtube 50, yellow_taxi (all granularities) 24.
-Full command list: Revisions/V4/Response/Runbooks/RUN_T1.4_T2.1.md
+Full command list: REPRODUCE.md
 Outputs: protocol/*.csv, comparison/summary_{all,common}_windows.csv,
 metadata/protocol_v5_run.json.
 """

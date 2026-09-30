@@ -28,7 +28,7 @@ by tools/run_v5_eval.py) and writes, for every metric column:
 Why block-level tests: consecutive windows share 63 of 64 slots, so per-window
 values are strongly autocorrelated and the window-level Wilcoxon p value is
 far too small.  The block test uses one value per block (a day for YouTube, a
-week for taxi; decision of 24 Sep 2026, tracker section E) and is the basis of
+week for taxi; decision of 24 Sep 2026) and is the basis of
 every claim in the paper.  The window-level p value is reported for
 completeness only.
 
@@ -46,7 +46,7 @@ Examples (from the project root, Windows):
   # stack every stats folder under a root into two tables
   python tools\stats_report.py --collect results\revision_v5\T1.6_stats
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T1.6_T1.5.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_stats_report.py
 """
 import argparse

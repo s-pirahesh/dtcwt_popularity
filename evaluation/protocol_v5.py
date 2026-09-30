@@ -4,8 +4,7 @@ Corrected evaluation protocol V5 (revision-srep-v5, task T1.4)
 Builds on ``evaluation/fast_evaluator.py`` (which is NOT modified: its
 ``compat`` mode keeps reproducing the V4 runs, gate G1).
 
-What changes with respect to the V4 protocol (all approved by Sajjad,
-24 Sep 2026 — see 07_Task_Tracker.md, T1.4):
+What changes with respect to the V4 protocol (24 Sep 2026, experiment T1.4):
 
 1. Exact window.  The training slice of window k is ``[k - W, k)``, i.e.
    exactly W slots (64 for the wavelet-based methods, 7 for the
@@ -46,7 +45,7 @@ Outputs (``out_dir``):
                                             ALL methods of the run evaluate
     metadata/protocol_v5_run.json
 
-Author: Sajjad (with assistance), September 2026
+Author: Sajjad Pirahesh, September 2026
 """
 from __future__ import annotations
 

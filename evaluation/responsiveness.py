@@ -5,8 +5,8 @@ Answers reviewer comment R4.12: does WSPI suppress or delay genuine rises in
 popularity?  No existing module is changed; the evaluator re-uses the matrix,
 the causal item catalogue and the eligibility rule of ``protocol_v5``.
 
-Design (approved by Sajjad, 25 Sep 2026, chat 7)
------------------------------------------------
+Design (25 Sep 2026)
+--------------------
 Ground truth.  At slot k the true ranking orders the catalogue items by their
 real count in slot k (the evaluation target, horizon 1 slot).  Catalogue =
 the causal item catalogue of T1.5 (total count before slot k >= dataset
@@ -52,7 +52,7 @@ compared, window by window, with an existing protocol run of the same
 configuration (``T1.5_causal_universe`` for ``default``,
 ``T2.2_window_sweep/W064`` for ``equal64``).
 
-Author: Sajjad (with assistance), September 2026
+Author: Sajjad Pirahesh, September 2026
 """
 from __future__ import annotations
 

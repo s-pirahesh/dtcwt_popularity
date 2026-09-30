@@ -25,7 +25,7 @@ Examples (from the project root, Windows):
   # one table over all N and methods (common windows of the whole scenario)
   python tools\run_window_sweep.py --collect results\revision_v5\T2.2_window_sweep
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T2.2.md
+Full command list: REPRODUCE.md
 """
 import argparse
 import json

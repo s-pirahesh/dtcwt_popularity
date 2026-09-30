@@ -17,7 +17,7 @@ Note:
     smoothing forecasters). These predict future demand values and are
     scored by the same future-ground-truth protocol.
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 """
 
 from dataclasses import dataclass

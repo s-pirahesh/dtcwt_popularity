@@ -11,7 +11,7 @@ Chapter 3 method lineup:
 Note: 'Statistical' (skewness/kurtosis) removed.
       'Hybrid V3.0' / 'Hybrid V3.1' replaced by 'WSPI'.
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 """
 
 import numpy as np

@@ -4,12 +4,12 @@ Generate the LaTeX result tables of the Scientific Reports revision (task T3.10)
 All numbers come from the result CSVs under ``results/revision_v5`` through the
 same loaders that draw the figures (scripts/generate_revision_figures.py:
 v4_values, v4_tests), so a table and its figure can never disagree.  Nothing
-is typed by hand.  Added in task T3.10 (chat 17, 27 Sep 2026).
+is typed by hand.  Added in task T3.10 (27 Sep 2026).
 
 Parameters
 ----------
   --results   folder of the revision results (normally results\revision_v5)
-  --out       folder for the .tex files (Response\Tables)
+  --out       folder for the .tex files
   --data-out  folder for the source CSVs of the tables and figures
               (default <results>/T3.10_main_figures; CSV and JSON only)
 
@@ -44,7 +44,7 @@ Source data (CSV, in --data-out)
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_revision_tables.py --results results\revision_v5 ^
-         --out "...\Revisions\V4\Response\Tables" ^
+         --out <folder for the tables> ^
          --data-out results\revision_v5\T3.10_main_figures
 """
 import argparse

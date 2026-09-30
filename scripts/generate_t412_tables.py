@@ -1,8 +1,7 @@
 r"""
 Six-scenario result tables of paper V5 (task T4.12)
 ====================================================
-MovieLens joins the main results of Section 4 (decision of Sajjad, chat 30;
-layout approved in chat 31).  This program writes the two main tables and the
+MovieLens joins the main results of Section 4 (28 Sep 2026).  This program writes the two main tables and the
 four SI tables of intervals and paired tests with all six scenarios: YouTube,
 NYC Yellow Taxi at three granularities and MovieLens daily and weekly.
 
@@ -12,7 +11,7 @@ T1.6 statistics against summary_common_windows.csv of every run, and the
 formatting helpers of scripts/generate_revision_tables.py.  Neither file is
 changed; the T3.10 tables stay as they were.
 
-Main tables (layout of chat 31): one panel per metric, one column per scenario,
+Main tables: one panel per metric, one column per scenario,
 nine rows per panel.  Bold = best of the nine methods in the scenario at the
 printed precision; \blacktriangle / \triangledown = significantly better /
 worse than WSPI (block Wilcoxon, Holm per scenario x metric, alpha 0.05).
@@ -20,7 +19,7 @@ worse than WSPI (block Wilcoxon, Holm per scenario x metric, alpha 0.05).
 Parameters
 ----------
   --results   folder of the revision results (results\revision_v5); read only
-  --out       folder for the .tex files and the run JSON (Response\Tables)
+  --out       folder for the .tex files and the run JSON
 
 Output (in --out)
 -----------------
@@ -36,7 +35,7 @@ Nothing is written to results.
 
 Usage (Windows, from the project root)
 --------------------------------------
-  python scripts\generate_t412_tables.py --results results\revision_v5 --out "...\Response\Tables"
+  python scripts\generate_t412_tables.py --results results\revision_v5 --out <folder for the tables>
 """
 import argparse
 import hashlib
@@ -65,7 +64,7 @@ HEAD6 = {'youtube_hourly': r'\shortstack{YouTube\\(1h)}', 'taxi_hourly': r'\shor
          'movielens_daily': r'\shortstack{MovieLens\\(1d)}', 'movielens_weekly': r'\shortstack{MovieLens\\(1w)}'}
 MET_PANEL = {'ndcg@10': r'NDCG@10 $\uparrow$', 'spearman_rho': r'Spearman $\rho$ $\uparrow$',
              'rsi@10': r'RSI@10 $\uparrow$', 'robustness_distortion': r'$\Delta$Rank $\downarrow$'}
-# Supplementary numbers of the interval and test tables (order of first citation, chat 31)
+# Supplementary numbers of the interval and test tables (order of first citation)
 SI_NUM = {'default': ('S6', 'S7'), 'equal64': ('S8', 'S9')}
 
 

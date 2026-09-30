@@ -30,7 +30,7 @@ Examples (from the project root, Windows):
   # all_rsi_failures.csv, all_control.csv
   python tools\run_responsiveness.py --collect results\revision_v5\T2.4_responsiveness
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T2.4.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_responsiveness.py
 """
 import argparse

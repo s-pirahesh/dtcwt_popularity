@@ -2,7 +2,7 @@
 """
 Comprehensive Evaluation Configuration
 Supports all datasets with adaptive parameters
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025
 """
 
@@ -16,42 +16,42 @@ from datetime import timedelta
 @dataclass
 class EvaluationConfig:
     """
-    پیکربندی جامع برای ارزیابی زمانی
-    سازگار با همه دیتاست‌ها (MovieLens, YouTube, Youku, NYC Taxi, ...)
+    Complete configuration of the temporal evaluation
+    Works with every dataset (MovieLens, YouTube, Youku, NYC Taxi, ...)
     """
     
-    # === پارامترهای زمانی ===
-    start_date: Optional[str] = None        # 'YYYY-MM-DD' یا None (از ابتدا)
-    end_date: Optional[str] = None          # 'YYYY-MM-DD' یا None (تا انتها)
+    # === Time parameters ===
+    start_date: Optional[str] = None        # 'YYYY-MM-DD' or None (from the start)
+    end_date: Optional[str] = None          # 'YYYY-MM-DD' or None (to the end)
     
-    # Time Granularity (اندازه یک time slot)
-    # مثال:
+    # Time granularity (length of one time slot)
+    # Examples:
     #   MovieLens daily: timedelta(days=1)
     #   MovieLens weekly: timedelta(days=7)
     #   Youku (5-min): timedelta(minutes=5)
     #   NYC Yellow Taxi (15-min): timedelta(minutes=15)
-    time_granularity: str = 'daily'        # 'daily', 'hourly', 'minute', یا custom
-    slot_duration_minutes: Optional[int] = None  # برای custom granularity
+    time_granularity: str = 'daily'        # 'daily', 'hourly', 'minute' or custom
+    slot_duration_minutes: Optional[int] = None  # for a custom granularity
     
-    # Window Parameters (به تعداد time slots)
-    window_size: int = 30                   # تعداد time slots برای training
-    prediction_horizon: int = 7             # (legacy) فقط برای compatibility
-    step_size: int = 1                      # گام لغزش (همیشه 1 slot)
-    use_pre_range_data: bool = True         # استفاده از داده قبل از start_date
+    # Window parameters (in time slots)
+    window_size: int = 30                   # number of time slots in the window
+    prediction_horizon: int = 7             # (legacy) kept for compatibility only
+    step_size: int = 1                      # sliding step (always 1 slot)
+    use_pre_range_data: bool = True         # use data before start_date
     
-    # === پارامترهای آیتم ===
-    num_items: Optional[int] = None         # تعداد آیتم‌ها (None = همه)
+    # === Item parameters ===
+    num_items: Optional[int] = None         # number of items (None = all)
     item_selection: str = 'top'             # 'top', 'random', 'stratified'
-    min_observations: int = 10              # حداقل مشاهدات برای یک آیتم
+    min_observations: int = 10              # minimum observations of an item
     
-    # === پارامترهای Stratification ===
-    strata_thresholds: Optional[List[int]] = None  # [Q1, Q2, Q3] یا None (خودکار)
+    # === Stratification parameters ===
+    strata_thresholds: Optional[List[int]] = None  # [Q1, Q2, Q3] or None (automatic)
     strata_names: List[str] = field(default_factory=lambda: ['cold_start', 'low', 'medium', 'high'])
     
-    # === پارامترهای روش‌ها ===
-    methods: Optional[List[str]] = None     # لیست روش‌ها یا None (همه)
+    # === Method parameters ===
+    methods: Optional[List[str]] = None     # list of methods or None (all)
     
-    # === پارامترهای Wavelet (مهم!) ===
+    # === Wavelet parameters (important) ===
     wavelet_config: Dict = field(default_factory=lambda: {
         'dwt': {
             'wavelet': 'db4',
@@ -65,34 +65,34 @@ class EvaluationConfig:
         }
     })
     
-    # === پارامترهای ذخیره‌سازی ===
-    # نتایج میانی: همیشه Parquet (غیرقابل تغییر - حجم زیاد)
-    # شامل: detailed scores, stratum summaries
+    # === Storage parameters ===
+    # Intermediate results: always Parquet (fixed; large volume)
+    # Includes: detailed scores, stratum summaries
     
-    # نتایج نهایی: قابل انتخاب
-    # شامل: method comparison, final reports
-    final_format: str = 'csv'                  # فرمت نتایج نهایی: 'csv' or 'parquet'
-    compression: str = 'snappy'                # فشرده‌سازی Parquet: 'snappy', 'gzip', 'brotli'
-    save_detailed: bool = True                 # ذخیره نتایج تفصیلی (Parquet)
-    save_summary: bool = True                  # ذخیره خلاصه (Parquet)
-    output_dir: Optional[Path] = None          # دایرکتوری خروجی
+    # Final results: format can be chosen
+    # Includes: method comparison, final reports
+    final_format: str = 'csv'                  # format of the final results: 'csv' or 'parquet'
+    compression: str = 'snappy'                # Parquet compression: 'snappy', 'gzip', 'brotli'
+    save_detailed: bool = True                 # save the detailed results (Parquet)
+    save_summary: bool = True                  # save the summary (Parquet)
+    output_dir: Optional[Path] = None          # output directory
     
-    # === پارامترهای Performance ===
-    parallel: bool = True                  # پردازش موازی
-    num_cores: int = -1                    # -1 = همه هسته‌ها
-    batch_size: int = 100                  # تعداد آیتم‌ها در هر batch
+    # === Performance parameters ===
+    parallel: bool = True                  # parallel processing
+    num_cores: int = -1                    # -1 = all cores
+    batch_size: int = 100                  # number of items per batch
     
-    # === پارامترهای Logging ===
+    # === Logging parameters ===
     verbose: bool = True
     progress_bar: bool = True
-    log_interval: int = 100                # هر 100 پنجره log کن
+    log_interval: int = 100                # log every 100 windows
     
     # === Dataset name ===
     dataset_name: str = 'movielens'
     
     # === Run naming ===
-    run_name: Optional[str] = None          # نام دلخواه برای این run (یا None برای خودکار)
-    use_timestamp: bool = True              # اضافه کردن timestamp به نام
+    run_name: Optional[str] = None          # optional name of this run (None = automatic)
+    use_timestamp: bool = True              # add a timestamp to the name
 
     # === Frozen Evaluation Protocol — Decision Layer ===
     # K values used for NDCG@K, Coverage@K, and RSI@K
@@ -105,35 +105,35 @@ class EvaluationConfig:
     spike_multiplier: float = 10.0
     
     def __post_init__(self):
-        """محاسبه خودکار پارامترها و اعتبارسنجی"""
+        """Derive the automatic parameters and validate them"""
         
-        # 1. تنظیم خودکار wavelet levels
+        # 1. Automatic wavelet levels
         if self.wavelet_config['dwt']['level'] == 'auto':
             max_level = int(np.log2(self.window_size))
-            # محافظه‌کارانه: 1 level کمتر از maximum
+            # Conservative: one level below the maximum
             self.wavelet_config['dwt']['level'] = min(max_level - 1, 5)
             self.wavelet_config['dwt']['level'] = max(self.wavelet_config['dwt']['level'], 2)
         
         if self.wavelet_config['dtcwt']['level'] == 'auto':
             max_level = int(np.log2(self.window_size)) - 1
-            # محافظه‌کارانه: 1 level کمتر از maximum
+            # Conservative: one level below the maximum
             self.wavelet_config['dtcwt']['level'] = min(max_level - 1, 4)
             self.wavelet_config['dtcwt']['level'] = max(self.wavelet_config['dtcwt']['level'], 2)
         
-        # 2. اعتبارسنجی window_size
+        # 2. Validate window_size
         self._validate_window_size()
         
-        # 3. تنظیم output directory با run name
+        # 3. Output directory with the run name
         if self.output_dir is None:
             from pathlib import Path
             from datetime import datetime
             
-            # ایجاد نام منحصر به فرد برای این run
+            # Unique name for this run
             if self.run_name is None:
-                # نام خودکار بر اساس پارامترها
+                # Automatic name from the parameters
                 self.run_name = self._generate_run_name()
             
-            # اضافه کردن timestamp
+            # Add a timestamp
             if self.use_timestamp:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 run_dir_name = f"{self.run_name}_{timestamp}"
@@ -142,16 +142,16 @@ class EvaluationConfig:
             
             self.output_dir = Path(__file__).parent.parent / 'results' / self.dataset_name / run_dir_name
         
-        # 4. ایجاد دایرکتوری‌ها
+        # 4. Create the directories
         self._create_directories()
         
-        # 5. اعتبارسنجی پارامترها
+        # 5. Validate the parameters
         self._validate_parameters()
     
     def _validate_window_size(self):
-        """بررسی اینکه window_size برای wavelet کافی است"""
+        """Check that window_size is long enough for the wavelets"""
         
-        # بررسی DWT
+        # Check DWT
         dwt_level = self.wavelet_config['dwt']['level']
         min_size_dwt = 2 ** (dwt_level + 1)
         if self.window_size < min_size_dwt:
@@ -160,7 +160,7 @@ class EvaluationConfig:
                 f"Minimum required: {min_size_dwt}"
             )
         
-        # بررسی DTCWT
+        # Check DTCWT
         dtcwt_level = self.wavelet_config['dtcwt']['level']
         min_size_dtcwt = 2 ** (dtcwt_level + 2)
         if self.window_size < min_size_dtcwt:
@@ -170,7 +170,7 @@ class EvaluationConfig:
             )
     
     def _create_directories(self):
-        """ایجاد ساختار دایرکتوری‌ها"""
+        """Create the directory structure"""
         
         self.output_dir.mkdir(exist_ok=True, parents=True)
         
@@ -185,7 +185,7 @@ class EvaluationConfig:
         (self.output_dir / 'visualization').mkdir(exist_ok=True)
     
     def _validate_parameters(self):
-        """اعتبارسنجی پارامترها"""
+        """Validate the parameters"""
         
         if self.window_size < 4:
             raise ValueError("window_size must be at least 4")
@@ -204,10 +204,10 @@ class EvaluationConfig:
     
     def _generate_run_name(self) -> str:
         """
-        ایجاد نام توصیفی برای run بر اساس پارامترها
+        Build a descriptive run name from the parameters
         
         Returns:
-            نام run (مثلاً: w30_h7_n1000_top)
+            run name (e.g. w30_h7_n1000_top)
         """
         parts = []
         
@@ -231,11 +231,11 @@ class EvaluationConfig:
         return "_".join(parts)
     
     def get_num_windows(self, total_days: int) -> int:
-        """محاسبه تعداد پنجره‌های ممکن"""
+        """Number of possible windows"""
         return max(0, total_days - self.window_size - self.prediction_horizon + 1)
     
     def to_dict(self) -> dict:
-        """تبدیل به dictionary برای ذخیره"""
+        """Convert to a dictionary for saving"""
         return {
             'start_date': self.start_date,
             'end_date': self.end_date,
@@ -259,14 +259,14 @@ class EvaluationConfig:
         }
     
     def save_config(self, filepath: Path):
-        """ذخیره پیکربندی"""
+        """Save the configuration"""
         import json
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
     
     def __repr__(self):
-        """نمایش خلاصه پیکربندی"""
+        """Print a summary of the configuration"""
         return (
             f"EvaluationConfig(\n"
             f"  Dataset:          {self.dataset_name}\n"
@@ -286,7 +286,7 @@ class EvaluationConfig:
     
     def get_slot_duration(self) -> timedelta:
         """
-        محاسبه مدت زمان یک time slot
+        Duration of one time slot
         
         Returns:
             timedelta object representing one time slot
@@ -307,10 +307,10 @@ class EvaluationConfig:
             raise ValueError(f"Unknown time_granularity: {self.time_granularity}")
 
 
-# پیکربندی‌های پیش‌فرض برای دیتاست‌های مختلف
+# Default configurations of the datasets
 
 def get_movielens_config(**kwargs) -> EvaluationConfig:
-    """پیکربندی پیش‌فرض برای MovieLens"""
+    """Default configuration for MovieLens"""
     defaults = {
         'dataset_name': 'movielens',
         'window_size': 30,
@@ -397,7 +397,7 @@ def get_youtube_config(**kwargs) -> EvaluationConfig:
     return EvaluationConfig(**defaults)
 
 def get_youku_config(**kwargs) -> EvaluationConfig:
-    """پیکربندی پیش‌فرض برای Youku (5-minute granularity)"""
+    """Default configuration for Youku (5-minute granularity)"""
     defaults = {
         'dataset_name': 'youku',
         'time_granularity': 'custom',

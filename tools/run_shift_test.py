@@ -5,7 +5,7 @@ Answers R4.7 (a controlled temporal-shift experiment comparing DTCWT with DWT an
 a conventional smoothing method) and supports R3.3.  No existing module is
 changed; the scorers and transforms are imported from the pipeline.
 
-Why two parts (decided with Sajjad, 26 Sep 2026, chat 13).  When the real window
+Why two parts (26 Sep 2026).  When the real window
 slides by one slot, two things change at once: the content (a new slot enters,
 the oldest leaves) and the position of the data on the dyadic grid of the
 transform.  A comparison of the score at t and t+s mixes both.  So:
@@ -96,7 +96,7 @@ Examples (from the project root, Windows):
   python tools\run_shift_test.py --stats results\revision_v5\T3.6_shift_invariance ^
          --stats-out results\revision_v5\T1.6_stats\T3.6_shift_invariance
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.6.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_shift_test.py
 """
 import argparse
@@ -135,7 +135,7 @@ DWT_WAVELET = 'db4'
 METRICS = ['cv_E_L', 'cv_E_1', 'cv_E_2', 'cv_E_3', 'sd_R', 'sd_WE']
 TRANSFORMS = ('DTCWT', 'DWT')
 REF_T15 = Path('results/revision_v5/T1.5_causal_universe/T1.4_protocol_v5')
-DATASETS = {  # scenario folder -> (block, block_sens), T1.6 (tracker section E)
+DATASETS = {  # scenario folder -> (block, block_sens), T1.6
     'youtube_hourly': (24, None),
     'taxi_hourly': (168, 24),
     'taxi_30min': (336, 48),

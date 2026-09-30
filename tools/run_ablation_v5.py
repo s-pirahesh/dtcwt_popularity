@@ -11,7 +11,7 @@ padding (left) only while a series is shorter than 64, entry rule 32 observed
 rows, horizon 1 slot, RSI by item id, stable tie-breaking, seed 42, robustness
 test on.  Use --causal-universe (paper setting).  Windows >= 32 are written.
 
-Two families (decided by Sajjad, 26 Sep 2026, chat 10).  Each family is its own
+Two families (26 Sep 2026).  Each family is its own
 run folder, so tools/stats_report.py (unchanged) builds one Holm family per
 scenario x metric x family, with WSPI as the reference.
 
@@ -63,7 +63,7 @@ Examples (from the project root, Windows):
          --causal-universe --out results\revision_v5\T3.3_ablation\youtube_hourly
   python tools\run_ablation_v5.py --collect results\revision_v5\T3.3_ablation
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.3.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_ablation_v5.py
 """
 import argparse

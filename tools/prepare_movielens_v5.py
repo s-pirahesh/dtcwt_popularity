@@ -9,7 +9,7 @@ Builds the two MovieLens files used in the paper from the raw GroupLens file
 
 Columns: ``timestamp,item_id,count`` (same layout as the YouTube and taxi files).
 
-Rules (decisions of Sajjad, 27 Sep 2026, chat 16):
+Rules (27 Sep 2026):
   * signal = number of ratings of the movie in the slot; the rating VALUE is
     not used (one rating = one interaction), no rating filter;
   * all ratings are kept, including those made on the user's first day;
@@ -40,7 +40,7 @@ Example (Windows, from the project root):
          --start 2015-01-01 --end 2023-10-12 --min-obs 24 ^
          --data-out data\datasets --meta-out results\revision_v5\T3.9_movielens\data_prep
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.9.md
+Full command list: REPRODUCE.md
 """
 import argparse
 import hashlib

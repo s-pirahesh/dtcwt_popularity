@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Results Analyzer - تحلیل نتایج ذخیره‌شده
+Results Analyzer - analysis of saved results
 =========================================
-دو حالت کار:
-  display-only  : خواندن متریک‌های از پیش محاسبه‌شده (protocol/*.parquet/csv)
-  recompute     : بازمحاسبه کامل 4-Layer Protocol از raw detailed scores
+Two modes:
+  display-only  : read the pre-computed metrics (protocol/*.parquet/csv)
+  recompute     : recompute the full 4-layer protocol from the raw detailed scores
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025 (refactored for Frozen Evaluation Protocol)
 """
 
@@ -29,14 +29,14 @@ from .scenarios import RobustnessScenario
 
 class ResultsAnalyzer:
     """
-    تحلیل نتایج ذخیره‌شده بدون شبیه‌سازی مجدد.
+    Analyse saved results without running the simulation again.
 
     Features:
-    - بارگذاری نتایج از Parquet/CSV
-    - display-only: خواندن protocol metrics از پیش محاسبه‌شده
-    - recompute: بازمحاسبه 4-Layer از raw detailed scores
-    - مقایسه روش‌ها با جدول multi-K
-    - فیلتر: stratum, time range, top-k%
+    - load results from Parquet/CSV
+    - display-only: read the pre-computed protocol metrics
+    - recompute: recompute the 4 layers from the raw detailed scores
+    - compare methods in a multi-K table
+    - filters: stratum, time range, top-k%
     """
 
     K_VALUES: List[int] = [5, 10, 20]
@@ -74,7 +74,7 @@ class ResultsAnalyzer:
         return json.load(open(p)) if p.exists() else {}
 
     def _detect_methods(self) -> List[str]:
-        """شناسایی روش‌های موجود از detailed/ یا protocol/"""
+        """Find the available methods in detailed/ or protocol/"""
         methods = set()
 
         detailed_dir = self.run_dir / 'detailed'
@@ -96,7 +96,7 @@ class ResultsAnalyzer:
 
     def load_detailed_scores(self, method_name: str,
                              use_cache: bool = True) -> pd.DataFrame:
-        """بارگذاری detailed scores (Parquet)"""
+        """Load the detailed scores (Parquet)"""
         if use_cache and method_name in self._cache:
             return self._cache[method_name]
 
@@ -113,7 +113,7 @@ class ResultsAnalyzer:
         return df
 
     def load_stratum_summary(self, method_name: str) -> pd.DataFrame:
-        """بارگذاری stratum summary (Parquet)"""
+        """Load the stratum summary (Parquet)"""
         fp = self.run_dir / 'summary' / f'{method_name}_stratum_summary.parquet'
         if not fp.exists():
             raise FileNotFoundError(f"Stratum summary not found: {fp}")
@@ -124,7 +124,7 @@ class ResultsAnalyzer:
 
     def load_protocol_metrics(self, method_name: str) -> Optional[pd.DataFrame]:
         """
-        بارگذاری 4-Layer Protocol metrics از پیش محاسبه‌شده.
+        Load the pre-computed 4-layer protocol metrics.
         Returns None if not found (run may be old/without protocol output).
         """
         proto_dir = self.run_dir / 'protocol'
@@ -182,7 +182,7 @@ class ResultsAnalyzer:
 
     def get_protocol_summary(self, method_name: str) -> Optional[Dict]:
         """
-        خواندن خلاصه آماری متریک‌های Protocol از فایل‌های ذخیره‌شده.
+        Read the summary statistics of the protocol metrics from the saved files.
         Returns None if protocol file does not exist.
         """
         df = self.load_protocol_metrics(method_name)
@@ -212,20 +212,20 @@ class ResultsAnalyzer:
                                    start_date: Optional[str] = None,
                                    end_date: Optional[str] = None) -> pd.DataFrame:
         """
-        بازمحاسبه کامل 4-Layer Protocol از raw detailed scores.
+        Recompute the full 4-layer protocol from the raw detailed scores.
 
-        برای هر window_id:
+        For every window_id:
           - Layer 1: NDCG@K, CHR@K
           - Layer 2: Kendall τ, Spearman ρ, MAE
-          - Layer 3: RSI@K (Jaccard با window قبلی)
-          - Layer 4: Rank Distortion (با RobustnessScenario روی اسکور‌ها)
+          - Layer 3: RSI@K (Jaccard with the previous window)
+          - Layer 4: Rank Distortion (RobustnessScenario on the scores)
 
         Returns:
-            DataFrame با یک سطر برای هر window_id
+            DataFrame with one row per window_id
         """
         df = self.load_detailed_scores(method_name)
 
-        # اعمال فیلترها
+        # Apply the filters
         if filter_top_percent:
             df = self.filter_by_percentile(df, filter_top_percent)
         if filter_stratum:
@@ -276,8 +276,8 @@ class ResultsAnalyzer:
                 prev_top_k[k] = top_k_now
 
             # ---- Layer 4: Robustness (synthetic — on score vector) ----------
-            # چون داده‌های اولیه time-series موجود نیست، از بردار امتیازها
-            # به عنوان یک time-series تک‌بُعدی تقریب می‌زنیم.
+            # The original time series are not available, so the score vector
+            # is used as a one-dimensional time series (approximation).
             try:
                 scores_2d = scores.reshape(1, -1)   # 1 × N  (N = items as "time")
                 target_idxs = scenario.select_stable_candidates(scores_2d.T)
@@ -312,22 +312,22 @@ class ResultsAnalyzer:
                                   end_date: Optional[str] = None,
                                   recompute: bool = False) -> Dict:
         """
-        محاسبه / خواندن معیارهای کلی یک روش.
+        Compute or read the overall metrics of one method.
 
         Args:
-            recompute: اگر True بازمحاسبه از raw scores انجام می‌شود؛
-                       اگر False از protocol metrics ذخیره‌شده می‌خواند
-                       (در صورت نبود، fallback به raw scores).
+            recompute: if True, recompute from the raw scores;
+                       if False, read the saved protocol metrics
+                       (falls back to the raw scores if they are missing).
         """
         if recompute or any([filter_top_percent, filter_stratum,
                               start_date, end_date]):
-            # بازمحاسبه از raw scores (تنها راه برای اعمال فیلتر)
+            # Recompute from the raw scores (the only way to apply filters)
             proto_df = self.recompute_protocol_metrics(
                 method_name, filter_top_percent, filter_stratum,
                 start_date, end_date
             )
         else:
-            # سعی در خواندن protocol metrics ذخیره‌شده
+            # Try to read the saved protocol metrics
             proto_df = self.load_protocol_metrics(method_name)
             if proto_df is None:
                 # fallback
@@ -361,10 +361,10 @@ class ResultsAnalyzer:
                         end_date: Optional[str] = None,
                         recompute: bool = False) -> pd.DataFrame:
         """
-        مقایسه همه روش‌ها در یک جدول.
+        Compare all methods in one table.
 
         Args:
-            recompute: بازمحاسبه از raw scores (به‌جای خواندن فایل ذخیره‌شده)
+            recompute: recompute from the raw scores (instead of reading the saved file)
         """
         rows = []
         for method_name in self.available_methods:
@@ -391,11 +391,11 @@ class ResultsAnalyzer:
                                window_agg: str = 'mean',
                                recompute: bool = False) -> pd.DataFrame:
         """
-        تکامل زمانی یک معیار (از protocol metrics یا bازمحاسبه).
+        Evolution of one metric over time (from the protocol metrics or recomputed).
 
         Args:
-            metric: نام ستون (مثلاً 'spearman_rho', 'ndcg@10', 'rsi@10')
-            recompute: بازمحاسبه از raw scores
+            metric: column name (e.g. 'spearman_rho', 'ndcg@10', 'rsi@10')
+            recompute: recompute from the raw scores
         """
         if recompute:
             df = self.recompute_protocol_metrics(method_name)
@@ -445,7 +445,7 @@ class ResultsAnalyzer:
         print(f"K values:          {self.config.get('k_list', self.K_VALUES)}")
         print(f"Available Methods: {', '.join(self.available_methods)}")
 
-        # بررسی وجود protocol output
+        # Check that the protocol output exists
         proto_dir = self.run_dir / 'protocol'
         has_proto = proto_dir.exists() and any(proto_dir.iterdir())
         print(f"Protocol data:     {'✓ found' if has_proto else '✗ not found (use --recompute)'}")

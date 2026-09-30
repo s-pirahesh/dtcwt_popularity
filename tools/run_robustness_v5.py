@@ -6,8 +6,8 @@ repeatable configuration).  No existing module is changed; the scorers come
 from evaluation/protocol_v5.py and the statistics from tools/stats_report.py
 (imported, unchanged).
 
-Design (decided in chat 12, 26 Sep 2026; tracker section E)
-------------------------------------------------------------
+Design (26 Sep 2026)
+--------------------
 "Common perturbation": in every evaluation window every method sees the SAME
 corrupted data.  This extends the T1.4 rule "fixed seed and identical input
 in the robustness test".
@@ -112,7 +112,7 @@ Examples (from the project root, Windows):
   python tools\run_robustness_v5.py --stats results\revision_v5\T3.5_robustness ^
          --stats-out results\revision_v5\T1.6_stats\T3.5_robustness
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.5.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_robustness_v5.py
 """
 import argparse

@@ -64,7 +64,7 @@ Usage
 
 or from the command line (see ``tools/run_fast_eval.py``).
 
-Author: Sajjad (with assistance), September 2026
+Author: Sajjad Pirahesh, September 2026
 """
 from __future__ import annotations
 

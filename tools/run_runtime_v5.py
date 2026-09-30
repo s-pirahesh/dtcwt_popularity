@@ -7,7 +7,7 @@ memory) and R4.17 (rigorous runtime and memory; evidence for real-time claims).
 No existing module is changed.  Every scorer is the exact protocol-V5 scorer of
 the paper (evaluation.protocol_v5.build_v5_methods, J = 3).
 
-Design (decided with Sajjad, 27 Sep 2026, chat 15)
+Design (27 Sep 2026)
   * Threads: one thread for NumPy / BLAS (OMP, MKL, OpenBLAS, NumExpr, vecLib = 1),
     set before NumPy is imported ("--threads default" leaves the library default).
     The paper states the numbers as "on one CPU core".
@@ -73,7 +73,7 @@ Examples (from the project root, Windows):
          --causal-universe --out results\revision_v5\T3.8_runtime\real\youtube_hourly
   python tools\run_runtime_v5.py --collect results\revision_v5\T3.8_runtime
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.8.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_runtime_v5.py
 """
 import os

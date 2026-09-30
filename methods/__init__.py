@@ -1,24 +1,24 @@
 # -*- coding: utf-8 -*-
 """
 Methods Package
-روش‌های مختلف تخمین محبوبیت
+Popularity estimation methods
 
-Available methods (بر اساس dependencies نصب شده):
+Available methods (depending on the installed dependencies):
 - DTCWTAssessment: Dual-Tree Complex Wavelet Transform (requires: dtcwt)
 - DWTAssessment: Discrete Wavelet Transform (requires: pywt)
 - HybridAssessment: Hybrid approaches
 - StatisticalAssessment: Statistical features
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025
 """
 
 import warnings
 
-# لیست methods موجود
+# List of the available methods
 __all__ = []
 
-# Import DWTAssessment (نیاز به pywt)
+# Import DWTAssessment (needs pywt)
 try:
     from .dwt_assessment import DWTAssessment
     __all__.append('DWTAssessment')
@@ -26,7 +26,7 @@ except ImportError as e:
     DWTAssessment = None
     warnings.warn(f"DWTAssessment not available: {e}", ImportWarning)
 
-# Import DTCWTAssessment (نیاز به dtcwt)
+# Import DTCWTAssessment (needs dtcwt)
 try:
     from .dtcwt_assessment import DTCWTAssessment
     __all__.append('DTCWTAssessment')
@@ -52,7 +52,7 @@ except ImportError as e:
 
 __version__ = '1.0.0'
 
-# نمایش methods موجود
+# Show the available methods
 if __all__:
     print(f"✓ Loaded {len(__all__)} methods: {', '.join(__all__)}")
 else:

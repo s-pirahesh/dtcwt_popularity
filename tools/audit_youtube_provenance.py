@@ -7,7 +7,7 @@ whether the data allow the experiments to be reproduced.  This script only
 READS the raw file, the processed file, the V5 protocol CSVs and the other
 dataset files, and writes CSV / JSON.  No existing module is changed.
 
-Facts it establishes (decided with Sajjad, 27 Sep 2026, chat 18)
+Facts it establishes (27 Sep 2026)
   * Raw file = Kaggle "YouTube videos viewCount every hour"
     (nnqkfdjq/statistics-observation-of-random-youtube-video, CC0, version 2),
     file count_observation_upload.csv: one row per video and hourly snapshot.
@@ -49,7 +49,7 @@ Outputs (<out>)
   dataset_summary.csv      (--summary) items and period of every data file
   metadata/provenance_run.json
 
-Author: Sajjad (with assistance), September 2026
+Author: Sajjad Pirahesh, September 2026
 """
 from __future__ import annotations
 

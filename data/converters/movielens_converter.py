@@ -1,6 +1,6 @@
 """
 MovieLens Dataset Converter
-تبدیل فایل ratings.csv به فرمت استاندارد
+Converts ratings.csv to the standard format
 
 Dataset: MovieLens (ml-25m, ml-32m)
 Source: https://grouplens.org/datasets/movielens/
@@ -13,7 +13,7 @@ from .base_converter import BaseConverter, ConverterFactory
 
 class MovieLensConverter(BaseConverter):
     """
-    Converter برای دیتاست MovieLens
+    Converter for the MovieLens dataset
     
     Input: ratings.csv
         - userId, movieId, rating, timestamp
@@ -77,18 +77,18 @@ class MovieLensConverter(BaseConverter):
                  min_rating: Optional[float] = None,
                  **kwargs):
         """
-        مقداردهی اولیه
+        Initialisation
         
         Args:
-            aggregate_by: تجمیع زمانی ('hour', 'day', 'week', None)
-            keep_rating: نگهداری ستون rating
-            keep_user: نگهداری ستون userId
-            min_rating: حداقل rating برای فیلتر
-            **kwargs: پارامترهای BaseConverter
+            aggregate_by: time aggregation ('hour', 'day', 'week', None)
+            keep_rating: keep the rating column
+            keep_user: keep the userId column
+            min_rating: minimum rating kept by the filter
+            **kwargs: BaseConverter parameters
         """
         super().__init__(**kwargs)
         
-        # تنظیم پارامترها
+        # Set the parameters
         self.aggregate_by = aggregate_by if aggregate_by != 'none' else None
         self.keep_rating = keep_rating
         self.keep_user = keep_user
@@ -98,19 +98,19 @@ class MovieLensConverter(BaseConverter):
                             file_path: Path,
                             **kwargs) -> pd.DataFrame:
         """
-        تبدیل فایل ratings.csv
+        Convert ratings.csv
         
         Args:
-            file_path: مسیر ratings.csv
-            **kwargs: پارامترهای اضافی
+            file_path: path of ratings.csv
+            **kwargs: extra parameters
             
         Returns:
-            DataFrame استاندارد
+            standard DataFrame
         """
         self.log(f"Reading MovieLens file: {file_path.name}")
         
         # ==========================================
-        # مرحله 1: خواندن CSV
+        # Step 1: read the CSV
         # ==========================================
         df = pd.read_csv(
             file_path,
@@ -126,12 +126,12 @@ class MovieLensConverter(BaseConverter):
         self.log(f"  Ratings count: {initial_count:,}")
         
         # ==========================================
-        # مرحله 2: تبدیل timestamp
+        # Step 2: convert the timestamp
         # ==========================================
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
         
         # ==========================================
-        # مرحله 3: فیلتر rating (اختیاری)
+        # Step 3: rating filter (optional)
         # ==========================================
         if self.min_rating is not None:
             df = df[df['rating'] >= self.min_rating].copy()
@@ -140,19 +140,19 @@ class MovieLensConverter(BaseConverter):
                 self.log(f"  Filter rating < {self.min_rating}: {removed:,} records removed")
         
         # ==========================================
-        # مرحله 4: تبدیل به فرمت استاندارد
+        # Step 4: convert to the standard format
         # ==========================================
         df['item_id'] = df['movieId'].astype(str)
-        df['count'] = 1  # هر rating = 1 دسترسی
+        df['count'] = 1  # each rating = 1 access
         
         # ==========================================
-        # مرحله 5: تجمیع زمانی (اختیاری)
+        # Step 5: time aggregation (optional)
         # ==========================================
         if self.aggregate_by:
             df = self._aggregate_temporal(df)
         
         # ==========================================
-        # مرحله 6: انتخاب ستون‌های خروجی
+        # Step 6: select the output columns
         # ==========================================
         output_columns = ['timestamp', 'item_id', 'count']
         
@@ -166,7 +166,7 @@ class MovieLensConverter(BaseConverter):
         df_output = df[output_columns].copy()
         
         # ==========================================
-        # مرحله 7: مرتب‌سازی
+        # Step 7: sort
         # ==========================================
         df_output = df_output.sort_values('timestamp').reset_index(drop=True)
         
@@ -176,29 +176,29 @@ class MovieLensConverter(BaseConverter):
     
     def _aggregate_temporal(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        تجمیع بر اساس بازه زمانی
+        Aggregate by time interval
         
         Args:
-            df: DataFrame با timestamp دقیق
+            df: DataFrame with exact timestamps
             
         Returns:
-            DataFrame تجمیع شده
+            aggregated DataFrame
         """
         self.log(f"  Aggregating by: {self.aggregate_by}")
         
-        # گرد کردن timestamp
+        # Round the timestamp
         if self.aggregate_by == 'week':
-            # تبدیل به ابتدای هفته (دوشنبه) برای جلوگیری از خطای non-fixed frequency در پانداز
+            # Move to the start of the week (Monday) to avoid the pandas non-fixed frequency error
             df['time_bucket'] = df['timestamp'].dt.to_period('W').dt.start_time
         else:
             freq_map = {
-                'hour': 'h',  # 'h' برای سازگاری بهتر با pandas جدید
+                'hour': 'h',  # 'h' for newer pandas versions
                 'day': 'D'
             }
             freq = freq_map.get(self.aggregate_by, 'D')
             df['time_bucket'] = df['timestamp'].dt.floor(freq)
         
-        # تجمیع
+        # Aggregate
         agg_dict = {
             'count': 'sum',
         }
@@ -207,13 +207,13 @@ class MovieLensConverter(BaseConverter):
             agg_dict['rating'] = 'mean'
         
         if self.keep_user and 'userId' in df.columns:
-            # تعداد کاربران یکتا در این بازه
+            # number of unique users in this interval
             df['user_count'] = df.groupby(['time_bucket', 'item_id'])['userId'].transform('nunique')
             agg_dict['user_count'] = 'first'
         
         df_agg = df.groupby(['time_bucket', 'item_id'], as_index=False).agg(agg_dict)
         
-        # تغییر نام
+        # Rename
         df_agg.rename(columns={'time_bucket': 'timestamp'}, inplace=True)
         
         self.log(f"  OK: Aggregated from {len(df):,} to {len(df_agg):,} records")
@@ -222,13 +222,13 @@ class MovieLensConverter(BaseConverter):
     
     def get_statistics(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
-        آمار تکمیلی
+        Additional statistics
         
         Args:
-            df: DataFrame تبدیل شده
+            df: converted DataFrame
             
         Returns:
-            دیکشنری آمار
+            dictionary of statistics
         """
         stats = {
             'total_records': len(df),
@@ -249,6 +249,6 @@ class MovieLensConverter(BaseConverter):
 
 
 # ==========================================
-# ثبت در Factory
+# Register in the factory
 # ==========================================
 ConverterFactory.register('movielens', MovieLensConverter)

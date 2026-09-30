@@ -10,7 +10,7 @@ zero fill, reflect padding only while a series is shorter than N, entry rule
 min(32, N / 2) observed rows, horizon 1 slot, RSI by item id, stable
 tie-breaking, seed 42.  Use --causal-universe (paper setting).
 
-Settings approved by Sajjad (25 Sep 2026, chat 8): methods WSPI and DTCWT+AF
+Settings (25 Sep 2026): methods WSPI and DTCWT+AF
 (DWT+AF is left out: with db4 the largest level without boundary effects is
 3 for 64 samples and 2 for 32 samples).
 
@@ -36,7 +36,7 @@ Examples (from the project root, Windows):
          --causal-universe --out results\revision_v5\T3.1_level_sweep\youtube_hourly
   python tools\run_level_sweep.py --collect results\revision_v5\T3.1_level_sweep
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.1.md
+Full command list: REPRODUCE.md
 """
 import argparse
 import json

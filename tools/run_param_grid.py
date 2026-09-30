@@ -18,7 +18,7 @@ Two jobs, one file.  No existing module is changed.
    mu * exp(expo)), so it is bit-identical to ``protocol_v5.make_v5_wspi``
    (checked by tools/test_param_grid.py and by grid_control.csv).
 
-2) Selection (--select), pre-registered rule (Sajjad, 26 Sep 2026, chat 9)
+2) Selection (--select), pre-registered rule (26 Sep 2026)
    Applied per scenario, separately to
      alpha_beta : the 49 grid runs (J = 3, N = 64)
      J          : the T3.1 runs of WSPI with N = 64, J in {2, 3, 4, 5}
@@ -62,7 +62,7 @@ Examples (from the project root, Windows):
   python tools\run_param_grid.py --select results\revision_v5\T3.2_param_grid ^
          --level-root results\revision_v5\T3.1_level_sweep
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.2.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_param_grid.py
 """
 import argparse
@@ -451,7 +451,7 @@ def select(root: Path, level_root: Path):
                       'order; NDCG* = best tuning mean NDCG@10; feasible if NDCG@10 >= 0.99 NDCG*; '
                       'select max tuning mean RSI@10; ties (4 decimals) -> higher NDCG@10 -> '
                       'closest to default'),
-                decided='Sajjad, 26 Sep 2026 (chat 9), before any grid result was seen',
+                decided='26 Sep 2026, before any grid result was seen',
                 tune_share=TUNE_SHARE, ndcg_tolerance=NDCG_TOL, default_alpha_beta=DEFAULT_AB,
                 default_J=DEFAULT_J, window=WINDOW, level_for_alpha_beta=LEVEL,
                 grid_root=str(root), level_root=str(level_root) if level_root else None,

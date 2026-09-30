@@ -19,7 +19,7 @@ Figures
   T2.2_window_curves  (task T2.2, SI figure) input: <results>/T2.2_window_sweep/sweep_summary.csv
       NDCG@10 (row 1) and RSI@10 (row 2) against the window length N for every
       method except PFRF and Holt, 4 scenarios.  Output T2.2_window_curves.pdf/.png.
-      Decision of Sajjad, 25 Sep 2026: this replaces the Pareto plot in the paper.
+      This figure replaces the Pareto plot in the paper (25 Sep 2026).
 
   T2.3_tradeoff  (task T2.3) input: <results>/T2.2_window_sweep/sweep_summary.csv
       Accuracy-stability trade-off over window length N = 7, 16, 32, 64, 128.
@@ -48,7 +48,7 @@ Figures
       Same input, examples and panels as T2.4_surge_examples, laid out for the
       page width: 2 columns (typical, worst case) x 2 scenarios (YouTube on
       top, taxi hourly below), each example as count panel over rank panel.
-      Added in chat 23 (27 Sep 2026); the 4-column figure is unchanged.
+      Added on 27 Sep 2026; the 4-column figure is unchanged.
 
   T2.4_delay_ecdf  (task T2.4 / E11, SI figure)
       input: <results>/T2.4_responsiveness/<scenario>/<config>/delays.csv
@@ -135,9 +135,9 @@ Figures
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_revision_figures.py --results results\revision_v5 ^
-         --out "D:\Research\Thesis Research\Articles\Popularity With Wavelet\03 - Popularity with Wavelets\Submit Paper\Scientific Reports\Revisions\V4\Response\Figures"
+         --out <folder for the figures>
 
-Commands: Revisions/V4/Response/Runbooks/RUN_T2.3_T2.5.md
+Full command list: REPRODUCE.md
 """
 import argparse
 import json
@@ -160,7 +160,7 @@ INK, INK2, GRID, SURF = '#0b0b0b', '#52514e', '#e6e5e0', '#fcfcfb'
 GREY = '#9a9994'
 
 # Every method in its own colour, in every figure (no grey group of 'other
-# methods'); decision of Sajjad, chat 32.  The nine methods use the V4 colours,
+# methods').  The nine methods use the V4 colours,
 # markers and line widths of evaluation/visualizer.py (METHOD_COLORS,
 # METHOD_MARKERS, _lw), read inside an rc_context so that its global rcParams do
 # not leak into these figures (the same source as Figures 7 and 8 of the paper,
@@ -1028,8 +1028,7 @@ def fig_t38_runtime(results, out):
 # Paired colours, light-grey axes, hatched wavelet-based bars).  The style
 # constants are copied here, not imported, because importing that module
 # changes the global matplotlib style of every other figure of this program.
-# Added in task T3.10 (chat 17, 27 Sep 2026); decisions in 07_Task_Tracker.md
-# section "e".  The same loaders are used by scripts/generate_revision_tables.py
+# Added in task T3.10 (27 Sep 2026).  The same loaders are used by scripts/generate_revision_tables.py
 # and scripts/generate_thesis_figures.py, so figures and tables share numbers.
 
 V4_BASELINES = ['AF', 'CompoundPop', 'EWMA', 'PFRF', 'RRD', 'VSE']

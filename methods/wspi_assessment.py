@@ -28,7 +28,7 @@ Why this form (each choice is backed by evidence, not assertion):
 Ablation flags (use_R / use_WE / use_dtcwt) reproduce every ablation variant
 from this single class.
 
-Author: Sajjad (with assistance)
+Author: Sajjad Pirahesh
 """
 from typing import List
 import numpy as np

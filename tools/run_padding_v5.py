@@ -4,8 +4,8 @@ Padding strategies under protocol V5 (revision-srep-v5, task T3.4 / E8)
 Answers R4.11 (boundary padding: explain the strategy, compare alternatives or
 justify the choice).  No existing module is changed.
 
-Two kinds of boundary handling act on a wavelet-based score (decided with
-Sajjad, 26 Sep 2026, chat 11):
+Two kinds of boundary handling act on a wavelet-based score (decided on
+26 Sep 2026):
 
   pad  - explicit LEFT padding to N = 64 (protocol V5: reflect, on the oldest
          side).  It is active only while a series is shorter than 64, i.e. in
@@ -64,7 +64,7 @@ Examples (from the project root, Windows):
          --causal-universe --out results\revision_v5\T3.4_padding\youtube_hourly
   python tools\run_padding_v5.py --collect results\revision_v5\T3.4_padding
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.4.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_padding_v5.py
 """
 import argparse

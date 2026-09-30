@@ -62,12 +62,6 @@ setup(
             'ipython>=7.30.0',
         ],
     },
-    entry_points={
-        'console_scripts': [
-            'dtcwt-demo=demo:main',
-            'dtcwt-experiment=experiments.exp1_assessment_comparison:main',
-        ],
-    },
     include_package_data=True,
     package_data={
         '': ['*.md', '*.txt'],

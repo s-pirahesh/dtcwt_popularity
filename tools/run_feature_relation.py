@@ -5,7 +5,7 @@ Answers R1.8 (are R and WE complementary?) and R4.3 (what distinct information
 each feature gives, and why the three features are enough).  No existing module
 is changed; the features are computed with the exact WSPI code of protocol V5.
 
-Design (decided with Sajjad, 27 Sep 2026, chat 14)
+Design (27 Sep 2026)
   * Item-windows: exactly those that WSPI scores in the paper setting: protocol
     V5, N = 64, J = 3, eligibility 32 observed rows, causal catalogue
     (--causal-universe), windows >= 32 (reflect padding only in windows 32..63,
@@ -37,7 +37,7 @@ Design (decided with Sajjad, 27 Sep 2026, chat 14)
     Windows with fewer than 10 valid items get NaN statistics.  When the next-slot
     count is the same for every valid item, the statistics that involve y are NaN;
     a partial correlation is NaN when nothing is left after the controls (relative
-    residual energy <= 1e-12).  Before this rule (fixed 27 Sep 2026, chat 14) such
+    residual energy <= 1e-12).  Before this rule (fixed 27 Sep 2026) such
     a case returned rounding noise (YouTube window 277).
   * Pooled over all item-windows of the scenario (descriptive):
         quantiles of R, WE, D; share_R_gt_half; Pearson / Spearman of R and WE,
@@ -72,7 +72,7 @@ Examples (from the project root, Windows):
          --causal-universe --out results\revision_v5\T3.7_feature_relation\youtube_hourly
   python tools\run_feature_relation.py --collect results\revision_v5\T3.7_feature_relation
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T3.7.md
+Full command list: REPRODUCE.md
 Unit test: tools/test_feature_relation.py
 """
 import argparse
@@ -105,7 +105,7 @@ QUANTILES = (0.01, 0.10, 0.25, 0.50, 0.75, 0.90, 0.99)
 B_BOOT, SEED = 10000, 42
 REF_T15 = Path('results/revision_v5/T1.5_causal_universe/T1.4_protocol_v5')
 GRID_ROOT = Path('results/revision_v5/T3.2_param_grid')
-DATASETS = {  # scenario folder -> (block, block_sens), T1.6 (tracker section E)
+DATASETS = {  # scenario folder -> (block, block_sens), T1.6
     'youtube_hourly': (24, None),
     'taxi_hourly': (168, 24),
     'taxi_30min': (336, 48),

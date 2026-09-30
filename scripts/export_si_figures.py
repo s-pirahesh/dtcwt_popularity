@@ -1,14 +1,14 @@
 r"""
 Export the figures of the Supplementary Information of paper V5 at their printed size
 ====================================================================================
-Same method as scripts/export_paper_figures.py (chat 27): the figure functions of
+Same method as scripts/export_paper_figures.py: the figure functions of
 scripts/generate_revision_figures.py are called unchanged, inside the
 ``paper_mode`` wrapper of export_paper_figures.py, so that every figure is drawn
 at the width it has in WSPI_SI.tex, with text of 7-9 pt embedded as TrueType
 (Type 42).  No number is computed here.
 
-Added for paper V5 (chat 28, 28 Sep 2026; decision in chat 27: "the SI figures
-are also made at printed size").  No existing file of the project is changed.
+Added for paper V5 (28 Sep 2026): the SI figures are also made at their
+printed size.  No existing file of the project is changed.
 
   SI figure  function                        source (results/revision_v5)
   figS1      fig_t22_window_curves           T2.2_window_sweep/sweep_summary.csv

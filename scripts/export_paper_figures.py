@@ -17,7 +17,7 @@ that no scaling is needed and the text keeps its size:
 Figures 6 and 7 keep the T3.10 layout (date axis, rolling mean of one period)
 but draw every one of the nine methods in its own V4 colour (METHOD_COLORS and
 line widths of evaluation/visualizer.py) instead of five coloured and four grey
-lines (decision of Sajjad, chat 27).
+lines.
 
 Nothing in generate_revision_figures.py is changed: its functions are called
 unchanged; only plt.subplots / plt.figure (size), FontProperties.set_size
@@ -26,8 +26,8 @@ unchanged; only plt.subplots / plt.figure (size), FontProperties.set_size
 computed here; every value comes from the loaders of that program, which
 check the statistics against summary_common_windows.csv.
 
-Added for paper V5 (chat 27, 28 Sep 2026; decision of Sajjad: "ساخت دوباره
-در اندازه چاپ + Type 42").
+Added for paper V5 (28 Sep 2026): the figures are rebuilt at their printed
+size with Type 42 fonts.
 
 Usage
 -----
@@ -36,7 +36,7 @@ Usage
 Output: <out>/<paper name>.pdf and .png (fig2 ... fig8, fig_movielens,
 fig_surge) and <out>/export_paper_figures_run.json (sizes, font range,
 matplotlib version, md5 of every file).  Nothing is written to results.
-Figure 1 is TikZ (V5/source/fig/fig1_pipeline.tex) and is not built here.
+Figure 1 is drawn in TikZ in the LaTeX source of the paper and is not built here.
 """
 import argparse
 import importlib.util
@@ -99,8 +99,7 @@ def _v4_line_palette():
 def fig_time_all_colours(results, out, scenario, name, title):
     """Figures 6 and 7: the T3.10 figure (common windows, date axis, rolling mean
     of one period, same axes and title), but every one of the nine methods is
-    drawn in its own V4 colour (no grey group).  Decision of Sajjad, chat 27:
-    only the colours change."""
+    drawn in its own V4 colour (no grey group).  Only the colours change."""
     try:
         df, n = g.v4_window_series(results, 'default', scenario)
     except (FileNotFoundError, KeyError, ValueError) as e:

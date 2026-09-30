@@ -2,7 +2,7 @@
 """
 Wavelet Window Size Validator
 Ensures proper window size for wavelet decomposition
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025
 """
 
@@ -12,18 +12,18 @@ from typing import Tuple
 
 class WaveletWindowValidator:
     """
-    اعتبارسنجی اندازه پنجره برای wavelet decomposition
+    Validate the window size for a wavelet decomposition
     """
     
     @staticmethod
     def validate_window_size(window_size: int, level: int, 
                            wavelet_type: str = 'dwt') -> bool:
         """
-        بررسی اینکه window_size برای wavelet مناسب است
+        Check that window_size suits the wavelet
         
         Args:
-            window_size: اندازه پنجره
-            level: سطح decomposition
+            window_size: window size
+            level: decomposition level
             wavelet_type: 'dwt' or 'dtcwt'
         
         Returns:
@@ -42,21 +42,21 @@ class WaveletWindowValidator:
     @staticmethod
     def get_minimum_size(level: int, wavelet_type: str = 'dwt') -> int:
         """
-        محاسبه حداقل window_size مورد نیاز
+        Minimum window_size required
         
         Args:
-            level: سطح decomposition
+            level: decomposition level
             wavelet_type: 'dwt' or 'dtcwt'
         
         Returns:
-            حداقل اندازه پنجره
+            minimum window size
         """
         if wavelet_type == 'dwt':
-            # DWT: حداقل 2^(level+1)
+            # DWT: at least 2^(level+1)
             return 2 ** (level + 1)
         
         elif wavelet_type == 'dtcwt':
-            # DTCWT: حداقل 2^(level+2) به دلیل Q-shift filters
+            # DTCWT: at least 2^(level+2) because of the Q-shift filters
             return 2 ** (level + 2)
         
         else:
@@ -65,14 +65,14 @@ class WaveletWindowValidator:
     @staticmethod
     def get_maximum_level(window_size: int, wavelet_type: str = 'dwt') -> int:
         """
-        محاسبه حداکثر level ممکن برای window_size داده شده
+        Maximum level possible for the given window_size
         
         Args:
-            window_size: اندازه پنجره
+            window_size: window size
             wavelet_type: 'dwt' or 'dtcwt'
         
         Returns:
-            حداکثر level
+            maximum level
         """
         if wavelet_type == 'dwt':
             # DWT: max_level = floor(log2(window_size))
@@ -88,29 +88,29 @@ class WaveletWindowValidator:
     @staticmethod
     def get_optimal_level(window_size: int, wavelet_type: str = 'dwt') -> int:
         """
-        توصیه بهترین level برای window_size
-        محافظه‌کارانه: 1-2 سطح کمتر از maximum
+        Recommended level for window_size
+        Conservative: 1-2 levels below the maximum
         
         Args:
-            window_size: اندازه پنجره
+            window_size: window size
             wavelet_type: 'dwt' or 'dtcwt'
         
         Returns:
-            سطح توصیه شده
+            recommended level
         """
         max_level = WaveletWindowValidator.get_maximum_level(window_size, wavelet_type)
         
         if wavelet_type == 'dwt':
-            # برای DWT: 1 سطح کمتر از maximum
+            # DWT: one level below the maximum
             optimal = max_level - 1
-            # حداکثر 5، حداقل 2
+            # at most 5, at least 2
             optimal = min(optimal, 5)
             optimal = max(optimal, 2)
         
         else:  # dtcwt
-            # برای DTCWT: 1 سطح کمتر از maximum
+            # DTCWT: one level below the maximum
             optimal = max_level - 1
-            # حداکثر 4، حداقل 2
+            # at most 4, at least 2
             optimal = min(optimal, 4)
             optimal = max(optimal, 2)
         
@@ -119,18 +119,18 @@ class WaveletWindowValidator:
     @staticmethod
     def recommend_window_size(desired_level: int, wavelet_type: str = 'dwt') -> int:
         """
-        توصیه window_size برای level مورد نظر
+        Recommended window_size for the desired level
         
         Args:
-            desired_level: سطح مورد نظر
+            desired_level: desired level
             wavelet_type: 'dwt' or 'dtcwt'
         
         Returns:
-            توصیه اندازه پنجره
+            recommended window size
         """
         min_size = WaveletWindowValidator.get_minimum_size(desired_level, wavelet_type)
         
-        # توصیه: دو برابر حداقل برای margin بهتر
+        # Recommendation: twice the minimum, for a safer margin
         recommended = min_size * 2
         
         return recommended
@@ -139,21 +139,21 @@ class WaveletWindowValidator:
     def get_decomposition_info(window_size: int, level: int, 
                               wavelet_type: str = 'dwt') -> dict:
         """
-        اطلاعات جامع درباره decomposition
+        Full information about the decomposition
         
         Args:
-            window_size: اندازه پنجره
-            level: سطح decomposition
+            window_size: window size
+            level: decomposition level
             wavelet_type: 'dwt' or 'dtcwt'
         
         Returns:
-            dict حاوی اطلاعات
+            dict with the information
         """
         max_level = WaveletWindowValidator.get_maximum_level(window_size, wavelet_type)
         min_size = WaveletWindowValidator.get_minimum_size(level, wavelet_type)
         optimal_level = WaveletWindowValidator.get_optimal_level(window_size, wavelet_type)
         
-        # محاسبه اندازه coefficient در هر سطح
+        # Coefficient size at each level
         coeff_sizes = []
         current_size = window_size
         for i in range(level):
@@ -177,11 +177,11 @@ class WaveletWindowValidator:
     def print_validation_report(window_size: int, level: int, 
                                wavelet_type: str = 'dwt'):
         """
-        چاپ گزارش اعتبارسنجی
+        Print the validation report
         
         Args:
-            window_size: اندازه پنجره
-            level: سطح decomposition
+            window_size: window size
+            level: decomposition level
             wavelet_type: 'dwt' or 'dtcwt'
         """
         info = WaveletWindowValidator.get_decomposition_info(

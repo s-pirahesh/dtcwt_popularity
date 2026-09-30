@@ -52,7 +52,7 @@ Examples (from the project root, Windows):
   # the earlier T1.4 / T2.1 runs (whole-file catalogue)
   python tools\leakage_audit.py --out results\revision_v5\T1.5_leakage_audit\whole_file
 
-Full command list: Revisions/V4/Response/Runbooks/RUN_T1.6_T1.5.md
+Full command list: REPRODUCE.md
 """
 import argparse
 import ast
@@ -93,7 +93,7 @@ COMPARE = ['num_items', 'ndcg@5', 'coverage@5', 'ndcg@10', 'coverage@10', 'ndcg@
 V5_ENTRY = ['evaluation/protocol_v5.py', 'tools/run_v5_eval.py']
 STRATA_RE = re.compile(r'STRATA_THRESHOLDS|strata_thresholds|StratificationSystem|stratif|strata',
                        re.IGNORECASE)
-SKIP_DIRS = {'.git', '.claude', 'results', '__pycache__', 'venv', '.venv', 'env', 'data'}
+SKIP_DIRS = {'.git', '_private', 'results', '__pycache__', 'venv', '.venv', 'env', 'data'}
 
 
 def rel(p: Path) -> str:

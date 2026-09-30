@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-اسکریپت آماده‌سازی داده‌ها V2
-تبدیل دیتاست‌های خام به فرمت استاندارد
+Data preparation script V2
+Converts the raw datasets to the standard format
 
 Features:
-- Dynamic argument generation (هر converter arguments خودش را می‌سازد)
+- Dynamic argument generation (each converter builds its own arguments)
 - Config file support (YAML)
 - Generic + Dataset-specific parameters
 - Backward compatible
 
-استفاده:
+Usage:
     # MovieLens - basic
     python prepare_data.py --dataset movielens \\
         --input data/raw/movielens/ratings.csv \\
         --output data/datasets/movielens.csv
     
-    # MovieLens - با options
+    # MovieLens - with options
     python prepare_data.py --dataset movielens \\
         --movielens-aggregate-by day \\
         --movielens-keep-rating \\
         --movielens-min-rating 4.0
     
-    # Yellow Taxi - با options
+    # Yellow Taxi - with options
     python prepare_data.py --dataset yellow_taxi \\
         --input "data/raw/yellow_taxi/yellow_*.parquet" \\
         --output data/datasets/yellow_taxi_15min.csv \\
@@ -30,10 +30,10 @@ Features:
         --yellow-taxi-min-trips-per-location 200 \\
         --yellow-taxi-extract-features
     
-    # از config file
+    # From a config file
     python prepare_data.py --config configs/yellow_taxi_hourly.yaml
     
-    # لیست دیتاست‌ها
+    # List the datasets
     python prepare_data.py --list
 """
 import argparse
@@ -49,16 +49,16 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-# اضافه کردن پروژه به path
+# Add the project to the path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Import converters (این باعث auto-registration می‌شود)
+# Import the converters (this registers them automatically)
 from data.converters.base_converter import ConverterFactory
 from data.converters import movielens_converter
 from data.converters import yellow_taxi_converter
 from data.converters import youtube_converter
 
-# پیکربندی دیتاست‌ها (برای --all و مسیرهای پیش‌فرض)
+# Dataset configuration (for --all and the default paths)
 DATASET_CONFIGS = {
     'movielens': {
         'description': 'MovieLens ratings dataset',
@@ -75,19 +75,19 @@ DATASET_CONFIGS = {
         'input': 'data/raw/youtube/count_observation_upload.csv',
         'output': 'data/datasets/youtube_hourly.csv'
     }
-    # اضافه کردن دیتاست‌های بعدی اینجا
+    # Add further datasets here
 }
 
 
 def load_config_file(config_path: str) -> Dict[str, Any]:
     """
-    خواندن فایل config (YAML)
+    Read a config file (YAML)
     
     Args:
-        config_path: مسیر فایل config
+        config_path: path of the config file
         
     Returns:
-        Dictionary تنظیمات
+        Dictionary of settings
     """
     config_path = Path(config_path)
     
@@ -101,26 +101,26 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
 
 
 def parse_args():
-    """پردازش arguments از command line"""
+    """Parse the command-line arguments"""
     
     # ==========================================
-    # Parser اصلی
+    # Main parser
     # ==========================================
     parser = argparse.ArgumentParser(
-        description='تبدیل دیتاست‌های خام به فرمت استاندارد',
+        description='Convert the raw datasets to the standard format',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-مثال‌ها:
-  # MovieLens با aggregation
+Examples:
+  # MovieLens with aggregation
   python prepare_data.py --dataset movielens --movielens-aggregate-by day --movielens-keep-rating
   
-  # NYC Yellow Taxi با features
+  # NYC Yellow Taxi with features
   python prepare_data.py --dataset yellow_taxi --yellow-taxi-granularity hourly --yellow-taxi-extract-features
   
-  # از config file
+  # From a config file
   python prepare_data.py --config configs/movielens_daily.yaml
   
-  # لیست دیتاست‌ها
+  # List the datasets
   python prepare_data.py --list
         """
     )
@@ -132,41 +132,41 @@ def parse_args():
         '--dataset', '-d',
         type=str,
         choices=ConverterFactory.list_converters(),
-        help='نام دیتاست'
+        help='dataset name'
     )
     
     parser.add_argument(
         '--input', '-i',
         type=str,
-        help='مسیر ورودی (می‌تواند wildcard داشته باشد)'
+        help='input path (may contain a wildcard)'
     )
     
     parser.add_argument(
         '--output', '-o',
         type=str,
-        help='مسیر خروجی CSV'
+        help='output CSV path'
     )
     
     parser.add_argument(
         '--config', '-c',
         type=str,
-        help='مسیر فایل config (YAML)'
+        help='path of a config file (YAML)'
     )
     
     parser.add_argument(
         '--all', '-a',
         action='store_true',
-        help='تبدیل همه دیتاست‌ها (از DATASET_CONFIGS)'
+        help='convert all datasets (from DATASET_CONFIGS)'
     )
     
     parser.add_argument(
         '--list', '-l',
         action='store_true',
-        help='نمایش لیست دیتاست‌های موجود'
+        help='list the available datasets'
     )
     
     # ==========================================
-    # Generic Parameters (مشترک بین همه)
+    # Generic parameters (shared by all datasets)
     # ==========================================
     generic_group = parser.add_argument_group('Generic Options')
     
@@ -175,24 +175,24 @@ def parse_args():
         type=str,
         default='csv',
         choices=['csv', 'parquet', 'feather'],
-        help='فرمت خروجی (پیش‌فرض: csv)'
+        help='output format (default: csv)'
     )
     
     generic_group.add_argument(
         '--quiet', '-q',
         action='store_true',
-        help='حالت ساکت (بدون نمایش پیام‌ها)'
+        help='quiet mode (no messages)'
     )
     
     generic_group.add_argument(
         '--no-validate',
         action='store_true',
-        help='غیرفعال کردن اعتبارسنجی'
+        help='disable validation'
     )
     
     # ==========================================
     # Dataset-Specific Arguments
-    # تمام converters به صورت خودکار اضافه می‌شوند
+    # All converters are added automatically
     # ==========================================
     for dataset_name in ConverterFactory.list_converters():
         converter_class = ConverterFactory.get_converter_class(dataset_name)
@@ -202,7 +202,7 @@ def parse_args():
 
 
 def list_datasets():
-    """نمایش لیست دیتاست‌ها"""
+    """List the datasets"""
     print("\n" + "=" * 70)
     print("Available datasets for conversion:")
     print("=" * 70)
@@ -210,7 +210,7 @@ def list_datasets():
     for dataset_name in ConverterFactory.list_converters():
         converter_class = ConverterFactory.get_converter_class(dataset_name)
         
-        # اطلاعات از config (اگر موجود باشد)
+        # Information from the config (if present)
         config = DATASET_CONFIGS.get(dataset_name, {})
         
         print(f"\nDataset: {dataset_name.upper()}")
@@ -220,7 +220,7 @@ def list_datasets():
             print(f"   Input (default):  {config.get('input', 'N/A')}")
             print(f"   Output (default): {config.get('output', 'N/A')}")
         
-        # نمایش parameters
+        # Show the parameters
         params = converter_class.get_specific_params()
         if params:
             print(f"   Parameters:")
@@ -239,23 +239,23 @@ def convert_single_dataset(dataset_name: str,
                            converter_params: Dict[str, Any],
                            verbose: bool = True) -> bool:
     """
-    تبدیل یک دیتاست
+    Convert one dataset
     
     Args:
-        dataset_name: نام دیتاست
-        input_path: مسیر ورودی
-        output_path: مسیر خروجی
-        converter_params: پارامترهای converter
-        verbose: نمایش پیام‌ها
+        dataset_name: dataset name
+        input_path: input path
+        output_path: output path
+        converter_params: converter parameters
+        verbose: print messages
         
     Returns:
-        True اگر موفق، False اگر ناموفق
+        True on success, False on failure
     """
     print("\n" + "=" * 70)
     print(f"Converting dataset: {dataset_name.upper()}")
     print("=" * 70 + "\n")
     
-    # نمایش پارامترها
+    # Show the parameters
     if converter_params and verbose:
         print("Converter parameters:")
         for key, value in converter_params.items():
@@ -263,7 +263,7 @@ def convert_single_dataset(dataset_name: str,
                 print(f"  {key}: {value}")
         print()
     
-    # بررسی wildcard در مسیر ورودی
+    # Check for a wildcard in the input path
     if '*' in input_path or '?' in input_path:
         input_files = sorted(glob(input_path))
         if not input_files:
@@ -273,10 +273,10 @@ def convert_single_dataset(dataset_name: str,
         input_path = input_files
     
     try:
-        # ایجاد converter
+        # Create the converter
         converter = ConverterFactory.create(dataset_name, **converter_params)
         
-        # تبدیل
+        # Convert
         df = converter.convert(input_path, output_path)
         
         print(f"\nOK: Conversion completed: {len(df):,} records.")
@@ -293,13 +293,13 @@ def convert_single_dataset(dataset_name: str,
 
 def convert_all_datasets(verbose: bool = True) -> Dict[str, bool]:
     """
-    تبدیل همه دیتاست‌ها
+    Convert all datasets
     
     Args:
-        verbose: نمایش پیام‌ها
+        verbose: print messages
         
     Returns:
-        Dictionary نتایج {dataset_name: success}
+        Dictionary of results {dataset_name: success}
     """
     print("\n" + "=" * 70)
     print("Starting conversion for all datasets")
@@ -308,7 +308,7 @@ def convert_all_datasets(verbose: bool = True) -> Dict[str, bool]:
     results = {}
     
     for dataset_name, config in DATASET_CONFIGS.items():
-        # استفاده از مقادیر پیش‌فرض config
+        # Use the default values of the config
         success = convert_single_dataset(
             dataset_name=dataset_name,
             input_path=config['input'],
@@ -322,7 +322,7 @@ def convert_all_datasets(verbose: bool = True) -> Dict[str, bool]:
         )
         results[dataset_name] = success
     
-    # خلاصه نتایج
+    # Summary of the results
     print("\n" + "=" * 70)
     print("Summary:")
     print("=" * 70)
@@ -342,18 +342,18 @@ def convert_all_datasets(verbose: bool = True) -> Dict[str, bool]:
 
 
 def main():
-    """تابع اصلی"""
+    """Main function"""
     args = parse_args()
     
     # ==========================================
-    # حالت: نمایش لیست
+    # Mode: list
     # ==========================================
     if args.list:
         list_datasets()
         return 0
     
     # ==========================================
-    # حالت: از config file
+    # Mode: from a config file
     # ==========================================
     if args.config:
         print(f"Loading config from: {args.config}")
@@ -364,7 +364,7 @@ def main():
         output_path = config.get('output')
         converter_params = config.get('converter_params', {})
         
-        # اضافه کردن generic params
+        # Add the generic parameters
         converter_params['verbose'] = not args.quiet
         converter_params['output_format'] = args.output_format
         converter_params['validate_output'] = not args.no_validate
@@ -380,7 +380,7 @@ def main():
         return 0 if success else 1
     
     # ==========================================
-    # حالت: تبدیل همه
+    # Mode: convert all
     # ==========================================
     if args.all:
         results = convert_all_datasets(verbose=not args.quiet)
@@ -388,16 +388,16 @@ def main():
         return 0 if all_success else 1
     
     # ==========================================
-    # حالت: تبدیل تک دیتاست
+    # Mode: convert one dataset
     # ==========================================
     if not args.dataset:
         print("ERROR: You must specify --dataset, --config, or --all.")
         print("   For help: python prepare_data.py --help")
         return 1
     
-    # تعیین input/output
+    # Set input/output
     if not args.input or not args.output:
-        # استفاده از config پیش‌فرض
+        # Use the default config
         if args.dataset in DATASET_CONFIGS:
             config = DATASET_CONFIGS[args.dataset]
             input_path = args.input or config['input']
@@ -410,16 +410,16 @@ def main():
         input_path = args.input
         output_path = args.output
     
-    # استخراج converter parameters
+    # Extract the converter parameters
     converter_class = ConverterFactory.get_converter_class(args.dataset)
     converter_params = converter_class.extract_params_from_args(args, prefix=True)
     
-    # اضافه کردن generic params
+    # Add the generic parameters
     converter_params['verbose'] = not args.quiet
     converter_params['output_format'] = args.output_format
     converter_params['validate_output'] = not args.no_validate
     
-    # تبدیل
+    # Convert
     success = convert_single_dataset(
         dataset_name=args.dataset,
         input_path=input_path,

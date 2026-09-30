@@ -6,23 +6,23 @@ uses a V4 picture again.  Figures shared with the paper are drawn by the same
 functions as the paper (scripts/generate_revision_figures.py), so the thesis
 and the paper show the same numbers and the same look (paper V4 style).
 Labels are English (decision of 27 Sep 2026); captions are Persian in the
-thesis text.  Added in task T3.10 (chat 17, 27 Sep 2026).
+thesis text.  Added in task T3.10 (27 Sep 2026).
 
 Parameters
 ----------
   --results  folder of the revision results (normally results\revision_v5)
-  --out      folder for the figures (PDF + PNG), e.g. Thesis Document\Figures\V5
+  --out      folder for the figures (PDF + PNG)
   --only     optional list of figure ids
   --list     print the registry (thesis figure -> id -> status) and stop
 
 Registry
 --------
-THESIS_FIGURES below maps every Chapter-4 figure of thesis draft V1.5 (file
-05_Ch4_Arzyabi.md) and the new MovieLens figures to a figure id and a status:
+THESIS_FIGURES below maps every Chapter-4 figure of the thesis draft V1.5 and
+the new MovieLens figures to a figure id and a status:
   ready    built by this program from V5 CSVs
   paper    the same file as a paper figure (built here under the thesis name)
   planned  not built yet; the V4 picture must not be used; to be added when
-           Chapter 4 is rewritten (task T3.12 of 07_Task_Tracker.md)
+           Chapter 4 is rewritten
   other    belongs to another work stream (prediction method) with its own scripts
 
 Figures built here
@@ -46,7 +46,7 @@ Figures built here
 Usage (Windows, from the project root)
 --------------------------------------
   python scripts\generate_thesis_figures.py --results results\revision_v5 ^
-         --out "D:\Research\Thesis Research\Thesis Document\Figures\V5"
+         --out <folder for the thesis figures>
 """
 import argparse
 import sys
@@ -61,7 +61,7 @@ import generate_revision_figures as grf  # noqa: E402
 from generate_revision_figures import plt  # noqa: E402  (Agg backend already set)
 
 ROOT = HERE.parent
-PERIOD_SPLIT = pd.Timestamp('2015-01-01', tz='UTC')   # decision of chat 16 (R15 section 6.7)
+PERIOD_SPLIT = pd.Timestamp('2015-01-01', tz='UTC')   # decision of 27 Sep 2026
 TAXI_ROLL = {'taxi_30min': 336, 'taxi_5min': 2016}     # one week, as the T1.6 blocks
 
 

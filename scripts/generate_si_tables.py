@@ -8,12 +8,12 @@ a ratio, a weighted share); each of these is written to the control CSV.
 The SI tables of intervals and paired tests (S6-S9) are made by
 scripts/generate_t412_tables.py (six scenarios, task T4.12) and are not built here.
 
-Numbers after task T4.12 (chat 31, MovieLens in the main results; the SI is
+Numbers after task T4.12 (MovieLens in the main results; the SI is
 numbered by first citation): the file names below keep the numbers of T4.10,
 the second column gives the printed number.
 
-Added for paper V5 (chat 28, 28 Sep 2026; plan: Reports/R27_T4.10a_SI_Plan.md,
-sections 3-5).  No existing file of the project is changed or imported.
+Added for paper V5 (28 Sep 2026).  No existing file of the project is changed
+or imported.
 
 Tables (file name -> SI number, label)
 --------------------------------------
@@ -52,7 +52,7 @@ Other output (same folder, CSV and JSON only)
 Usage (Windows, from the project root)
 --------------------------------------
   set PYTHONDONTWRITEBYTECODE=1
-  python scripts\generate_si_tables.py --results results\revision_v5 --out "...\Response\Tables\SI"
+  python scripts\generate_si_tables.py --results results\revision_v5 --out <folder for the SI tables>
 Nothing is written to results.
 """
 import argparse
