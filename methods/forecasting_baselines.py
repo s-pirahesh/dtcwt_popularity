@@ -19,7 +19,7 @@ All classes only need the standard BaseMethod interface:
     assess_single(time_series) -> float
 so they plug into the existing pipeline with zero evaluator changes.
 
-Author: Sajjad (with Claude)
+Author: Sajjad Pirahesh
 Date: August 2026
 """
 import warnings

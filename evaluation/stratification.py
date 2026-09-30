@@ -23,7 +23,7 @@ meaningful and stable across runs with different window configurations.
 The same fix is applied in get_stratum_label() (called from temporal_evaluator)
 where train_count was also a raw sum.
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 """
 
 import numpy as np

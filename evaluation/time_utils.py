@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Time Slot Utilities
-Generic time handling برای datasets با granularity مختلف
+Generic time handling for datasets with different granularities
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025
 """
 
@@ -14,9 +14,9 @@ import pandas as pd
 
 class TimeSlotHelper:
     """
-    Helper برای کار با time slots generic
+    Helper for generic time slots
     
-    هر dataset granularity خودش را دارد:
+    Each dataset has its own granularity:
       - MovieLens daily: 1 slot = 1 day
       - MovieLens weekly: 1 slot = 1 week  
       - Youku: 1 slot = 5 minutes
@@ -28,16 +28,16 @@ class TimeSlotHelper:
         """
         Args:
             time_granularity: 'daily', 'hourly', 'minute', 'weekly', 'custom'
-            slot_duration_minutes: برای 'custom' مثلاً 5 برای 5-minute slots
+            slot_duration_minutes: for 'custom', e.g. 5 for 5-minute slots
         """
         self.granularity = time_granularity
         self.custom_minutes = slot_duration_minutes
         
-        # محاسبه یک slot duration
+        # Duration of one slot
         self._slot_delta = self._calculate_slot_duration()
     
     def _calculate_slot_duration(self) -> timedelta:
-        """محاسبه مدت زمان یک slot"""
+        """Duration of one slot"""
         if self.granularity == 'daily':
             return timedelta(days=1)
         elif self.granularity == 'hourly':
@@ -47,7 +47,7 @@ class TimeSlotHelper:
         elif self.granularity == 'weekly':
             return timedelta(days=7)
         elif self.granularity == 'monthly':
-            return timedelta(days=30)  # تقریبی
+            return timedelta(days=30)  # approximate
         elif self.granularity == 'custom':
             if self.custom_minutes is None:
                 raise ValueError("slot_duration_minutes must be set for custom granularity")
@@ -57,10 +57,10 @@ class TimeSlotHelper:
     
     def slots_to_timedelta(self, n_slots: int) -> timedelta:
         """
-        تبدیل تعداد slots به timedelta
+        Convert a number of slots to a timedelta
         
         Args:
-            n_slots: تعداد slots
+            n_slots: number of slots
             
         Returns:
             timedelta object
@@ -93,14 +93,14 @@ class TimeSlotHelper:
 
     def count_slots(self, start: datetime, end: datetime) -> int:
         """
-        محاسبه تعداد slots بین دو تاریخ
+        Number of slots between two dates
         
         Args:
-            start: تاریخ شروع
-            end: تاریخ پایان
+            start: start date
+            end: end date
             
         Returns:
-            تعداد slots
+            number of slots
             
         Example:
             daily: 2023-01-01 to 2023-01-08 → 7 slots
@@ -113,26 +113,26 @@ class TimeSlotHelper:
     
     def add_slots(self, dt: datetime, n_slots: int) -> datetime:
         """
-        اضافه کردن n slots به تاریخ
+        Add n slots to a date
         
         Args:
-            dt: تاریخ
-            n_slots: تعداد slots برای اضافه کردن
+            dt: date
+            n_slots: number of slots to add
             
         Returns:
-            تاریخ جدید
+            new date
         """
         return dt + self.slots_to_timedelta(n_slots)
     
     def get_unit_name(self, plural: bool = False) -> str:
         """
-        دریافت نام واحد زمانی برای نمایش
+        Name of the time unit for display
         
         Args:
-            plural: آیا جمع باشد؟
+            plural: plural form?
             
         Returns:
-            نام واحد
+            unit name
             
         Example:
             daily: "day" or "days"
@@ -156,13 +156,13 @@ class TimeSlotHelper:
     
     def format_window_size(self, n_slots: int) -> str:
         """
-        فرمت کردن window size برای نمایش
+        Format the window size for display
         
         Args:
-            n_slots: تعداد slots
+            n_slots: number of slots
             
         Returns:
-            رشته فرمت شده
+            formatted string
             
         Example:
             daily, 30 → "30 days"
@@ -171,7 +171,7 @@ class TimeSlotHelper:
         unit = self.get_unit_name(plural=(n_slots > 1))
         base = f"{n_slots} {unit}"
         
-        # اضافه کردن توضیح اگر custom
+        # Add an explanation for 'custom'
         if self.granularity == 'custom':
             total_hours = (n_slots * self.custom_minutes) / 60
             if total_hours >= 24:
@@ -185,7 +185,7 @@ class TimeSlotHelper:
 
 def create_time_helper(config) -> TimeSlotHelper:
     """
-    ساخت TimeSlotHelper از config
+    Build a TimeSlotHelper from a config
     
     Args:
         config: EvaluationConfig

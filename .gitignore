@@ -1,29 +1,27 @@
 # ==========================================
-# فایل .gitignore برای پروژه DTCWT
-# ==========================================
-#
-# این فایل را در ریشه پروژه با نام ".gitignore" ذخیره کنید
-# (بدون پسوند، دقیقاً همین نام: .gitignore)
-#
+# .gitignore of the DTCWT popularity project
 # ==========================================
 
+# Private working files (never published)
+_private/
+
 # ==========================================
-# DATA FILES - حجیم و نباید در Git باشند
+# DATA FILES - large, not kept in Git
 # ==========================================
 
-# داده‌های خام
+# Raw data
 data/raw/
 data/raw/*
 
-# داده‌های تبدیل شده
+# Converted data
 data/datasets/
 data/datasets/*
 
-# فایل‌های موقت
+# Temporary files
 data/temp/
 data/tmp/
 
-# فایل‌های بزرگ
+# Large files
 *.csv
 *.tsv
 *.dat
@@ -32,19 +30,19 @@ data/tmp/
 *.feather
 *.hdf
 
-# استثناها - این فایل‌ها مجاز هستند
+# Exceptions - these files are allowed
 !requirements.txt
 !README.txt
 !README.md
 
 # ==========================================
-# RESULTS - نتایج آزمایش‌ها
+# RESULTS - experiment results
 # ==========================================
 
 results/
 results/*
 
-# مدل‌ها
+# Models
 models/
 *.h5
 *.hdf5
@@ -52,7 +50,7 @@ models/
 *.pickle
 *.joblib
 
-# تصاویر و نمودارها
+# Images and plots
 figures/
 *.png
 *.jpg
@@ -60,7 +58,7 @@ figures/
 *.svg
 *.pdf
 
-# استثنا: تصاویر مستندات
+# Exception: documentation images
 !docs/images/*.png
 !docs/images/*.jpg
 
@@ -72,7 +70,7 @@ mlartifacts/
 # PYTHON
 # ==========================================
 
-# Cache و Bytecode
+# Cache and bytecode
 __pycache__/
 *.py[cod]
 *$py.class
@@ -204,7 +202,7 @@ temp/
 # KEEP DIRECTORY STRUCTURE
 # ==========================================
 
-# این فایل‌ها را نگه دار
+# Keep these files
 !.gitkeep
 !*/.gitkeep
 !README.md

@@ -1,0 +1,32 @@
+{
+  "title": "WSPI: Wavelet-Structured Popularity Index - source code",
+  "upload_type": "software",
+  "description": "Source code for the paper \"WSPI: A Wavelet-Structured Popularity Index for Stable Content Ranking via Trend-Noise Separation\" (Scientific Reports, revised version). It contains the WSPI index and the two other wavelet-based methods (DTCWT+AF and DWT+AF), the six baselines, the evaluation protocol, the scripts that build the datasets from the public sources, the scripts of every experiment, and the scripts that regenerate every table and figure of the paper and its Supplementary Information. Library versions are pinned in requirements.txt.",
+  "creators": [
+    {
+      "name": "Pirahesh, Sajjad",
+      "affiliation": "Faculty of Electrical and Computer Engineering, University of Tabriz, Tabriz, Iran"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "Mohammad Khanli, Leyli",
+      "affiliation": "Faculty of Electrical and Computer Engineering, University of Tabriz, Tabriz, Iran",
+      "type": "Supervisor"
+    },
+    {
+      "name": "Baradarani, Aryaz",
+      "affiliation": "Center for Diagnostic Imaging Research, Tessonics Inc., Windsor, Ontario, Canada",
+      "type": "Supervisor"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "data popularity estimation",
+    "dual-tree complex wavelet transform",
+    "multi-scale analysis",
+    "trend-noise separation",
+    "temporal ranking stability",
+    "edge caching"
+  ]
+}

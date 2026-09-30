@@ -7,7 +7,7 @@ Implements the 4-Layer "Frozen Evaluation Protocol":
   Layer 3 - Stability:   RSI (Ranking Stability Index) @K
   Layer 4 - Robustness:  Rank Distortion (Noise Injection)
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025 (refactored)
 """
 

@@ -5,7 +5,7 @@ Abstract base class for all popularity assessment methods
 All concrete methods (DWT, DTCWT, Statistical, Hybrid, Baselines) must inherit 
 from this class and implement the required methods.
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025
 """
 

@@ -4,7 +4,7 @@ Storage System with Smart Format Handling
 - Intermediate results: Always Parquet (high volume)
 - Final results: Configurable CSV or Parquet
 - Reading: Supports both formats automatically
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025
 """
 
@@ -17,12 +17,12 @@ import json
 
 class StorageSystem:
     """
-    سیستم ذخیره‌سازی هوشمند
+    Storage system
     
     Rules:
-    - نتایج میانی (detailed, summary): همیشه Parquet
-    - نتایج نهایی (comparison): قابل انتخاب (CSV یا Parquet)
-    - خواندن: خودکار هر دو فرمت را تشخیص می‌دهد
+    - intermediate results (detailed, summary): always Parquet
+    - final results (comparison): CSV or Parquet
+    - reading: both formats are detected automatically
     """
     
     def __init__(self, config):
@@ -35,7 +35,7 @@ class StorageSystem:
         self.final_format = config.final_format
         self.compression = config.compression
         
-        # بررسی در دسترس بودن pyarrow
+        # Check that pyarrow is available
         try:
             import pyarrow
             self.has_pyarrow = True
@@ -45,22 +45,22 @@ class StorageSystem:
     
     def save_detailed_scores(self, method_name: str, results: List[Dict]):
         """
-        ذخیره نتایج تفصیلی - همیشه Parquet
+        Save the detailed results - always Parquet
         
         Args:
-            method_name: نام روش
-            results: لیست dictionary های نتایج
+            method_name: method name
+            results: list of result dictionaries
         """
         if not self.config.save_detailed:
             return
         
         df = pd.DataFrame(results)
         
-        # تبدیل timestamp به int64
+        # Convert timestamp to int64
         if 'timestamp' in df.columns:
             df['timestamp'] = df['timestamp'].astype('int64')
         
-        # ذخیره - همیشه Parquet
+        # Save - always Parquet
         filename = f"{method_name}_scores.parquet"
         filepath = self.output_dir / 'detailed' / filename
         
@@ -72,22 +72,22 @@ class StorageSystem:
     
     def save_stratum_summary(self, method_name: str, summary: List[Dict]):
         """
-        ذخیره خلاصه stratum - همیشه Parquet
+        Save the stratum summary - always Parquet
         
         Args:
-            method_name: نام روش
-            summary: لیست dictionary های خلاصه
+            method_name: method name
+            summary: list of summary dictionaries
         """
         if not self.config.save_summary:
             return
         
         df = pd.DataFrame(summary)
         
-        # تبدیل timestamp
+        # Convert timestamp
         if 'timestamp' in df.columns:
             df['timestamp'] = df['timestamp'].astype('int64')
         
-        # ذخیره - همیشه Parquet
+        # Save - always Parquet
         filename = f"{method_name}_stratum_summary.parquet"
         filepath = self.output_dir / 'summary' / filename
         
@@ -95,10 +95,10 @@ class StorageSystem:
     
     def save_method_comparison(self, comparison_df: pd.DataFrame):
         """
-        ذخیره مقایسه روش‌ها - قابل انتخاب (CSV یا Parquet)
+        Save the method comparison - CSV or Parquet
         
         Args:
-            comparison_df: DataFrame مقایسه
+            comparison_df: comparison DataFrame
         """
         filename = f"method_comparison.{self.final_format}"
         filepath = self.output_dir / 'comparison' / filename
@@ -110,11 +110,11 @@ class StorageSystem:
     
     def _save_parquet(self, df: pd.DataFrame, filepath: Path):
         """
-        ذخیره Parquet با بررسی pyarrow
+        Save Parquet after checking pyarrow
         
         Args:
             df: DataFrame
-            filepath: مسیر فایل
+            filepath: file path
         """
         if not self.has_pyarrow:
             raise ImportError(
@@ -131,10 +131,10 @@ class StorageSystem:
     
     def load_detailed_scores(self, method_name: str) -> pd.DataFrame:
         """
-        بارگذاری نتایج تفصیلی - خودکار Parquet
+        Load the detailed results - Parquet, detected automatically
         
         Args:
-            method_name: نام روش
+            method_name: method name
         
         Returns:
             DataFrame
@@ -149,10 +149,10 @@ class StorageSystem:
     
     def load_stratum_summary(self, method_name: str) -> pd.DataFrame:
         """
-        بارگذاری خلاصه stratum - خودکار Parquet
+        Load the stratum summary - Parquet, detected automatically
         
         Args:
-            method_name: نام روش
+            method_name: method name
         
         Returns:
             DataFrame
@@ -167,12 +167,12 @@ class StorageSystem:
     
     def load_method_comparison(self) -> pd.DataFrame:
         """
-        بارگذاری مقایسه روش‌ها - خودکار (CSV یا Parquet)
+        Load the method comparison - CSV or Parquet, detected automatically
         
         Returns:
             DataFrame
         """
-        # سعی کردن هر دو فرمت
+        # Try both formats
         for fmt in ['parquet', 'csv']:
             filename = f"method_comparison.{fmt}"
             filepath = self.output_dir / 'comparison' / filename
@@ -187,14 +187,14 @@ class StorageSystem:
     
     def save_metadata(self, metadata: Dict):
         """
-        ذخیره اطلاعات metadata - همیشه JSON
+        Save the metadata - always JSON
         
         Args:
-            metadata: dictionary اطلاعات
+            metadata: information dictionary
         """
         filepath = self.output_dir / 'metadata' / 'run_metadata.json'
         
-        # تبدیل numpy types به Python types
+        # Convert numpy types to Python types
         metadata = self._convert_to_json_serializable(metadata)
         
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -202,10 +202,10 @@ class StorageSystem:
     
     def save_runtime_stats(self, stats: Dict):
         """
-        ذخیره آمار زمان اجرا - همیشه JSON
+        Save the runtime statistics - always JSON
         
         Args:
-            stats: dictionary آمار
+            stats: statistics dictionary
         """
         filepath = self.output_dir / 'metadata' / 'runtime_stats.json'
         
@@ -215,7 +215,7 @@ class StorageSystem:
             json.dump(stats, f, indent=2, ensure_ascii=False)
     
     def _convert_to_json_serializable(self, obj):
-        """تبدیل numpy types به Python types"""
+        """Convert numpy types to Python types"""
         if isinstance(obj, np.integer):
             return int(obj)
         elif isinstance(obj, np.floating):
@@ -232,7 +232,7 @@ class StorageSystem:
     
     def get_file_sizes(self) -> Dict[str, float]:
         """
-        محاسبه اندازه فایل‌ها
+        Compute the file sizes
         
         Returns:
             dict: {file_path: size_in_mb}
@@ -244,7 +244,7 @@ class StorageSystem:
             if not path.exists():
                 continue
             
-            # بررسی هر دو فرمت
+            # Check both formats
             for file in path.glob('*'):
                 if file.is_file():
                     size_mb = file.stat().st_size / (1024 * 1024)
@@ -253,7 +253,7 @@ class StorageSystem:
         return sizes
     
     def print_storage_summary(self):
-        """چاپ خلاصه فضای ذخیره‌سازی"""
+        """Print a summary of the storage used"""
         sizes = self.get_file_sizes()
         
         if not sizes:
@@ -277,7 +277,7 @@ class StorageSystem:
             
             print(f"\n{category.upper()}:")
             for filename, size in sorted(category_files.items()):
-                # نمایش فرمت
+                # Show the format
                 fmt = "Parquet" if filename.endswith('.parquet') else "CSV"
                 print(f"  {filename:<40} {size:>8.2f} MB ({fmt})")
             print(f"  {'Subtotal:':<40} {category_size:>8.2f} MB")
@@ -285,7 +285,7 @@ class StorageSystem:
         print(f"\n{'TOTAL:':<40} {total_size:>8.2f} MB")
         print("="*70 + "\n")
         
-        # نمایش فرمت‌ها
+        # Show the formats
         print("FORMAT DETAILS:")
         print(f"  Intermediate (detailed/summary): Parquet (compressed)")
         print(f"  Final (comparison): {self.final_format.upper()}")

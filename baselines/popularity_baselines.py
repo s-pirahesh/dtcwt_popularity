@@ -11,7 +11,7 @@ Methods provided:
   - CompoundPopMethod : Three-factor compound popularity
   - PFRFMethod        : Period-based popularity weighting (PFRF)
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 """
 import sys
 import os

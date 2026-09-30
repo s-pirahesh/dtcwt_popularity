@@ -12,7 +12,7 @@ Six variants for the ablation study (Reviewer Comment #5):
   - WSPI with DWT             (DTCWT -> DWT)
   - WSPI no clip              (c -> infinity)
 
-Author: Sajjad (with assistance)
+Author: Sajjad Pirahesh
 """
 import numpy as np
 import pywt

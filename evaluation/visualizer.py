@@ -23,7 +23,7 @@ Charts produced:
   chart14_longterm_structure  — Long-term structure vs. short-term burst detection
                                 (RSI trend + Spearman trend showing WSPI stability)
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 """
 
 import numpy as np
@@ -1339,7 +1339,7 @@ class ResultsVisualizer:
 
     # ==================================================================
     # CHART 15 — Wavelet Decomposition Advantage (RSI Lift)
-    #   PURPOSE: تأیید تجربی مزیت تجزیه موجک
+    #   PURPOSE: empirical check of the benefit of the wavelet decomposition
     #   Show that ANY wavelet method beats ALL traditional methods on RSI,
     #   independently of implementation details.
     #   Two sub-panels:
@@ -1462,7 +1462,7 @@ class ResultsVisualizer:
 
     # ==================================================================
     # CHART 16 — Temporal Scale Robustness
-    #   PURPOSE: مقاوم بودن در برابر تغییر مقیاس زمانی
+    #   PURPOSE: robustness to a change of the time scale
     #   Show that WSPI's RSI advantage GROWS (not shrinks) as granularity
     #   becomes finer (hourly → 30min → 15min → 5min).
     #   For ΔRank the 5-min scenario is annotated as an exception with

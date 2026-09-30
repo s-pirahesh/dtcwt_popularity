@@ -2,7 +2,7 @@
 Statistical-based Popularity Assessment (Contribution 3)
 Uses higher-order statistics: Skewness + Kurtosis
 
-Author: Sajjad
+Author: Sajjad Pirahesh
 Date: February 2025
 """
 import numpy as np

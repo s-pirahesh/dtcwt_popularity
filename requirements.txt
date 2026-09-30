@@ -1,26 +1,27 @@
-# Dependencies for dtcwt_popularity project
-# نصب: pip install -r requirements.txt
-
-# Core scientific computing
-numpy>=1.21.0
-pandas>=1.3.0
-scipy>=1.7.0
-scikit-learn>=1.0.0
-
-# Wavelet transforms (ضروری برای پروژه)
-PyWavelets>=1.1.1        # pywt - برای DWT
-dtcwt>=0.12.0            # برای DTCWT
-
-# Visualization
-matplotlib>=3.5.0
-seaborn>=0.11.0
-
-# Data storage
-pyarrow>=10.0.0          # برای Parquet
-
-# Progress bars
-tqdm>=4.62.0
-
-# Optional (اختیاری)
-# jupyter>=1.0.0         # برای Notebooks
-# ipython>=7.0.0         # برای Interactive
+# Exact versions used for every result of the revised Scientific Reports paper
+# (Python 3.12.10 on Windows 11). Install with: pip install -r requirements.txt
+#
+# Computation and evaluation
+numpy==1.26.4
+pandas==2.3.3
+scipy==1.17.0
+PyWavelets==1.9.0
+dtcwt==0.14.0
+#
+# Figures
+matplotlib==3.10.8
+seaborn==0.13.2
+#
+# Data preparation (YouTube and NYC taxi converters, prepare_data.py)
+pyarrow==22.0.0
+PyYAML==6.0.3
+tqdm==4.67.1
+#
+# Runtime and memory measurements (tools/run_runtime_v5.py)
+psutil==7.2.1
+threadpoolctl==3.6.0
+#
+# Notes
+# - dtcwt 0.14.0 does not work with NumPy 2 (it uses np.asfarray).
+# - PyWavelets 1.9.0 reports pywt.__version__ == '1.8.0', so the run metadata
+#   in results/ show 1.8.0.
