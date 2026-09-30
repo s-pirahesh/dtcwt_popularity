@@ -226,33 +226,38 @@ python tools/audit_youtube_provenance.py --summary --out results/revision_v5/T3.
 
 ## 16. Tables and figures
 
-These programs only read `results/revision_v5`; `<folder>` is any output folder
-outside `results`.
+These programs read `results/revision_v5` through `scripts/result_paths.json`
+(logical name -> result folder); `<folder>` is any output folder outside
+`results`.
 
 ```
-python scripts/generate_revision_tables.py --results results/revision_v5 --out <folder> --data-out results/revision_v5/T3.10_main_figures
-python scripts/generate_t412_tables.py --results results/revision_v5 --out <folder>
-python scripts/generate_si_tables.py --results results/revision_v5 --out <folder>
-python scripts/export_paper_figures.py --results results/revision_v5 --out <folder>
-python scripts/export_si_figures.py --results results/revision_v5 --out <folder>
+python scripts/generate_tables.py --part all --results results/revision_v5 --out <folder>
+python scripts/generate_figures.py --target paper --results results/revision_v5 --out <folder>
+python scripts/generate_figures.py --target si --results results/revision_v5 --out <folder>
+python scripts/generate_figures.py --target thesis --results results/revision_v5 --out <folder>
+python scripts/generate_figures.py --target draft --results results/revision_v5 --out <folder>
 ```
 
-`generate_revision_tables.py` must run first: it writes the source CSVs of the
-main tables and figures (`results/revision_v5/T3.10_main_figures/`), which the
-other programs read.
+`generate_tables.py --part main` (or `all`) also writes the source CSVs of the
+main tables and figures (`values_all.csv`, `tests_all.csv`, `control.csv`) to
+`results/revision_v5/T3.10_main_figures/` (the folder `figure_data` of
+`result_paths.json`); `--data-out` sets another folder.
+
+The output file names are the names used in the LaTeX source; the table and
+figure numbers follow from the order in the LaTeX source.
 
 | Paper element | Program | Main source files (`results/revision_v5/...`) |
 |---|---|---|
-| Tables 8 and 9; SI Tables S6-S9 | `generate_t412_tables.py` | `T3.10_main_figures/values_all.csv`, `tests_all.csv` |
-| Other SI tables | `generate_si_tables.py` | listed in its output `si_tables_sources.csv` |
-| Figures 2-10 | `export_paper_figures.py` | `T3.10_main_figures/`, `T2.4_responsiveness/` |
-| SI Figures S1-S8 | `export_si_figures.py` | listed in the program header |
-| Table 11 (run time) | values of | `T3.8_runtime/runtime_paper_table.csv` |
-| Table 12 (ablation) | values of | `T3.3_ablation/ablation_summary.csv`, `T1.6_stats/T3.3_ablation/` |
-| Table 13 (sensitivity) | values of | `T3.2_param_grid/grid_summary.csv` (test split) |
-| Table 14 (responsiveness) | values of | `T2.4_responsiveness/responsiveness_summary.csv` |
+| Main result tables (`tab_main_default`, `tab_main_equal64`); SI tables of intervals and tests (`si_ci_*`, `si_tests_*`) | `generate_tables.py` | `T3.10_main_figures/values_all.csv`, `tests_all.csv` |
+| Other SI tables (`si_*.tex`) | `generate_tables.py --part si` | listed in its output `si_tables_sources.csv` |
+| Paper figures (`fig_*.pdf`) | `generate_figures.py --target paper` | `T3.10_main_figures/`, `T2.4_responsiveness/` |
+| SI figures (`si_*.pdf`) | `generate_figures.py --target si` | read by the figure functions of the program |
+| Run-time table | values of | `T3.8_runtime/runtime_paper_table.csv` |
+| Ablation table | values of | `T3.3_ablation/ablation_summary.csv`, `T1.6_stats/T3.3_ablation/` |
+| Sensitivity table | values of | `T3.2_param_grid/grid_summary.csv` (test split) |
+| Responsiveness table | values of | `T2.4_responsiveness/responsiveness_summary.csv` |
 
-Figure 1 is drawn in TikZ in the LaTeX source of the paper.
+The pipeline figure is drawn in TikZ in the LaTeX source of the paper.
 
 ## 17. Experiment ids
 
