@@ -73,9 +73,9 @@ PATHS = gf.PATHS
 
 # Numbers of the paper tables cited in SI captions, and of the SI tables cited in
 # paper captions (order of first citation; change here when the numbering changes).
-PAPER_TABLE = {'tab:main_default': '8', 'tab:resp': '14'}
-SI_NUM = {'default': ('S6', 'S7'), 'equal64': ('S8', 'S9'),
-          'fig:si_spike_size': 'S4', 'tab:si_runtime_grid': 'S14', 'tab:si_runtime_real': 'S16'}
+PAPER_TABLE = {'tab:main_default': '6', 'tab:resp': '10'}
+SI_NUM = {'default': ('S8', 'S9'), 'equal64': ('S10', 'S11'),
+          'fig:si_spike_size': 'S5', 'tab:si_runtime_grid': 'S17', 'tab:si_runtime_real': 'S19'}
 
 
 def src(key, *parts):

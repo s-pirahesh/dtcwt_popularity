@@ -11,19 +11,18 @@ Targets (--target)
 ------------------
   paper   main-text figures at their printed size (text 7-9 pt, TrueType fonts,
           PDF + PNG 600 dpi), file names = the names used in the LaTeX source:
-            fig_ndcg10, fig_spearman, fig_rsi10, fig_deltarank   grouped bars, four
-                YouTube and taxi scenarios, nine methods, 95 % CI whiskers
-            fig_movielens          the same four metrics on MovieLens (2 x 2)
-            fig_youtube_rsi_time, fig_taxi_rsi_time   window-by-window RSI@10,
-                rolling mean of one period, every method in its V4 colour
-            fig_granularity        taxi at three granularities
+            fig_main_metrics       grouped bars of NDCG@10, rho, RSI@10 and Delta Rank
+                (2 x 2), four YouTube and taxi scenarios, nine methods, 95 % CI whiskers
+            fig_rsi_time           window-by-window RSI@10 on YouTube and hourly taxi
+                data, rolling mean of one period, every method in its V4 colour
             fig_surge              genuine entries into the true Top-10
           and figures_paper_run.json (sizes, font range, Matplotlib version, md5).
           The pipeline figure is drawn in TikZ in the LaTeX source.
   si      figures of the Supplementary Information at printed size:
-            si_window_curves, si_feature_relation, si_spike_size, si_runtime,
-            si_shift_invariance, si_param_heatmap, si_movielens_rsi_time,
-            si_delay_ecdf; and figures_si_run.json
+            si_window_curves, si_feature_relation, si_movielens (the four metrics
+            on MovieLens), si_spike_size, si_granularity (taxi at three
+            granularities), si_runtime, si_shift_invariance, si_param_heatmap,
+            si_movielens_rsi_time, si_delay_ecdf; and figures_si_run.json
   thesis  figures of Chapter 4 of the thesis (names = thesis figure numbers);
           --list prints the registry (ready / paper / planned / other)
   draft   the same figures at working size (12-17 inches wide), plus the
@@ -321,12 +320,17 @@ def fig_window_curves(results, out):
 # ----------------------------------------------------------- responsiveness to genuine entries
 SURGE_EXAMPLE_SCEN = [('youtube_hourly', 'YouTube (hourly)'), ('taxi_hourly', 'NYC Taxi (hourly)')]
 SURGE_EXAMPLE_KIND = [('typical', 'typical entry'), ('worst_for_reference', 'worst case for WSPI')]
-SURGE_LINES = [                      # (config, method, label, colour, marker, lw)
-    ('default', 'WSPI', 'WSPI (N=64)', '#2a78d6', 'o', 2.2),
-    ('default', 'AF', 'AF (N=7)', '#1baf7a', 's', 1.5),
-    ('default', 'DTCWT+AF', 'DTCWT+AF (N=64)', '#4a3aa7', '^', 1.5),
-    ('equal64', 'RRD', 'RRD (N=64)', '#eb6834', 'D', 1.5),
+SURGE_METHODS = [                    # (config, method, label, line width)
+    ('default', 'WSPI', 'WSPI (N=64)', 2.2),
+    ('default', 'AF', 'AF (N=7)', 1.5),
+    ('default', 'DTCWT+AF', 'DTCWT+AF (N=64)', 1.5),
+    ('equal64', 'RRD', 'RRD (N=64)', 1.5),
 ]
+
+
+def surge_lines():
+    """(config, method, label, colour, marker, lw): each method in its V4 colour and marker."""
+    return [(cfg, m, lab) + tuple(method_style(m)[:2]) + (lw,) for cfg, m, lab, lw in SURGE_METHODS]
 SURGE_RANK_CAP = 100
 
 
@@ -373,7 +377,7 @@ def fig_surge_examples(results, out):
         ax2.axvline(0, color=INK2, lw=0.8, ls=':')
         tr_rank = base['truth_rank'].clip(upper=SURGE_RANK_CAP)
         ax2.plot(x, tr_rank, color=GREY, lw=1.0, ls='-', zorder=2)
-        for cfg, m, lab, col, mk, lw in SURGE_LINES:
+        for cfg, m, lab, col, mk, lw in surge_lines():
             g = t[(t.config == cfg) & (t.method == m)].sort_values('window_id')
             ax2.plot(g.window_id - t0, g['rank'].clip(upper=SURGE_RANK_CAP), color=col, lw=lw,
                      marker=mk, ms=3.2, mec=SURF, mew=0.5, zorder=4 if m == 'WSPI' else 3)
@@ -386,7 +390,7 @@ def fig_surge_examples(results, out):
             ax2.set_ylabel('rank of the item (log)', color=INK2)
         notes.append(f"{title}/{klab}: item {e.item_id}, t0={t0}, run={R}, "
                      f"delay WSPI {int(e.delay_WSPI)}, AF {int(e.delay_AF)}")
-    h = [plt.Line2D([], [], color=v[3], marker=v[4], lw=v[5], ms=4, label=v[2]) for v in SURGE_LINES]
+    h = [plt.Line2D([], [], color=v[3], marker=v[4], lw=v[5], ms=4, label=v[2]) for v in surge_lines()]
     h += [plt.Line2D([], [], color=GREY, lw=1.0, label='true rank'),
           plt.Line2D([], [], color=INK2, ls='--', lw=0.9, label='Top-10 boundary'),
           Patch(color='#e9e6f7', label='item in the true Top-10')]
@@ -446,7 +450,7 @@ def fig_surge_examples_2col(results, out):
             ax2.axhline(10, color=INK2, lw=0.9, ls='--', zorder=1)
             ax2.axvline(0, color=INK2, lw=0.8, ls=':')
             ax2.plot(x, base['truth_rank'].clip(upper=SURGE_RANK_CAP), color=GREY, lw=1.0, zorder=2)
-            for cfg, m, lab, col, mk, lw in SURGE_LINES:
+            for cfg, m, lab, col, mk, lw in surge_lines():
                 g = t[(t.config == cfg) & (t.method == m)].sort_values('window_id')
                 ax2.plot(g.window_id - t0, g['rank'].clip(upper=SURGE_RANK_CAP), color=col,
                          lw=lw * 0.85, marker=mk, ms=2.6, mec=SURF, mew=0.4,
@@ -460,7 +464,7 @@ def fig_surge_examples_2col(results, out):
                 ax2.set_ylabel('rank of the\nitem (log)', color=INK2, fontsize=8.5)
             notes.append(f"{title}/{klab}: item {e.item_id}, t0={t0}, run={R}, "
                          f"delay WSPI {int(e.delay_WSPI)}, AF {int(e.delay_AF)}")
-    h = [plt.Line2D([], [], color=v[3], marker=v[4], lw=v[5] * 0.85, ms=4, label=v[2]) for v in SURGE_LINES]
+    h = [plt.Line2D([], [], color=v[3], marker=v[4], lw=v[5] * 0.85, ms=4, label=v[2]) for v in surge_lines()]
     h += [plt.Line2D([], [], color=GREY, lw=1.0, label='true rank'),
           plt.Line2D([], [], color=INK2, ls='--', lw=0.9, label='Top-10 boundary'),
           Patch(color='#e9e6f7', label='item in the true Top-10')]
@@ -656,14 +660,19 @@ def fig_spike_size(results, out):
 SHIFT_BANDS = [('cv_E_L', 'lowpass'), ('cv_E_1', 'level 1'), ('cv_E_2', 'level 2'),
              ('cv_E_3', 'level 3')]
 SHIFT_TR = {'DTCWT': '#2a78d6', 'DWT': '#b5b4ae'}
-SHIFT_METHODS = {                    # method: (colour, marker, line style)
-    'WSPI':     ('#2a78d6', 'o', '-'),
-    'DWT-WSPI': ('#2a78d6', 'o', ':'),
-    'DTCWT+AF': ('#1baf7a', '^', '-'),
-    'DWT+AF':   ('#1baf7a', '^', ':'),
-    'SMA':      ('#eb6834', 's', '-'),
-    'EWMA-eq':  ('#4a3aa7', 'D', '-'),
+SHIFT_METHODS = {                    # method: (colour source, line style); ':' and hatch = DWT features
+    'WSPI':     ('WSPI', '-'),
+    'DWT-WSPI': ('WSPI', ':'),          # WSPI with DWT features: the colour of WSPI
+    'DTCWT+AF': ('DTCWT+AF', '-'),
+    'DWT+AF':   ('DWT+AF', ':'),
+    'SMA':      ('SMA', '-'),
+    'EWMA-eq':  ('EWMA-eq', '-'),
 }
+
+
+def shift_methods():
+    """method -> (colour, marker, line style), colour and marker from method_style (V4)."""
+    return {m: tuple(method_style(src)[:2]) + (ls,) for m, (src, ls) in SHIFT_METHODS.items()}
 SHIFT_SETTINGS = [('spike', 'middle'), ('burst3', 'middle'), ('spike', 'recent'), ('burst3', 'recent')]
 
 
@@ -710,7 +719,7 @@ def fig_shift_invariance(results, out):
     if f.exists():
         d = pd.read_csv(f)
         d = d[(d['repetition'] == 0) & (d['shape'] == 'burst3') & (d['age'] == 'recent')]
-        for m, (col, mk, ls) in SHIFT_METHODS.items():
+        for m, (col, mk, ls) in shift_methods().items():
             h = d[d['method'] == m].sort_values('shift')
             if h.empty:
                 continue
@@ -733,7 +742,7 @@ def fig_shift_invariance(results, out):
         s = s[(s['kind'] == 'score') & (s['metric'] == 'share_wrong')]
         x = np.arange(len(SHIFT_SETTINGS))
         w = 0.8 / len(SHIFT_METHODS)
-        for j, (m, (col, mk, ls)) in enumerate(SHIFT_METHODS.items()):
+        for j, (m, (col, mk, ls)) in enumerate(shift_methods().items()):
             y, lo, hi = [], [], []
             for shp, age in SHIFT_SETTINGS:
                 r = s[(s['shape'] == shp) & (s['age'] == age) & (s['name'] == m)]
@@ -829,17 +838,16 @@ def fig_feature_relation(results, out):
     return files, msg
 
 
-COST_STYLE = {   # method: colour, marker, line style, line width
-    'WSPI':        ('#2a78d6', 'o', '-', 2.4),
-    'DTCWT+AF':    ('#1baf7a', '^', '-', 1.6),
-    'DWT+AF':      ('#1baf7a', 'v', ':', 1.6),
-    'AF':          ('#6f6e69', 's', '-', 1.1),
-    'EWMA':        ('#6f6e69', 'D', '--', 1.1),
-    'RRD':         ('#9a9994', 'P', '-', 1.1),
-    'VSE':         ('#9a9994', 'X', '--', 1.1),
-    'CompoundPop': ('#b9b8b2', '*', '-', 1.1),
-    'PFRF':        ('#b9b8b2', 'h', '--', 1.1),
+COST_LINES = {   # method: line style, line width (colour and marker: method_style, V4)
+    'WSPI': ('-', 2.4), 'DTCWT+AF': ('-', 1.6), 'DWT+AF': ('-', 1.6),
+    'AF': ('-', 1.1), 'EWMA': ('--', 1.1), 'RRD': ('-', 1.1), 'VSE': ('--', 1.1),
+    'CompoundPop': ('-', 1.1), 'PFRF': ('--', 1.1),
 }
+
+
+def cost_style():
+    """method -> (colour, marker, line style, line width)."""
+    return {m: tuple(method_style(m)[:2]) + v for m, v in COST_LINES.items()}
 COST_BASE = ['AF', 'EWMA', 'RRD', 'VSE', 'CompoundPop', 'PFRF']
 
 
@@ -858,7 +866,7 @@ def fig_runtime(results, out):
     notes = []
     ax = axes[0]
     style_axes(ax)
-    for m, (col, mk, ls, lw) in COST_STYLE.items():
+    for m, (col, mk, ls, lw) in cost_style().items():
         nd = 7 if m in COST_BASE else 64
         d = g[(g['method'] == m) & (g['N'] == nd)].sort_values('M')
         if d.empty:
@@ -878,7 +886,7 @@ def fig_runtime(results, out):
     ax = axes[1]
     style_axes(ax)
     Mb = 10_000 if (g['M'] == 10_000).any() else int(g['M'].max())
-    for m, (col, mk, ls, lw) in COST_STYLE.items():
+    for m, (col, mk, ls, lw) in cost_style().items():
         d = g[(g['method'] == m) & (g['M'] == Mb)].sort_values('N')
         if d.empty:
             continue
@@ -893,7 +901,7 @@ def fig_runtime(results, out):
     style_axes(ax)
     if t is not None:
         Bb = 10_000 if (t['batch'] == 10_000).any() else int(t['batch'].max())
-        for m, (col, mk, ls, lw) in COST_STYLE.items():
+        for m, (col, mk, ls, lw) in cost_style().items():
             d = t[(t['method'] == m) & (t['batch'] == Bb)].sort_values('N')
             if d.empty:
                 continue
@@ -1285,11 +1293,13 @@ def fig_granularity(results, out):
         'default configuration; best traditional = best of the six baselines except PFRF at each point; whiskers = 95% CI'
 
 
-def ml_bars_figure(results, out, config, name, methods=V4_ORDER):
-    """2 x 2 bar figure on MovieLens (daily and weekly) for one configuration."""
-    vals = v4_values(results, config, [s for s, _ in ML_SCENARIOS])
+def ml_bars_figure(results, out, config, name, methods=V4_ORDER, groups=None):
+    """2 x 2 bar figure (NDCG@10, rho, RSI@10, Delta Rank) for one configuration;
+    groups = [(scenario, tick label)], MovieLens daily and weekly by default."""
+    if groups is None:
+        groups = [(s, lab.replace('MovieLens ', '')) for s, lab in ML_SCENARIOS]
+    vals = v4_values(results, config, [s for s, _ in groups])
     fig, axes = plt.subplots(2, 2, figsize=(12, 8.4))
-    groups = [(s, lab.replace('MovieLens ', '')) for s, lab in ML_SCENARIOS]
     for ax, met, tag in zip(axes.ravel(), MAIN_METRICS, 'abcd'):
         _v4_bar_panel(ax, vals, groups, met, methods=methods, width=0.8 / len(methods))
         ax.set_ylabel(V4_YLABEL[met], fontsize=9.5)
@@ -1308,6 +1318,51 @@ def fig_bars_movielens(results, out):
         return ml_bars_figure(results, out, 'default', 'bars_movielens')
     except (FileNotFoundError, KeyError) as e:
         return None, f'input missing: {e}'
+
+
+MAIN_GROUPS = [('youtube_hourly', 'YouTube\n(hourly)'), ('taxi_hourly', 'Taxi\n(hourly)'),
+               ('taxi_30min', 'Taxi\n(30 min)'), ('taxi_5min', 'Taxi\n(5 min)')]
+
+
+def fig_main_metrics(results, out):
+    """Main results in one figure: (a) NDCG@10, (b) rho, (c) RSI@10, (d) Delta Rank (log);
+    default configuration, the four YouTube and taxi scenarios, nine methods, 95 % CI."""
+    try:
+        return ml_bars_figure(results, out, 'default', 'main_metrics', groups=MAIN_GROUPS)
+    except (FileNotFoundError, KeyError) as e:
+        return None, f'input missing: {e}'
+
+
+def fig_rsi_time(results, out):
+    """RSI@10 over the common windows, default configuration: (a) YouTube (rolling 24 h),
+    (b) NYC Taxi hourly (rolling 168 h); every method in its own V4 colour."""
+    panels = [('youtube_hourly', '(a) YouTube (hourly)'), ('taxi_hourly', '(b) NYC Yellow Taxi (hourly)')]
+    try:
+        data = [(sc, t) + v4_window_series(results, 'default', sc) for sc, t in panels]
+    except (FileNotFoundError, KeyError, ValueError) as e:
+        return None, f'input missing or inconsistent: {e}'
+    colours, widths = _v4_line_palette()
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8.4), layout='constrained')
+    order = V4_BASELINES + ['DWT+AF', 'DTCWT+AF', 'WSPI']   # WSPI drawn last (on top)
+    msg = []
+    for ax, (sc, title, df, n) in zip(axes, data):
+        _v4_axes(ax)
+        ax.xaxis.grid(True, alpha=0.9, linewidth=1.0, color='white')
+        roll = TIME_ROLL[sc]
+        for k, m in enumerate(order):
+            ax.plot(df['time'], df[m].rolling(roll, center=True, min_periods=roll // 2).mean(),
+                    color=colours[m], lw=widths[m] * 0.6, zorder=3 + k, label=m)
+        ax.set_ylabel(f'RSI@10  (rolling mean, {roll} {TIME_UNIT[sc]})', fontsize=10)
+        ax.set_ylim(None, 1.01)
+        ax.set_title(title, fontsize=10.5)
+        msg.append(f'{sc}: {n} common windows, rolling mean {roll} (centred)')
+    h, lab = axes[0].get_legend_handles_labels()
+    leg = fig.legend(h, lab, loc='outside lower center', ncol=5, frameon=False, fontsize=9)
+    for t in leg.get_texts():
+        if t.get_text() in V4_WAVELET:
+            t.set_color(V4_PURPLE)
+            t.set_fontweight('bold')
+    return _save_v4(fig, out, 'rsi_time'), '; '.join(msg) + '; V4 colours'
 
 
 def fig_time_movielens(results, out):
@@ -1341,18 +1396,8 @@ PNG_DPI = 600
 
 # paper name: (function, printed width as share of \textwidth, height in, legend columns)
 PAPER_FIGURES = {
-    'fig_ndcg10': (fig_bars_ndcg10, 0.92, 2.9, 5),
-    'fig_spearman': (fig_bars_spearman, 0.92, 2.9, 5),
-    'fig_rsi10': (fig_bars_rsi10, 0.92, 2.9, 5),
-    'fig_deltarank': (fig_bars_deltarank, 0.92, 2.9, 5),
-    'fig_youtube_rsi_time': (lambda r, o: fig_time_all_colours(
-        r, o, 'youtube_hourly', 'time_youtube_rsi',
-        'YouTube Hourly — RSI@10 over the common evaluation windows'), 0.92, 2.6, 5),
-    'fig_taxi_rsi_time': (lambda r, o: fig_time_all_colours(
-        r, o, 'taxi_hourly', 'time_taxi_rsi',
-        'NYC Yellow Taxi Hourly — RSI@10 over the common evaluation windows'), 0.92, 2.6, 5),
-    'fig_granularity': (fig_granularity, 1.00, 2.7, 3),
-    'fig_movielens': (fig_bars_movielens, 0.85, 4.1, 5),
+    'fig_main_metrics': (fig_main_metrics, 1.00, 5.6, 5),
+    'fig_rsi_time': (fig_rsi_time, 1.00, 5.0, 5),
     'fig_surge': (fig_surge_examples_2col, 0.95, 7.6, 4),
 }
 
@@ -1505,7 +1550,9 @@ LANDSCAPE_WIDTH_IN = 9.0      # text height of the letter page, used for the lan
 SI_FIGURES = {
     'si_window_curves': (fig_window_curves, LANDSCAPE_WIDTH_IN, 5.6, 5, True),
     'si_feature_relation': (fig_feature_relation, 6.5, 2.4, 2, False),
+    'si_movielens': (fig_bars_movielens, 5.525, 4.1, 5, False),
     'si_spike_size': (fig_spike_size, LANDSCAPE_WIDTH_IN, 5.6, 5, True),
+    'si_granularity': (fig_granularity, 6.5, 2.7, 3, False),
     'si_runtime': (fig_runtime, 6.5, 2.7, 5, False),
     'si_shift_invariance': (fig_shift_invariance, LANDSCAPE_WIDTH_IN, 5.2, 3, True),
     'si_param_heatmap': (fig_param_heatmap, LANDSCAPE_WIDTH_IN, 6.2, 2, True),
@@ -1517,6 +1564,8 @@ SI_FIGURES = {
 SHORT_TITLES = {'si_runtime', 'si_shift_invariance'}
 # per-panel text boxes that Supplementary Table S2 repeats
 DROP_AXES_TEXT = {'si_feature_relation'}
+# figures that were in the main text of the first revision: their own legend (V4 style) is kept
+KEEP_LEGEND = {'si_movielens', 'si_granularity'}
 # cell labels of the heat maps: kept below the 7 pt floor, so that they fit the cells
 CELL_LABEL_PT = 5.0
 
@@ -1531,7 +1580,7 @@ def si_fix(name, fig, ncols):
         fig._suptitle.remove()
         fig._suptitle = None
     handles, labels = [], []
-    for leg in list(fig.legends):
+    for leg in ([] if name in KEEP_LEGEND else list(fig.legends)):
         for h, t in zip(leg.legend_handles, leg.get_texts()):
             if t.get_text() not in labels:
                 handles.append(h)
@@ -1814,6 +1863,8 @@ DRAFT_FIGURES = {
     'granularity': fig_granularity,
     'bars_movielens': fig_bars_movielens,
     'time_movielens_rsi': fig_time_movielens,
+    'main_metrics': fig_main_metrics,
+    'rsi_time': fig_rsi_time,
 }
 
 
