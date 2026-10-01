@@ -11,8 +11,8 @@ The paper proposes three training-free, wavelet-based methods:
 | Method | Idea |
 |---|---|
 | **WSPI** | Dual-tree complex wavelet transform (DTCWT) of the last *N* slots. Score `P = mu_L * exp(alpha*R - beta*W_E)`: `mu_L` is a recency-weighted mean of the magnitudes of the approximation (trend) coefficients, `R` the share of energy in the trend band and `W_E` the normalised wavelet entropy of the band energies. Defaults: `N = 64`, `J = 3`, `alpha = beta = 1`, filters `near_sym_a` / `qshift_a` (`methods/wspi_assessment.py`). |
-| **DTCWT+AF** | Recency-weighted approximation coefficients of the DTCWT (`methods/dtcwt_assessment.py`). |
-| **DWT+AF** | Recency-weighted approximation coefficients of the discrete wavelet transform, db4 (`methods/dwt_assessment.py`). |
+| **DTCWT+AF** | Access-frequency (recency-weighted) score of the magnitudes of the DTCWT approximation coefficients, plus 0.1 times that of the finest detail coefficients; `J = 3`, same filters as WSPI. |
+| **DWT+AF** | The same with the discrete wavelet transform (db4, `J = 3`). |
 
 They are compared with six time-domain baselines: AF, EWMA, RRD, VSE,
 CompoundPop and PFRF (`baselines/`).
@@ -74,10 +74,38 @@ enters only when its counts up to *t* reach the threshold. Statistics use
 circular block bootstrap confidence intervals and block-level Wilcoxon tests
 with Holm correction (`tools/stats_report.py`).
 
+## Which code produced the results of the paper
+
+All results of the revised paper come from `evaluation/protocol_v5.py`, run by
+`tools/run_v5_eval.py` and the other `tools/run_*.py` programs. It scores all
+items of a window at once with the batched scorers of
+`evaluation/fast_evaluator.py`: the six baselines, and the three wavelet-based
+methods with `J = 3` and left `reflect` padding only for series shorter than
+the window (the first windows). The robustness column of the main tables comes
+from `ProtocolV5Evaluator._robustness_v5` (seed 42); the wider perturbation
+study is `tools/run_robustness_v5.py` (seeds 42 to 46).
+
+The per-item classes are kept as references; the unit tests check that the
+batched scorers give the same scores.
+
+- `methods/wspi_assessment.py` is the WSPI index of the paper.
+- `methods/dtcwt_assessment.py` and `methods/dwt_assessment.py` are the classes
+  of the first submission. They pad short series with `edge`, and
+  `DWTAssessment` lowers the level for short series; the protocol of the paper
+  does neither.
+- `methods/hybrid_assessment.py` and `methods/wspi_ablation.py` hold an earlier
+  WSPI formula with a slope term and a clip. They are not used for any result.
+- `evaluation/scenarios.py`, `evaluation/temporal_evaluator.py` and
+  `evaluation/results_analyzer.py` are the evaluation of the first submission;
+  `evaluation/fast_evaluator.py` in `compat` mode reproduces it.
+- Only the flat entries of `WAVELET_CONFIG` in `config.py` are read (by the
+  per-item classes); the other blocks of `config.py` are not read.
+
 ## Citation
 
 If you use this code, please cite the paper and the archived release of this
-repository (see `.zenodo.json`).
+repository on Zenodo: <https://doi.org/10.5281/zenodo.23062475> (this DOI
+always points to the latest version; every version also has its own DOI).
 
 ## License
 

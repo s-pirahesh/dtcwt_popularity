@@ -1,20 +1,20 @@
 r"""
-Command-line runner for evaluation/protocol_v5.py (revision-srep-v5, T1.4+)
-===========================================================================
+Command-line runner for evaluation/protocol_v5.py
+=================================================
 Protocol V5: exact W-slot window, zero-filled slots, J=3 + reflect padding
 for the three wavelet-based methods, RSI by item id, stable tie-breaking by
 fixed item order, seeded robustness test.  See the module docstring.
 
 Examples (from the project root, Windows):
 
-  # T1.4 main run, default windows (baselines 7, wavelet-based 64)
+  # main run, default windows (baselines 7, wavelet-based 64)
   python tools\run_v5_eval.py --data data\datasets\youtube_hourly.csv --min-obs 50 ^
          --out results\revision_v5\T1.4_protocol_v5\youtube_hourly
 
   python tools\run_v5_eval.py --data data\datasets\yellow_taxi_2025_all_hourly.csv --min-obs 24 ^
          --out results\revision_v5\T1.4_protocol_v5\taxi_hourly
 
-  # T2.1 baselines with a 16-slot window (wavelet-based stay at 64)
+  # baselines with a 16-slot window (wavelet-based stay at 64)
   # (--out results\revision_v5\T2.1_baselines_W16\<dataset>)
   python tools\run_v5_eval.py ... --window AF=16 EWMA=16 RRD=16 VSE=16 CompoundPop=16 PFRF=16
 

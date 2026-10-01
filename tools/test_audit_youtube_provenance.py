@@ -1,5 +1,5 @@
 r"""
-Unit test of tools/audit_youtube_provenance.py (task T3.11).
+Unit test of tools/audit_youtube_provenance.py.
 
 Builds a small synthetic raw file in the Kaggle format (videos in blocks,
 cumulative viewCount, viewCount_diff = consecutive difference) with every case

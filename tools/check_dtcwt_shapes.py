@@ -1,6 +1,6 @@
 r"""
-T1.1 — Audit of DTCWT / DWT output shapes (revision-srep-v5)
-============================================================
+Audit of DTCWT / DWT output shapes
+=========================================
 Prints and saves the shape and dtype of every sub-band produced by the
 transforms used in this project, for N in {16, 32, 64, 128} and
 J in {2, 3, 4, 5}.

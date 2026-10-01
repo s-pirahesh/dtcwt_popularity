@@ -1,13 +1,14 @@
 """
-Evaluation Scenarios Module
-===========================
-This module handles the generation of synthetic scenarios (specifically noise injection)
-to test the robustness of popularity assessment methods.
+Robustness test of the first submission (noise injection)
+=========================================================
+Used by ``evaluation/temporal_evaluator.py`` and ``evaluation/results_analyzer.py``
+(the evaluation of the first submission).  Its target sampling has no fixed
+seed, so it is not repeatable.
 
-It is designed to be:
-1. Dynamic: Works with any time-series dataset (numpy arrays).
-2. Statistical: Selects a statistical sample of items, not just one.
-3. Plug-and-Play: Can be called within the evaluation loop.
+The revised paper does not use this module.  The robustness column of the
+main tables comes from ``ProtocolV5Evaluator._robustness_v5`` in
+``evaluation/protocol_v5.py`` (fixed seed 42), and the wider perturbation
+study from ``tools/run_robustness_v5.py`` (seeds 42 to 46).
 """
 
 import numpy as np

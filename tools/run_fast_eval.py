@@ -1,17 +1,17 @@
 r"""
-Command-line runner for evaluation/fast_evaluator.py (revision-srep-v5)
-=======================================================================
+Command-line runner for evaluation/fast_evaluator.py
+====================================================
 Examples (from the project root):
 
   # V4-compatible run (reproduces the old protocol CSVs)
   python tools/run_fast_eval.py --data data/datasets/youtube_hourly.csv --min-obs 50 ^
          --out results/revision_v5/compat_youtube_20260924
 
-  # corrected protocol (T1.4): exact W slots, zero-filled, RSI by item id
+  # corrected protocol: exact W slots, zero-filled, RSI by item id
   python tools/run_fast_eval.py --data data/datasets/youtube_hourly.csv --min-obs 50 ^
          --mode dense --rsi-by-item --out results/revision_v5/dense_youtube_<date>
 
-  # window sweep for the baselines (T2.2): --window AF=16 EWMA=16 ...
+  # window sweep for the baselines: --window AF=16 EWMA=16 ...
   python tools/run_fast_eval.py ... --window AF=16 EWMA=16 RRD=16 VSE=16 CompoundPop=16 PFRF=16
 
 Dataset min-obs of the V4 runs: youtube 50, yellow_taxi (all granularities) 24.

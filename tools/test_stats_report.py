@@ -1,5 +1,5 @@
 r"""
-Unit tests for tools/stats_report.py (revision-srep-v5, T1.6).
+Unit tests for tools/stats_report.py.
 
     python tools\test_stats_report.py
 

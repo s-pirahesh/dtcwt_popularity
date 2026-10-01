@@ -1,6 +1,8 @@
 """
-Statistical-based Popularity Assessment (Contribution 3)
-Uses higher-order statistics: Skewness + Kurtosis
+Statistical popularity score (skewness and kurtosis) from an early version
+of the project.  Not used in the paper.  It imports ``ASSESSMENT_CONFIG``,
+which ``config.py`` no longer defines, so ``methods/__init__.py`` skips it
+with an ImportWarning.
 
 Author: Sajjad Pirahesh
 Date: February 2025

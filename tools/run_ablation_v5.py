@@ -1,12 +1,12 @@
 r"""
-Ablation study and fusion comparison under protocol V5 (revision-srep-v5, task T3.3 / E6)
-========================================================================================
-Answers R4.9 (expanded ablation), R4.14 (controlled comparison of the fusion
-function), R3.6 (statistics on the ablation) and part of R4.2 / R4.16.
+Ablation study and fusion comparison under protocol V5
+======================================================
+Expanded ablation, a controlled comparison of the fusion function, and
+statistics on the ablation.
 No existing module is changed.
 
 All variants use N = 64, J = 3, alpha = beta = 1 and the settings of the
-T1.4 / T2.2 / T3.1 / T3.2 runs: exact 64-slot window, zero fill, reflect
+main runs, the window sweep, the level sweep and the alpha x beta grid: exact 64-slot window, zero fill, reflect
 padding (left) only while a series is shorter than 64, entry rule 32 observed
 rows, horizon 1 slot, RSI by item id, stable tie-breaking, seed 42, robustness
 test on.  Use --causal-universe (paper setting).  Windows >= 32 are written.
@@ -52,8 +52,8 @@ Layout
   --collect <root>:
   <root>/ablation_summary.csv  scenario x family x variant: mean and SD of every
                                metric on the windows common to the family
-  <root>/ablation_control.csv  WSPI against the T1.5 causal WSPI run, and
-                               Trend / Trend+R / Trend+WE against the T3.2 grid
+  <root>/ablation_control.csv  WSPI against the main causal WSPI run, and
+                               Trend / Trend+R / Trend+WE against the alpha x beta grid
                                points (0,0) / (1,0) / (0,1); window by window,
                                must be equal
 
@@ -114,7 +114,7 @@ FUSION = {
 FAMILIES = {'ablation': ABLATION, 'fusion': FUSION}
 FORMULA = {'full': 'mu_L*exp(R-WE)', 'trend': 'mu_L', 'R': 'mu_L*exp(R)', 'WE': 'mu_L*exp(-WE)',
            'linear': 'mu_L*(1+R-WE)', 'product': 'mu_L*R*(1-WE)', 'additive': 'mu_L+R-WE'}
-# control: variant -> T3.2 grid tag
+# control: variant -> alpha x beta grid tag
 T32_CONTROL = {'Trend': 'a0.00_b0.00', 'Trend+R': 'a1.00_b0.00', 'Trend+WE': 'a0.00_b1.00'}
 
 

@@ -76,7 +76,7 @@ and `<min>`, `<block>`, `<sens>` the values of this table. Leave out
 `--block-sens <sens>` for YouTube. Steps 3 to 13 use the four YouTube and taxi
 scenarios; step 14 is MovieLens.
 
-## 3. Main runs, default windows (Tables 8 and 9, Figures 2-5 and 7-9)
+## 3. Main runs, default windows (Tables 6 and 7, Figures 2 and 3, Tables S8-S11, Figure S6)
 
 Baselines use 7 slots and the three wavelet-based methods 64 slots.
 
@@ -92,7 +92,7 @@ Leakage audit of these runs:
 python tools/leakage_audit.py --causal-universe --run-root results/revision_v5/T1.5_causal_universe --out results/revision_v5/T1.5_leakage_audit/causal
 ```
 
-## 4. Window sweep and the equal 64-slot window (Table 9, Figure S1)
+## 4. Window sweep and the equal 64-slot window (Table 7, Figure S1)
 
 Every method with N in {7, 16, 32, 64, 128} (wavelet-based methods from 16),
 plus SMA, an equivalent EWMA and Holt. The folder `W064` is the equal-window
@@ -107,14 +107,14 @@ python tools/stats_report.py --collect results/revision_v5/T1.6_stats/T2.2_windo
 
 `W<NNN>` is `W016`, `W032`, `W064` and `W128`.
 
-## 5. Responsiveness to real surges (Section 4.10, Table 14, Figure 10, Tables S20-S21, Figure S8)
+## 5. Responsiveness to real surges (Section 4.10, Table 10, Figure 4, Tables S24-S25, Figure S10)
 
 ```
 python tools/run_responsiveness.py --data data/datasets/<file> --min-obs <min> --causal-universe --scenario <s> --block <block> --control-default results/revision_v5/T1.5_causal_universe/T1.4_protocol_v5/<s> --control-equal64 results/revision_v5/T2.2_window_sweep/<s>/W064 --out results/revision_v5/T2.4_responsiveness/<s>
 python tools/run_responsiveness.py --collect results/revision_v5/T2.4_responsiveness
 ```
 
-## 6. Decomposition level J (Table S3)
+## 6. Decomposition level J (Table S4)
 
 ```
 python tools/run_level_sweep.py --data data/datasets/<file> --min-obs <min> --causal-universe --out results/revision_v5/T3.1_level_sweep/<s>
@@ -125,7 +125,7 @@ python tools/stats_report.py --collect results/revision_v5/T1.6_stats/T3.1_level
 
 `<W>` is `W064` and `W032`; `<m>` is `WSPI` and `DTCWT+AF`.
 
-## 7. alpha x beta grid and the 30/70 selection (Section 4.9, Table 13, Table S19, Figure S6)
+## 7. alpha x beta grid and the 30/70 selection (Section 4.9, Tables S22-S23, Figure S9)
 
 The selection of J uses the level sweep of step 6.
 
@@ -139,7 +139,7 @@ python tools/stats_report.py --collect results/revision_v5/T1.6_stats/T3.2_param
 
 `<p>` is `alpha_beta` and `J`.
 
-## 8. Ablation and fusion function (Section 4.8, Table 12, Tables S17-S18)
+## 8. Ablation and fusion function (Section 4.8, Table 9, Tables S20-S21)
 
 ```
 python tools/run_ablation_v5.py --data data/datasets/<file> --min-obs <min> --causal-universe --out results/revision_v5/T3.3_ablation/<s>
@@ -161,7 +161,7 @@ python tools/stats_report.py --collect results/revision_v5/T1.6_stats/T3.4_paddi
 
 `<m>` is `WSPI`, `DTCWT+AF` and `DWT+AF`.
 
-## 10. Wider perturbations (Section 4.3, Tables S10-S12, Figure S3)
+## 10. Wider perturbations (Section 4.3, Tables S12-S14, Figure S5)
 
 ```
 python tools/run_robustness_v5.py --data data/datasets/<file> --min-obs <min> --causal-universe --out results/revision_v5/T3.5_robustness/<s>
@@ -177,7 +177,7 @@ The 5-minute taxi run is long; it can be split with `--methods` (for example
 python tools/run_robustness_v5.py --audit <s> --data data/datasets/<file> --min-obs <min> --causal-universe --audit-out results/revision_v5/T3.5_robustness
 ```
 
-## 11. Shift invariance (Section 4.8, Figure S5)
+## 11. Shift invariance (Section 4.8, Figure S8)
 
 ```
 python tools/run_shift_test.py --data data/datasets/<file> --min-obs <min> --causal-universe --out results/revision_v5/T3.6_shift_invariance/<s>
@@ -193,7 +193,7 @@ python tools/run_feature_relation.py --data data/datasets/<file> --min-obs <min>
 python tools/run_feature_relation.py --collect results/revision_v5/T3.7_feature_relation
 ```
 
-## 13. Run time and memory (Section 4.7, Table 11, Tables S13-S16, Figure S4)
+## 13. Run time and memory (Section 4.7, Table 8, Tables S16-S19, Figure S7)
 
 The measurements use one thread (the program sets it).
 
@@ -205,7 +205,7 @@ python tools/run_runtime_v5.py --real --data data/datasets/<file> --min-obs <min
 python tools/run_runtime_v5.py --collect results/revision_v5/T3.8_runtime
 ```
 
-## 14. MovieLens (Tables 8 and 9, Figure 6, Table S5, Figure S7)
+## 14. MovieLens (Tables 6 and 7, Table S6, Figures S3 and S4)
 
 ```
 python tools/run_v5_eval.py --data data/datasets/movielens_v5_<g>.csv --min-obs 24 --causal-universe --out results/revision_v5/T3.9_movielens/default/movielens_<g>
@@ -217,7 +217,7 @@ python tools/stats_report.py --collect results/revision_v5/T1.6_stats/T3.9_movie
 
 `<g>` is `daily` (block 7, sensitivity 28) or `weekly` (block 4, sensitivity 13).
 
-## 15. YouTube data provenance (Section 4.2, Table S4)
+## 15. YouTube data provenance (Section 4.2, Table S5)
 
 ```
 python tools/audit_youtube_provenance.py --raw data/raw/youtube/count_observation_upload.csv --processed data/datasets/youtube_hourly.csv --v5-run results/revision_v5/T1.5_causal_universe/T1.4_protocol_v5/youtube_hourly --out results/revision_v5/T3.11_youtube_provenance

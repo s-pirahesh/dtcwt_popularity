@@ -1,6 +1,6 @@
 r"""
-Window-length sweep methods for protocol V5 (revision-srep-v5, task T2.2 / E1)
-==============================================================================
+Window-length sweep methods for protocol V5
+===========================================
 Adds three simple smoothers and builds the full method set for one window
 length N.  No existing module is changed.
 

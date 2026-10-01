@@ -1,12 +1,12 @@
 r"""
-Window-length sweep under protocol V5 (revision-srep-v5, task T2.2 / E1)
-=======================================================================
+Window-length sweep under protocol V5
+=====================================
 For every N in the grid, all methods run with the same N-slot window:
 the six baselines, three simple smoothers (SMA, EWMA-eq, Holt) and, for
 N >= 16, the three wavelet-based methods with J = 3.  Settings: see
 ``evaluation/sweep_methods.py``.
 
-Every N gets its own run folder, laid out like the T1.4 / T2.1 runs, so that
+Every N gets its own run folder, laid out like the runs of tools/run_v5_eval.py, so that
 ``tools/stats_report.py`` works on it unchanged:
 
   <out>/W<NNN>/protocol/<method>_protocol.csv   windows >= --first-window only

@@ -1,12 +1,12 @@
 r"""
-alpha x beta grid and leakage-free 30/70 selection (revision-srep-v5, task T3.2 / E3)
-====================================================================================
+alpha x beta grid and leakage-free 30/70 selection
+==================================================
 Two jobs, one file.  No existing module is changed.
 
 1) Grid run (one scenario per call)
    WSPI with N = 64, J = 3 under protocol V5 for every (alpha, beta) in
    GRID x GRID, GRID = {0, 0.25, 0.5, 0.75, 1, 1.5, 2} (49 runs).  All other
-   settings are those of the T1.4 / T2.2 / T3.1 runs: exact 64-slot window,
+   settings are those of the main runs and the two sweeps: exact 64-slot window,
    zero fill, reflect padding only while a series is shorter than 64, entry
    rule 32 observed rows, horizon 1 slot, RSI by item id, stable tie-breaking,
    seed 42, robustness test on.  Use --causal-universe (paper setting).
@@ -21,7 +21,7 @@ Two jobs, one file.  No existing module is changed.
 2) Selection (--select), pre-registered rule (26 Sep 2026)
    Applied per scenario, separately to
      alpha_beta : the 49 grid runs (J = 3, N = 64)
-     J          : the T3.1 runs of WSPI with N = 64, J in {2, 3, 4, 5}
+     J          : the level-sweep runs of WSPI with N = 64, J in {2, 3, 4, 5}
                   (alpha = beta = 1), read from --level-root; no new run.
    a. Split: the windows common to all runs of the scenario (window_id >= 32),
       in time order.  The first floor(0.30 n) windows are the tuning part, the
@@ -47,7 +47,7 @@ Layout
                              mean and SD of the metrics
   <root>/grid_control.csv    a1.00_b1.00 against T1.5_causal_universe WSPI
                              (window by window; must be equal)
-  --select <root> --level-root <T3.1 root>:
+  --select <root> --level-root <level-sweep root>:
   <root>/selection/selection.csv             one row per scenario x param
   <root>/selection/selection_candidates.csv  every configuration, tuning means,
                                              feasible / selected flags
@@ -302,7 +302,7 @@ def collect(root: Path):
                      'first_window': int(pid[0]), 'last_window': int(pid[-1])}
                 r.update(part_means(d, pid, METRIC_COLUMNS))
                 rows.append(r)
-        # control: default against the T1.5 causal WSPI run
+        # control: default against the main causal WSPI run
         dt = tag(*DEFAULT_AB)
         ref = _abs(REF_T15) / scen.name / 'protocol' / 'WSPI_protocol.csv'
         c = {'scenario': scen.name, 'config': dt, 'reference': str(REF_T15 / scen.name /

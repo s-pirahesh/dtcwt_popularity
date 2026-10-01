@@ -1,5 +1,5 @@
 r"""
-Unit tests for evaluation/sweep_methods.py (T2.2).
+Unit tests for evaluation/sweep_methods.py.
 
     python tools\test_sweep_methods.py
 

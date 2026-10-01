@@ -1,6 +1,13 @@
 """
-DTCWT-based Popularity Assessment (Contribution 2)
-Strategy: Stable Trend + Shock Detection using Dual-Tree Complex Wavelet Transform
+DTCWT+AF, per-item reference class (first submission)
+Score = AF(|lowpass|) + 0.1 * AF(|level-1 highpass|) of the dual-tree complex
+wavelet transform.
+
+The runs of the revised paper do not call this class.  They use the batched
+scorer of ``evaluation/protocol_v5.py`` (``make_v5_dtcwt_af``): the same score
+with J = 3 and left ``reflect`` padding only for series shorter than the
+window.  This class pads short series with ``edge`` to a power of two and
+takes J from ``config.py``.  The unit tests compare the two.
 """
 import numpy as np
 import dtcwt
@@ -12,19 +19,9 @@ class DTCWTAssessment(BaseMethod):
     """
     Popularity assessment method based on Dual-Tree Complex Wavelet Transform (DTCWT).
 
-    This method is proposed as the main contribution in this research to overcome
-    the limitations of conventional DWT.
-
-    Key advantages over DWT:
-    1. Shift Invariance:
-       Minor changes in data arrival time (e.g., short time delay) do not cause
-       drastic changes in coefficient energy. This property produces "stable"
-       popularity scores without flickering.
-
-    2. Richer Information (Magnitude & Phase):
-       Using complex numbers ($z = x + iy$) allows us to calculate the "true energy"
-       of oscillations using magnitude ($|z|$), without the direction of oscillation
-       (positive/negative) having a negative impact.
+    Compared with the DWT, the DTCWT is nearly shift-invariant: a small shift
+    of the series changes the band energies much less.  The magnitude of the
+    complex coefficients does not depend on the sign of an oscillation.
 
     Combined Strategy (Stable Trend + Shock):
     This class calculates the score based on the combination of two components:

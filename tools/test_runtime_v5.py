@@ -1,5 +1,5 @@
 r"""
-Unit test for tools/run_runtime_v5.py (task T3.8 / E9).
+Unit test for tools/run_runtime_v5.py.
 
 Run from the project root:   python tools\test_runtime_v5.py
 The last line must be ALL OK.  Writes only to a temporary folder.

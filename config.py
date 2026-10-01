@@ -1,15 +1,15 @@
 """
-Global configuration — DTCWT Popularity Assessment Framework
-Version 4.0  (Frozen Evaluation Protocol + WSPI)
+Global configuration of the project.
 
-Chapter 3 method lineup:
-  Baselines   : AF, MeanFreq, EWMA, RRD, VSE, CompoundPop  (7-slot window)
-  Section 3-2 : DWT+AF   — Trend-Shock Model (64-day window)
-  Section 3-3 : DTCWT+AF — Stable Model      (64-day window)
-  Section 3-4 : WSPI     — Proposed Method   (64-day window, frozen params)
+Only the flat entries of WAVELET_CONFIG are read by the code: by the
+per-item classes in ``methods/`` and by ``tools/check_dtcwt_shapes.py``
+(filter names, DWT wavelet, default level J = 3).  The runs of
+the paper take their settings from ``evaluation/protocol_v5.py`` and
+``evaluation/method_configs.py`` (windows: baselines 7 slots, the three
+wavelet-based methods 64 slots).
 
-Note: 'Statistical' (skewness/kurtosis) removed.
-      'Hybrid V3.0' / 'Hybrid V3.1' replaced by 'WSPI'.
+The other blocks below are kept from the first submission and are not read
+by any code.
 
 Author: Sajjad Pirahesh
 """
@@ -33,31 +33,27 @@ RESULTS_DIR.mkdir(exist_ok=True, parents=True)
 # =============================================================================
 # Wavelet configuration
 # =============================================================================
-# Nested structure matches EvaluationConfig.wavelet_config exactly.
-# Evaluators and run_popularity_assessment.py read from:
-#   config.wavelet_config['dwt']['wavelet']
-#   config.wavelet_config['dtcwt']['biort']  etc.
+# The nested entries 'dwt' and 'dtcwt' are not read by any code; the flat
+# entries at the end are.
 
 WAVELET_CONFIG = {
-    # ---- Section 3-2: DWT (Trend-Shock Model) --------------------------------
+    # ---- DWT (DWT+AF) ----------------------------------------------------------
     # db4 gives good time-frequency resolution for popularity signals.
-    # level='auto' → resolved at runtime: min(floor(log2(window_size))-1, 5)
     'dwt': {
         'wavelet': 'db4',       # Daubechies-4 wavelet
-        'level':   'auto',      # decomposition levels (resolved at runtime)
+        'level':   'auto',      # not read
         'mode':    'symmetric', # signal extension mode
     },
 
-    # ---- Section 3-3 / 3-4: DTCWT (Stable Model + WSPI) --------------------
+    # ---- DTCWT (DTCWT+AF and WSPI) --------------------------------------------
     # near_sym_a / qshift_a give the best shift-invariance properties.
-    # level='auto' → resolved at runtime: min(floor(log2(window_size))-1, 4)
     'dtcwt': {
         'biort':  'near_sym_a', # biorthogonal filter pair
         'qshift': 'qshift_a',   # Q-shift filter pair
-        'level':  'auto',       # decomposition levels (resolved at runtime)
+        'level':  'auto',       # not read
     },
 
-    # ---- Flat aliases (kept for legacy code that reads WAVELET_CONFIG directly)
+    # ---- Flat entries (read by the per-item classes in methods/) ------------
     'dwt_wavelet':        'db4',
     'decomposition_level': 3,
     'dtcwt_biort':        'near_sym_a',
@@ -65,17 +61,11 @@ WAVELET_CONFIG = {
 }
 
 # =============================================================================
-# WSPI configuration — Section 3-4 (Frozen Parameters)
+# Earlier WSPI parameters (first submission) — NOT READ BY ANY CODE
 # =============================================================================
-# P_WSPI = mu_L * exp( clip( alpha*S_L + beta*R - gamma*WE, -3, 3 ) )
-#
-#   mu_L  — trend volume   : WeightedMean(|Low|) with 2^{-i} decay weights
-#   S_L   — normalised slope: Slope(|Low|) / (Mean(|Low|) + eps)
-#   R     — energy ratio   : E_low / (E_low + sum(E_high))
-#   WE    — wavelet entropy : -sum(p_i * log2(p_i)), normalised
-#
-# Parameters are FROZEN for the dissertation evaluation.
-# Do not change without re-running all experiments.
+# Earlier formula: mu_L * exp( clip( alpha*S_L + beta*R - gamma*WE, -3, 3 ) ).
+# The index of the paper is P = mu_L * exp(alpha*R - beta*W_E) with
+# alpha = beta = 1 (methods/wspi_assessment.py, evaluation/fast_evaluator.py).
 
 WSPI_CONFIG = {
     'alpha_slope':    1.0,   # weight for normalised trend slope (S_L)
@@ -87,7 +77,7 @@ WSPI_CONFIG = {
 }
 
 # =============================================================================
-# Frozen 4-Layer Evaluation Protocol configuration
+# Evaluation settings of the first submission — not read by any code
 # =============================================================================
 
 FROZEN_PROTOCOL_CONFIG = {
@@ -101,7 +91,8 @@ FROZEN_PROTOCOL_CONFIG = {
 
 
 # =============================================================================
-# Stratification thresholds — mean count per time-slot
+# Stratification thresholds of the first submission — not read by any code
+# (the evaluation of the paper has no strata)
 # =============================================================================
 # All values are in MEAN COUNT PER SLOT (not cumulative sum).
 # This makes thresholds independent of window_size and comparable
@@ -121,7 +112,7 @@ STRATA_THRESHOLDS = {
 }
 
 # =============================================================================
-# Evaluation parameters
+# Evaluation parameters of the first submission — not read by any code
 # =============================================================================
 
 EVAL_CONFIG = {
@@ -130,7 +121,8 @@ EVAL_CONFIG = {
 }
 
 # =============================================================================
-# Dataset configurations
+# Dataset descriptions — not read by any code (prepare_data.py and
+# data/README.md describe the datasets of the paper)
 # =============================================================================
 
 DATASETS = {
@@ -140,7 +132,7 @@ DATASETS = {
         'time_col':    'timestamp',
         'item_col':    'item_id',
         'count_col':   'count',
-        'description': 'MovieLens 25M — daily rating counts',
+        'description': 'MovieLens 32M — daily rating counts',
         'granularity': 'daily',
     },
 
@@ -167,7 +159,7 @@ DATASETS = {
         'source':      'Kaggle',
     },
 
-    # ---------- Legacy / not yet implemented ----------------------------------
+    # ---------- Not used in the paper ------------------------------------------
     'youku': {
         'path':      DATA_DIR / 'youku.csv',
         'time_col':  'timestamp',
@@ -184,7 +176,7 @@ DATASETS = {
 }
 
 # =============================================================================
-# Logging
+# Logging — not read by any code
 # =============================================================================
 
 LOGGING_CONFIG = {

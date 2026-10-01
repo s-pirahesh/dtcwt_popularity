@@ -1,6 +1,6 @@
 r"""
-Fast vectorised evaluator (revision-srep-v5, task T1.2)
-=======================================================
+Fast vectorised evaluator
+=========================
 A drop-in, much faster re-implementation of the per-window loop of
 ``evaluation/incremental_evaluator.py`` (IncrementalTemporalEvaluator).
 
@@ -40,7 +40,7 @@ Two modes
     sampling is seeded (``seed``) — the old code used the unseeded global
     NumPy RNG, so that column can only be matched in distribution.
 
-``mode='dense'`` is the corrected protocol for T1.4 (NOT used for G1):
+``mode='dense'`` is the corrected protocol (NOT used for the check against the V4 runs):
   - training slice is ``[t - W, t)`` -> exactly W slots;
   - missing slots are zero-filled;
   - eligibility: the item needs >= min_observations observed rows in the

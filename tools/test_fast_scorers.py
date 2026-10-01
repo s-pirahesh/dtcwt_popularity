@@ -1,5 +1,5 @@
 r"""
-T1.2 unit check — batched scorers vs. the original assess_single()
+Unit check — batched scorers vs. the original assess_single()
 ==================================================================
 For every method, random count series (Poisson, bursty, sparse with many
 zeros, all-zero) of every length that occurs in the protocol are scored

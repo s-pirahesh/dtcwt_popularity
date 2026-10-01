@@ -1,5 +1,5 @@
 r"""
-Unit tests for the causal item catalogue of protocol V5 (T1.5).
+Unit tests for the causal item catalogue of protocol V5.
 
     python tools\test_causal_universe.py
 

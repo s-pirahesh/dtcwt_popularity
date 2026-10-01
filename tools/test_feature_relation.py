@@ -1,6 +1,6 @@
 r"""
-Unit test for tools/run_feature_relation.py (revision-srep-v5, task T3.7 / E7)
-=============================================================================
+Unit test for tools/run_feature_relation.py
+===========================================
 Run from the project root:   python tools\test_feature_relation.py
 Ends with "ALL OK" when every check passes.  Uses synthetic data only (no file of
 data/ is needed) and writes only to a temporary folder.

@@ -1,10 +1,10 @@
 r"""
-Corrected evaluation protocol V5 (revision-srep-v5, task T1.4)
-==============================================================
+Corrected evaluation protocol V5
+================================
 Builds on ``evaluation/fast_evaluator.py`` (which is NOT modified: its
-``compat`` mode keeps reproducing the V4 runs, gate G1).
+``compat`` mode keeps reproducing the V4 runs).
 
-What changes with respect to the V4 protocol (24 Sep 2026, experiment T1.4):
+What changes with respect to the V4 protocol (24 Sep 2026):
 
 1. Exact window.  The training slice of window k is ``[k - W, k)``, i.e.
    exactly W slots (64 for the wavelet-based methods, 7 for the
@@ -204,8 +204,8 @@ class ProtocolV5Evaluator(FastEvaluator):
     def __init__(self, data: pd.DataFrame, dataset_min_obs: int, seed: int = 42,
                  robustness: bool = True, causal_universe: bool = False, **kw):
         """causal_universe=False (default): the item catalogue is fixed once from
-        the whole file (total count >= dataset_min_obs), as in V4 and the T1.4 /
-        T2.1 runs.  causal_universe=True (T1.5, decision of 24 Sep 2026): every
+        the whole file (total count >= dataset_min_obs), as in V4 and the
+        first V5 runs.  causal_universe=True (the setting of the paper): every
         item of the file is kept, and an item can enter window k only if its
         total count over all slots BEFORE the test slot k is >= dataset_min_obs.
         No full-period statistic is used.  The per-window eligibility rule
@@ -286,7 +286,7 @@ class ProtocolV5Evaluator(FastEvaluator):
         prev: Dict[int, set] = {}
         recs = []
         W = fm.window_slots
-        # causal catalogue: running total count over slots [0, k) (T1.5)
+        # causal catalogue: running total count over slots [0, k)
         cum = np.zeros(len(self.items)) if self.causal_universe else None
         for k in range(self.num_slots + 1):
             if cum is not None and k > 0:

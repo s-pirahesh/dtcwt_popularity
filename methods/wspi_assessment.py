@@ -1,32 +1,19 @@
 """
-WSPI — Wavelet Structural Popularity Index (final formula)
-==========================================================
-Proposed structural popularity index. After an extensive empirical study
-(ablation, coefficient sensitivity, several alternative fusion designs, a
-variance-domination analysis, and a slope partial-correlation diagnostic on
-both datasets) the index was reduced to its minimal, fully-justified form:
+WSPI — Wavelet-Structured Popularity Index (index of the paper)
+================================================================
+        WSPI = mu_L * exp( alpha * R  -  beta * W_E )        alpha = beta = 1
 
-        WSPI = mu_L * exp( alpha * R  -  beta * WE )          alpha = beta = 1
+  * mu_L : recency-weighted (2^-k) mean of the magnitudes of the DTCWT
+           lowpass (trend) coefficients; the dominant term.
+  * R    : share of the coefficient energy in the lowpass band.
+  * W_E  : normalised wavelet entropy of the band energies.
+Defaults: J = 3, filters near_sym_a / qshift_a.  An earlier version had a
+slope term and a clip; both were removed (see the paper).
 
-Why this form (each choice is backed by evidence, not assertion):
-  * mu_L : recency-weighted (2^-k) mean of the DTCWT low-pass envelope —
-           the trend-level magnitude; the dominant term.
-  * R    : energy-concentration ratio  e_low / e_total  — rewards signals whose
-           energy sits in the trend band (smooth / stable). Sensitivity showed
-           a clear, monotone contribution.
-  * WE   : normalised wavelet entropy across scales — penalises energy spread
-           across scales (spiky / chaotic). Also a clear contribution.
-  * The trend-slope term was removed: its partial correlation with future
-    popularity, controlling for mu_L, is NEGATIVE on both datasets
-    (YouTube -0.27, Taxi -0.35), i.e. it is redundant with mu_L and the
-    residual is misleading (mean-reverting series).
-  * The clip operator was removed: the sweep showed it never activates
-    (identical metrics to 6 decimals across c = 1..5).
-  * DTCWT (not DWT) is essential: swapping to DWT collapses RSI and inflates
-    rank distortion (shift-invariance is the real source of stability).
-
-Ablation flags (use_R / use_WE / use_dtcwt) reproduce every ablation variant
-from this single class.
+This is the per-item class.  The runs of the paper use the batched version
+in ``evaluation/fast_evaluator.py`` through ``evaluation/protocol_v5.py``
+(``make_v5_wspi``); the unit tests check that both give the same score.
+Ablation flags (use_R / use_WE / use_dtcwt) give the ablation variants.
 
 Author: Sajjad Pirahesh
 """

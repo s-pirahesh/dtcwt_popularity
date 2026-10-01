@@ -1,8 +1,8 @@
 r"""
-Controlled shift-invariance test (revision-srep-v5, task T3.6 / E5)
-===================================================================
-Answers R4.7 (a controlled temporal-shift experiment comparing DTCWT with DWT and
-a conventional smoothing method) and supports R3.3.  No existing module is
+Controlled shift-invariance test
+================================
+A controlled temporal-shift experiment comparing DTCWT with DWT and with a
+conventional smoothing method.  No existing module is
 changed; the scorers and transforms are imported from the pipeline.
 
 Why two parts (26 Sep 2026).  When the real window
@@ -43,7 +43,7 @@ transform.  A comparison of the score at t and t+s mixes both.  So:
                  recent p0 = 48  (spike age 16 -> 8 slots)
       Methods (the pipeline scorers, N = 64, J = 3, library boundary handling):
         WSPI      protocol_v5.make_v5_wspi              DTCWT, symmetric
-        DWT-WSPI  run_ablation_v5 DWT features, full    db4, symmetric (T3.3)
+        DWT-WSPI  run_ablation_v5 DWT features, full    db4, symmetric (ablation)
         DTCWT+AF  protocol_v5.make_v5_dtcwt_af
         DWT+AF    protocol_v5.make_v5_dwt
         SMA       sweep_methods.batch_sma               (N = 64)
@@ -77,12 +77,12 @@ Layout
                                      over the windows, DWT / DTCWT ratio (empty when
                                      the DTCWT mean is 0, dtcwt_zero), share of
                                      item-windows in which DTCWT varies MORE than DWT
-          <root>/shift_control.csv   (1) per-window item counts equal to the T1.5
+          <root>/shift_control.csv   (1) per-window item counts equal to the main
                                      causal WSPI run (windows >= 64); (2) the
                                      s = 8 period check
   --stats <root> --stats-out <folder>
           tools/stats_report.analyse (imported, unchanged), reference DTCWT,
-          lower is better for every metric, T1.6 blocks (YouTube 24; taxi one
+          lower is better for every metric, paper blocks (YouTube 24; taxi one
           week + one day as sensitivity), one Holm family per scenario x metric.
           <folder>/<scenario>/{method_summary,paired_tests}.csv and
           <folder>/all_{method_summary,paired_tests}.csv
@@ -135,7 +135,7 @@ DWT_WAVELET = 'db4'
 METRICS = ['cv_E_L', 'cv_E_1', 'cv_E_2', 'cv_E_3', 'sd_R', 'sd_WE']
 TRANSFORMS = ('DTCWT', 'DWT')
 REF_T15 = Path('results/revision_v5/T1.5_causal_universe/T1.4_protocol_v5')
-DATASETS = {  # scenario folder -> (block, block_sens), T1.6
+DATASETS = {  # scenario folder -> (block, block_sens) of the paper statistics
     'youtube_hourly': (24, None),
     'taxi_hourly': (168, 24),
     'taxi_30min': (336, 48),
@@ -486,7 +486,7 @@ def collect(root: Path, ref_t15: Path = None):
                                  dtcwt_zero=bool(m['DTCWT'] <= TIE_TOL),
                                  share_item_windows_dtcwt_higher=(
                                      res['DTCWT'][f'n_dtcwt_higher_{c}'].sum() / n_iw)))
-        # control 1: item counts against the T1.5 causal WSPI run
+        # control 1: item counts against the main causal WSPI run
         ref = ref_t15 / sd.name / 'protocol' / 'WSPI_protocol.csv'
         c1 = dict(scenario=sd.name, check='num_items vs T1.5 WSPI (windows >= 64)',
                   reference_file=str(ref))

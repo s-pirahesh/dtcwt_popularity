@@ -1,6 +1,6 @@
 r"""
-MovieLens execution datasets for protocol V5 (revision-srep-v5, task T3.9 / E10)
-===============================================================================
+MovieLens execution datasets for protocol V5
+============================================
 Builds the two MovieLens files used in the paper from the raw GroupLens file
 ``ratings.csv`` (ML-32M: userId, movieId, rating, timestamp):
 
@@ -161,7 +161,7 @@ def write_csv(t: pd.DataFrame, path: Path, chunk: int = 2_000_000):
 
 
 def profile(t: pd.DataFrame, gran: str, min_obs: int) -> dict:
-    """Pre-run statistics of one execution file (E10: items, span, zeros).
+    """Pre-run statistics of one execution file (items, span, zeros).
     One pass over the slots with running window counts, so memory stays at
     one slot x item count matrix (about 0.8 GB for 1998-2023 daily)."""
     step = 1 if gran == 'daily' else 7

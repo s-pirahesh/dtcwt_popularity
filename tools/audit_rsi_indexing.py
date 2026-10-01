@@ -1,5 +1,5 @@
 r"""
-T1.1 side-audit — effect of POSITIONAL top-K indices on RSI
+Side audit — effect of POSITIONAL top-K indices on RSI
 ===========================================================
 The V4 evaluator stores top-K as positions in the per-window score array.
 When the set of eligible items changes between two windows, the same

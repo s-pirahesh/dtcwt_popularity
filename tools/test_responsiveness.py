@@ -1,6 +1,6 @@
 r"""
-Unit test for evaluation/responsiveness.py and tools/run_responsiveness.py (T2.4 / E11)
-======================================================================================
+Unit test for evaluation/responsiveness.py and tools/run_responsiveness.py
+==========================================================================
 Synthetic data with planted entries; no real dataset is needed.
 
   1. event detection: planted entry found with the right t0, run length and strict flag

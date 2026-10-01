@@ -1,5 +1,5 @@
 r"""
-T1.4 — V4 protocol vs V5 protocol, per method (all windows of each method)
+V4 protocol vs V5 protocol, per method (all windows of each method)
 ==========================================================================
 Reads the V4 comparison/main_summary.csv and the V5 summary_all_windows.csv
 (+ the DTCWT+AF J=2 ablation under V5) and writes one tidy CSV.

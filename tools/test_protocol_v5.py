@@ -1,5 +1,5 @@
 r"""
-T1.4 unit checks for evaluation/protocol_v5.py
+Unit checks for evaluation/protocol_v5.py
 ==============================================
 1. Tie-stable metrics == metrics.py on tie-free score vectors
    (NDCG@K, Coverage@K, rank distortion).

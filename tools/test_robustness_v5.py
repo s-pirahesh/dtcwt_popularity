@@ -1,6 +1,6 @@
 r"""
-Unit test for tools/run_robustness_v5.py (revision-srep-v5, task T3.5 / E4)
-==========================================================================
+Unit test for tools/run_robustness_v5.py
+========================================
 Run from the project root:   python tools\test_robustness_v5.py
 Ends with "ALL OK" when every check passes.  Uses a small synthetic data set
 (no file of data/ is needed) and writes only to a temporary folder.

@@ -1,15 +1,15 @@
 r"""
-Extended robustness study under protocol V5 (revision-srep-v5, task T3.5 / E4)
-=============================================================================
-Answers R1.4 (spike size, position and duration) and part of R4.15 (uniform,
-repeatable configuration).  No existing module is changed; the scorers come
+Extended robustness study under protocol V5
+===========================================
+Spike size, position and duration, and continuous noise, in a uniform and
+repeatable configuration.  No existing module is changed; the scorers come
 from evaluation/protocol_v5.py and the statistics from tools/stats_report.py
 (imported, unchanged).
 
 Design (26 Sep 2026)
 --------------------
 "Common perturbation": in every evaluation window every method sees the SAME
-corrupted data.  This extends the T1.4 rule "fixed seed and identical input
+corrupted data.  This extends the protocol-V5 rule "fixed seed and identical input
 in the robustness test".
 
   window k      k >= 32, a row exists at slot k, and every method of both
@@ -69,13 +69,13 @@ Metrics per window (mean over targets, then over seeds)
              whose noisy series is all zeros (log 0) are left out of these two
              means only.
   Control columns: num_items, npool, ntargets, ndcg@10 of the clean scores
-  (must equal the T1.5 run for the default configuration and the T2.2 W064 run
+  (must equal the main causal run for the default configuration and the W064 sweep run
   for the baselines at 64).
 
 Configurations
   default  AF, EWMA, RRD, VSE, CompoundPop, PFRF with W=7; DWT+AF, DTCWT+AF,
-           WSPI with W=64 (paper table 1)
-  eq64     all nine methods with W=64 (paper table 2).  The wavelet-based
+           WSPI with W=64 (default configuration of the paper)
+  eq64     all nine methods with W=64 (equal-window configuration).  The wavelet-based
            methods are identical in both configurations (same pool, targets
            and noise), so they are computed once.
 
@@ -91,14 +91,14 @@ Layout
   <root>/robustness_control.csv   clean NDCG@10 and num_items against the
                                   reference runs, window by window (must be equal)
   <root>/robustness_main_check.csv  default configuration: mean Delta Rank of the
-                                  V4/V5 test of the paper tables (T1.5 runs) and of
+                                  V4/V5 test of the paper tables (main causal runs) and of
                                   the common test at 10x / last / 1 slot, on the
                                   same windows, with the rank of each method
   --audit <scenario> --data ... --min-obs ... --causal-universe:
   <audit-out>/current_test_audit.csv  the V4/V5 test of the paper tables replayed
                                   (per-method targets and spike): target Jaccard
                                   between methods, median spike, zero share, and
-                                  control against the T1.5 robustness column
+                                  control against the robustness column of the main runs
   --stats <root> --stats-out <dir>:
   <dir>/<scenario>/<config>/<condition>/{method_summary,paired_tests}.csv
   (stats_report.analyse, reference WSPI, metrics robustness_distortion and,
@@ -495,7 +495,7 @@ def audit_current_test(data, min_obs, causal_universe, ref_default: Path, scenar
     (per-method eligible set, spike = 10 x mean of the method's own W-slot
     series, last slot, one slot) and reports, on the windows >= 32 common to
     the audited methods: target overlap between methods, spike size, share of
-    zero slots, and a control of the replayed Delta Rank against the T1.5 run."""
+    zero slots, and a control of the replayed Delta Rank against the main causal run."""
     from evaluation.protocol_v5 import rank_distortion_stable
     fe = ProtocolV5Evaluator.from_csv(data, dataset_min_obs=min_obs, seed=42,
                                       causal_universe=causal_universe, verbose=False)
@@ -635,7 +635,7 @@ def collect(root: Path, ref_default: Path, ref_eq64: Path):
             ctrl.append(r)
     pd.DataFrame(rows).to_csv(root / 'robustness_summary.csv', index=False, encoding='utf-8')
     # main-table check: the V4/V5 test (per-method targets, robustness_distortion of
-    # the T1.5 runs) against the common test at 10x / last / 1 slot, same windows
+    # the main causal runs) against the common test at 10x / last / 1 slot, same windows
     mrows = []
     for sdir in sorted(p for p in root.iterdir() if (p / 'robustness').is_dir()):
         res = load_scenario(sdir)

@@ -1,11 +1,11 @@
 r"""
-Decomposition-level sweep under protocol V5 (revision-srep-v5, task T3.1 / E2)
-=============================================================================
+Decomposition-level sweep under protocol V5
+===========================================
 WSPI and DTCWT+AF are run at every level J of the grid, for two window
-lengths (E2): N = 64 with J in {2, 3, 4, 5} and N = 32 with J in {2, 3, 4}.
+lengths: N = 64 with J in {2, 3, 4, 5} and N = 32 with J in {2, 3, 4}.
 A pair (N, J) is run only if N >= 2**(J + 1), the same rule as the window
 sweep (so J = 5 is skipped at N = 32).  All other settings are those of the
-window sweep T2.2 (``evaluation/sweep_methods.py``): exact N-slot window,
+window sweep (``evaluation/sweep_methods.py``): exact N-slot window,
 zero fill, reflect padding only while a series is shorter than N, entry rule
 min(32, N / 2) observed rows, horizon 1 slot, RSI by item id, stable
 tie-breaking, seed 42.  Use --causal-universe (paper setting).

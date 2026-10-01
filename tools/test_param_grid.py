@@ -1,6 +1,6 @@
 r"""
-Unit tests for tools/run_param_grid.py (task T3.2 / E3)
-=======================================================
+Unit tests for tools/run_param_grid.py
+======================================
   1. Cached scorer == protocol_v5.make_v5_wspi, bit for bit, for every
      (alpha, beta) of the grid, on matrices of length 32..64 (with and
      without padding), with zero rows and repeated calls (cache hits).

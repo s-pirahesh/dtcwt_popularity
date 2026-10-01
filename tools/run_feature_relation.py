@@ -1,8 +1,8 @@
 r"""
-Relation between the WSPI features R and WE (revision-srep-v5, task T3.7 / E7)
-=============================================================================
-Answers R1.8 (are R and WE complementary?) and R4.3 (what distinct information
-each feature gives, and why the three features are enough).  No existing module
+Relation between the WSPI features R and WE
+===========================================
+Questions: are R and WE complementary, what distinct information does
+each feature give, and why are the three features enough?  No existing module
 is changed; the features are computed with the exact WSPI code of protocol V5.
 
 Design (27 Sep 2026)
@@ -57,11 +57,11 @@ Layout
   --collect <root>
   <root>/feature_relation_summary.csv   scenario x statistic: pooled value, or the
                                         mean over windows with a 95 % circular block
-                                        bootstrap interval (B 10000, seed 42, T1.6
+                                        bootstrap interval (B 10000, seed 42, paper
                                         blocks; sens = one-day blocks for taxi)
-  <root>/feature_relation_control.csv   window set and NDCG@10 against the T1.5
+  <root>/feature_relation_control.csv   window set and NDCG@10 against the main
                                         causal WSPI run (must be equal)
-  <root>/alpha_beta_total.csv           rows of the T3.2 grid (part all) with
+  <root>/alpha_beta_total.csv           rows of the alpha x beta grid (part all) with
                                         alpha + beta in {1, 2}, and (0, 0): the
                                         effect of the split between R and WE at a
                                         fixed total weight (no new run)
@@ -105,7 +105,7 @@ QUANTILES = (0.01, 0.10, 0.25, 0.50, 0.75, 0.90, 0.99)
 B_BOOT, SEED = 10000, 42
 REF_T15 = Path('results/revision_v5/T1.5_causal_universe/T1.4_protocol_v5')
 GRID_ROOT = Path('results/revision_v5/T3.2_param_grid')
-DATASETS = {  # scenario folder -> (block, block_sens), T1.6
+DATASETS = {  # scenario folder -> (block, block_sens) of the paper statistics
     'youtube_hourly': (24, None),
     'taxi_hourly': (168, 24),
     'taxi_30min': (336, 48),

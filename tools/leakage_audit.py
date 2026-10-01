@@ -1,13 +1,13 @@
 r"""
-Leakage and configuration audit for protocol V5 (revision-srep-v5, T1.5 / E12)
-==============================================================================
-Answers R4.13 (no temporal leakage), R3.7 (same settings for all datasets)
-and the STRATA_THRESHOLDS question of the experiments plan (E12).
+Leakage and configuration audit for protocol V5
+===============================================
+Checks that there is no temporal leakage, that all datasets use the same
+settings, and whether STRATA_THRESHOLDS affects any result.
 
 Five checks, one CSV each, in --out:
 
-  window_structure.csv   For every evaluated window of every method (T1.4 and
-                         T2.1 runs), the training slice rebuilt with the
+  window_structure.csv   For every evaluated window of every method (main runs and
+                         16-slot baseline runs), the training slice rebuilt with the
                          evaluator's own ``window_bounds``: last training slot
                          < test slot, exactly W slots once k >= W, and the
                          ``padded`` flag of the protocol CSV agrees.
@@ -40,16 +40,16 @@ Five checks, one CSV each, in --out:
   strata_v4_runs.csv     item_selection / num_items / strata_thresholds of the
                          V4 runs the paper used.
   config_table.csv       One row per scenario x run x method from
-                         metadata/protocol_v5_run.json (R3.7 table).
+                         metadata/protocol_v5_run.json (configuration table).
   metadata/leakage_audit_run.json
 
 Examples (from the project root, Windows):
 
-  # runs made with the causal item catalogue (the basis of the paper, T1.5)
+  # runs made with the causal item catalogue (the basis of the paper)
   python tools\leakage_audit.py --causal-universe --run-root results\revision_v5\T1.5_causal_universe ^
          --out results\revision_v5\T1.5_leakage_audit\causal
 
-  # the earlier T1.4 / T2.1 runs (whole-file catalogue)
+  # the earlier runs with the whole-file catalogue
   python tools\leakage_audit.py --out results\revision_v5\T1.5_leakage_audit\whole_file
 
 Full command list: REPRODUCE.md

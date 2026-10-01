@@ -1,9 +1,9 @@
 r"""
-Runtime, memory and scalability of the nine methods (revision-srep-v5, task T3.8 / E9)
-=====================================================================================
-Answers R1.7 (complexity and execution time against the baselines, large data),
-R4.8 (implementation-level memory of the multi-scale coefficients, measured peak
-memory) and R4.17 (rigorous runtime and memory; evidence for real-time claims).
+Runtime, memory and scalability of the nine methods
+===================================================
+Complexity and execution time against the baselines on large data, the
+memory of the multi-scale coefficients, measured peak memory, and evidence
+for real-time use.
 No existing module is changed.  Every scorer is the exact protocol-V5 scorer of
 the paper (evaluation.protocol_v5.build_v5_methods, J = 3).
 
@@ -48,7 +48,7 @@ Design (27 Sep 2026)
         robust_s  the robustness test (50 targets scored again + 50 re-rankings),
         other_s   the rest of the pipeline (slicing, metrics, bookkeeping).
     Data loading and matrix building are timed once (load_s).  Control: every
-    metric column and the window set must equal the T1.5 causal run
+    metric column and the window set must equal the main causal run
     (results/revision_v5/T1.5_causal_universe/T1.4_protocol_v5/<scenario>).
     The OS peak RSS of the whole process is recorded (full evaluation).
   * Hardware and library versions are written into every metadata JSON.

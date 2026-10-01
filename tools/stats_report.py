@@ -1,6 +1,6 @@
 r"""
-Statistical report for one protocol-V5 run folder (revision-srep-v5, T1.6 / E0)
-==============================================================================
+Statistical report for one protocol-V5 run folder
+=================================================
 Reads ``<run>/protocol/<method>_protocol.csv`` (window-by-window results written
 by tools/run_v5_eval.py) and writes, for every metric column:
 

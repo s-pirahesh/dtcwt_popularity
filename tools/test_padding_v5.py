@@ -1,6 +1,6 @@
 r"""
-Unit tests for tools/run_padding_v5.py (task T3.4 / E8)
-======================================================
+Unit tests for tools/run_padding_v5.py
+======================================
   1. dtcwt_forward_ext(mode='symmetric') == dtcwt.Transform1d.forward, bit for
      bit (lowpass and the three highpasses), N in {16, 32, 64, 128}, J in {2, 3}.
   2. Default scorers == protocol V5 scorers, bit for bit:
@@ -15,7 +15,7 @@ Unit tests for tools/run_padding_v5.py (task T3.4 / E8)
      scores targets alone).
   6. boundary_weight: interior coefficients (6..11) have a share < 0.001, shares are
      symmetric, the mu_L weights sum to 1.
-  7. End-to-end on synthetic data: run(both) + collect() with a reference T1.5
+  7. End-to-end on synthetic data: run(both) + collect() with a reference main-run
      folder built from the V5 scorers -> 6 controls 'equal'; the pad run covers
      windows 32..64 and equals the ext default there except in the padded
      windows for non-default modes; windows >= 65 of the combined 'all' subset

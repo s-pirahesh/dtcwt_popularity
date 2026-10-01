@@ -82,42 +82,39 @@ METHOD_CONFIGS: Dict[str, MethodConfig] = {
     ),
 
     # =========================================================================
-    # Group 2: Trend-Shock Model — DWT  (Chapter 3, Section 3-2)
+    # Group 2: DWT+AF (wavelet-based)
     # =========================================================================
     'DWT+AF': MethodConfig(
         name='DWT+AF',
         window_slots=64,
         min_observations=32,
         description=(
-            'Trend-Shock Model (Section 3-2): '
-            'Score = WAF(cA_L) + beta*WAF(cD_1), shift-sensitive'
+            'DWT+AF: Score = WAF(cA_L) + 0.1*WAF(cD_1), db4, J=3'
         )
     ),
 
     # =========================================================================
-    # Group 3: Stable DTCWT Model  (Chapter 3, Section 3-3)
+    # Group 3: DTCWT+AF (wavelet-based)
     # =========================================================================
     'DTCWT+AF': MethodConfig(
         name='DTCWT+AF',
         window_slots=64,
         min_observations=32,
         description=(
-            'Stable DTCWT Model (Section 3-3): '
-            'Score = WAF(M_trend) + beta*WAF(M_shock), shift-invariant'
+            'DTCWT+AF: Score = WAF(|L_J|) + 0.1*WAF(|H_1|), J=3'
         )
     ),
 
     # =========================================================================
-    # Group 4: WSPI — Proposed Method  (Chapter 3, Section 3-4)
+    # Group 4: WSPI (proposed index)
     # =========================================================================
     'WSPI': MethodConfig(
         name='WSPI',
         window_slots=64,
         min_observations=32,
         description=(
-            'Wavelet Structural Popularity Index (Section 3-4): '
-            'P = mu_L * exp(clip(alpha*S_L + beta*R - gamma*WE, -3, 3)), '
-            'alpha=1.0, beta=0.5, gamma=0.5'
+            'WSPI: P = mu_L * exp(alpha*R - beta*W_E), '
+            'alpha=beta=1, J=3'
         )
     ),
 

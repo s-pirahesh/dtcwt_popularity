@@ -1,7 +1,7 @@
 r"""
-Provenance audit of the YouTube dataset (revision-srep-v5, task T3.11, R4.10)
-==============================================================================
-Reviewer 4 (R4.10) asks for the source, collection period, number of videos,
+Provenance audit of the YouTube dataset
+=======================================
+Documents the source, collection period, number of videos,
 inclusion / exclusion criteria, preprocessing, missing-value treatment, and
 whether the data allow the experiments to be reproduced.  This script only
 READS the raw file, the processed file, the V5 protocol CSVs and the other
@@ -27,7 +27,7 @@ Facts it establishes (27 Sep 2026)
   * dataset_summary.csv gives, for every data file of the paper, the number of
     items in the file, the number of items that the causal catalogue rule
     (total count before the test slot >= min_obs) admits at least once, and the
-    period.  Used for the two new rows of tab:data (T4.4).
+    period.  Used for the dataset table of the paper.
 
 Usage (from the project root)
   python tools/audit_youtube_provenance.py ^

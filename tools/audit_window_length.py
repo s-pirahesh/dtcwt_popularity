@@ -1,9 +1,9 @@
 r"""
-T1.1 — Audit of the REAL series length that each method receives
+Audit of the REAL series length that each method receives
 ================================================================
 Replays the window logic of IncrementalTemporalEvaluator exactly (through
 the compat mode of evaluation/fast_evaluator.py, whose indexing is checked
-against the V4 protocol CSVs in T1.3) and reports, per dataset and method:
+against the V4 protocol CSVs by tools/validate_fast_evaluator.py) and reports, per dataset and method:
 
   * the train slice length in slots (W-1 in the current code);
   * the distribution of the actual series length passed to assess_single

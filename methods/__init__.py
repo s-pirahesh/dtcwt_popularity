@@ -3,11 +3,15 @@
 Methods Package
 Popularity estimation methods
 
-Available methods (depending on the installed dependencies):
-- DTCWTAssessment: Dual-Tree Complex Wavelet Transform (requires: dtcwt)
-- DWTAssessment: Discrete Wavelet Transform (requires: pywt)
-- HybridAssessment: Hybrid approaches
-- StatisticalAssessment: Statistical features
+Per-item classes (depending on the installed dependencies):
+- DTCWTAssessment: DTCWT+AF of the first submission (requires: dtcwt)
+- DWTAssessment: DWT+AF of the first submission (requires: pywt)
+- HybridAssessment: earlier WSPI formula with slope and clip (not used)
+- StatisticalAssessment: early statistical score (not used)
+
+The WSPI index of the paper is ``methods/wspi_assessment.WSPIAssessment``.
+The results of the paper come from the batched scorers of
+``evaluation/protocol_v5.py``.
 
 Author: Sajjad Pirahesh
 Date: February 2025

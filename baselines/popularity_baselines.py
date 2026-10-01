@@ -91,17 +91,14 @@ def get_all_baseline_methods() -> dict:
 
     Example:
         from baselines import get_all_baseline_methods
-        from methods.hybrid_assessment import HybridAssessment
-        from methods.dtcwt_assessment import DTCWTAssessment
-        from methods.dwt_assessment import DWTAssessment
+        from methods.wspi_assessment import WSPIAssessment
 
         methods = get_all_baseline_methods()
-        methods.update({
-            'DWT+AF':   DWTAssessment(),
-            'DTCWT+AF': DTCWTAssessment(),
-            'WSPI':     HybridAssessment(),
-        })
-        evaluator = TemporalEvaluator(loader, methods, config)
+        methods['WSPI'] = WSPIAssessment()
+        print(methods['WSPI'].assess_single(series))
+
+    The evaluation of the paper uses the batched scorers of
+    ``evaluation/protocol_v5.py`` instead.
     """
     return {
         'AF':          AFMethod(),

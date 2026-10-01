@@ -1,9 +1,9 @@
 r"""
-Unit tests for tools/run_ablation_v5.py (task T3.3 / E6)
-========================================================
+Unit tests for tools/run_ablation_v5.py
+=======================================
   1. DTCWT variants == protocol_v5.make_v5_wspi (bit for bit): WSPI = (1,1),
      Trend = use_R=False,use_WE=False, Trend+R = use_WE=False, Trend+WE = use_R=False;
-     and == the T3.2 cached grid scorer at (1,1), (0,0), (1,0), (0,1).
+     and == the cached alpha x beta grid scorer at (1,1), (0,0), (1,0), (0,1).
   2. DWT decomposition == the one of DWT+AF in V5: the DWT+AF score rebuilt
      from our coefficients equals protocol_v5.make_v5_dwt bit for bit.
   3. DWT features: batch == row-by-row 1-D pywt + scalar loops (1e-12), and
@@ -13,7 +13,7 @@ Unit tests for tools/run_ablation_v5.py (task T3.3 / E6)
   5. Per-item scores: the score of a row does not depend on the other rows
      (needed for the robustness test, which scores 50 targets alone).
   6. End-to-end on synthetic data: run() + collect() with reference folders
-     built from make_v5_wspi and the T3.2 scorer -> every control 'equal';
+     built from make_v5_wspi and the grid scorer -> every control 'equal';
      a perturbed reference -> 'DIFFERENT'; the fusion WSPI file equals the
      ablation WSPI file; summary has 8 + 4 rows.
 

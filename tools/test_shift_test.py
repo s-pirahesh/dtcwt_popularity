@@ -1,6 +1,6 @@
 r"""
-Unit test for tools/run_shift_test.py (revision-srep-v5, task T3.6 / E5)
-=======================================================================
+Unit test for tools/run_shift_test.py
+=====================================
 Run from the project root:   python tools\test_shift_test.py
 Ends with "ALL OK" when every check passes.  Uses synthetic data only (no file of
 data/ is needed) and writes only to a temporary folder.

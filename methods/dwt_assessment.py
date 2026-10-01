@@ -1,7 +1,13 @@
 """
-DWT-based Popularity Assessment (Contribution 1)
-Strategy: Trend + Viral Shock Detection
-Combines Approximation (Trend) with Level 1 Details (Viral Spikes).
+DWT+AF, per-item reference class (first submission)
+Score = AF(approximation) + 0.1 * AF(level-1 detail) of the discrete wavelet
+transform (db4).
+
+The runs of the revised paper do not call this class.  They use the batched
+scorer of ``evaluation/protocol_v5.py`` (``make_v5_dwt``): the same score with
+a fixed J = 3 and left ``reflect`` padding only for series shorter than the
+window.  This class lowers the level for short series (``_safe_level``) and
+pads with ``edge``.  The unit tests compare the two.
 """
 import numpy as np
 import pywt

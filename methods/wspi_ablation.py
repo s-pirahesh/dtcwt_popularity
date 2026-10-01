@@ -1,16 +1,11 @@
 """
-WSPI Ablation Variants
-======================
-Subclass of HybridAssessment (WSPI) that allows disabling individual
-components or swapping DTCWT for DWT.
-
-Six variants for the ablation study (Reviewer Comment #5):
-  - Full WSPI                 (baseline)
-  - WSPI - WE                 (gamma = 0)
-  - WSPI - R                  (beta = 0)
-  - WSPI - S_L                (alpha = 0)
-  - WSPI with DWT             (DTCWT -> DWT)
-  - WSPI no clip              (c -> infinity)
+Ablation variants of the earlier WSPI formula (first submission)
+================================================================
+Subclass of ``HybridAssessment`` (earlier formula with slope and clip) that
+can disable single components or swap DTCWT for DWT.  It is not used for any
+result of the revised paper; ``tools/test_ablation_v5.py`` uses it to check
+the DWT features of the ablation in ``tools/run_ablation_v5.py``.  The
+ablation of the paper is run by ``tools/run_ablation_v5.py``.
 
 Author: Sajjad Pirahesh
 """
@@ -39,7 +34,7 @@ class WSPIAblation(HybridAssessment):
     use_clip : bool
         If False, the exponent (alpha*S_L + beta*R - gamma*WE) is NOT clipped
         before exponentiation.  Useful for testing the contribution of the
-        clamp operator to robustness (Section 4-F of the paper).
+        clamp operator to robustness (earlier formula only).
     clip_c : float
         Symmetric clip bound, applied only when use_clip=True.  Default 3.0.
     variant_name : str

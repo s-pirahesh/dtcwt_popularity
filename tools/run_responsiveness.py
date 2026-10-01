@@ -1,6 +1,6 @@
 r"""
-Responsiveness experiment (revision-srep-v5, task T2.4 / E11)
-=============================================================
+Responsiveness experiment
+=========================
 Delay with which every method brings a genuine entry into its Top-10, plus
 the stability-failure analysis and the graphic examples.  Design and
 definitions: see ``evaluation/responsiveness.py``.

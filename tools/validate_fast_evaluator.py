@@ -1,5 +1,5 @@
 r"""
-T1.3 — Gate G1: fast evaluator (compat mode) vs. the V4 protocol CSVs
+Check: fast evaluator (compat mode) vs. the V4 protocol CSVs
 =====================================================================
 Runs evaluation/fast_evaluator.py in compat mode on the same data and
 compares it, window by window, with the protocol CSVs of the V4 runs:

@@ -1,5 +1,5 @@
 r"""
-Unit tests for tools/run_level_sweep.py (T3.1 / E2).
+Unit tests for tools/run_level_sweep.py.
 
     python tools\test_level_sweep.py
 

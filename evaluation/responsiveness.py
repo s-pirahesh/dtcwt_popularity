@@ -1,7 +1,7 @@
 r"""
-Responsiveness to genuine entries into the true Top-10 (revision-srep-v5, task T2.4 / E11)
-=========================================================================================
-Answers reviewer comment R4.12: does WSPI suppress or delay genuine rises in
+Responsiveness to genuine entries into the true Top-10
+======================================================
+Question: does WSPI suppress or delay genuine rises in
 popularity?  No existing module is changed; the evaluator re-uses the matrix,
 the causal item catalogue and the eligibility rule of ``protocol_v5``.
 
@@ -9,7 +9,7 @@ Design (25 Sep 2026)
 --------------------
 Ground truth.  At slot k the true ranking orders the catalogue items by their
 real count in slot k (the evaluation target, horizon 1 slot).  Catalogue =
-the causal item catalogue of T1.5 (total count before slot k >= dataset
+the causal item catalogue of protocol V5 (total count before slot k >= dataset
 min_obs).  Ties: stable sort, fixed item order (same rule as protocol V5).
 The truth does NOT depend on any method.
 
@@ -35,12 +35,12 @@ such windows during the run is recorded (``n_ineligible_run``).
 
 Statistics.  WSPI against every other method on ``delay_restricted``, paired
 by event.  Clusters = non-overlapping time blocks of the entry slot t0
-(block length as in T1.6: YouTube 24 slots, taxi one week).  95 % CI of the
+(block length as in the other statistics: YouTube 24 slots, taxi one week).  95 % CI of the
 mean paired difference from a cluster bootstrap (B resamples, seed); Wilcoxon
 signed-rank on cluster means; Holm within one scenario x configuration x
 variant.  Orientation: positive effect = WSPI faster.
 
-Stability failures (item 4 of E11).  For every window common to all methods
+Stability failures.  For every window common to all methods
 of a configuration (k >= first_window): RSI@10 of every method and the truth
 change the window could see (``truth_rsi_seen@10``: Jaccard of the true Top-10
 of the two previous evaluated slots).  For each method: Spearman correlation
@@ -73,9 +73,9 @@ CONFIGS = ('default', 'equal64')
 
 
 def build_config(config: str, level: int = 3) -> Dict[str, FastMethod]:
-    """default: baselines 7, wavelet-based 64 (table 1 of the paper).
-    equal64: every method with a 64-slot window (table 2; same settings as
-    the N = 64 point of the T2.2 sweep)."""
+    """default: baselines 7, wavelet-based 64 (default configuration of the paper).
+    equal64: every method with a 64-slot window (equal-window configuration; same
+    settings as the N = 64 point of the window sweep)."""
     if config == 'default':
         return build_v5_methods(level=level)
     if config == 'equal64':

@@ -1,8 +1,8 @@
 r"""
-Padding strategies under protocol V5 (revision-srep-v5, task T3.4 / E8)
-======================================================================
-Answers R4.11 (boundary padding: explain the strategy, compare alternatives or
-justify the choice).  No existing module is changed.
+Padding strategies under protocol V5
+====================================
+Boundary padding: the strategy of the paper compared with the
+alternatives.  No existing module is changed.
 
 Two kinds of boundary handling act on a wavelet-based score (decided on
 26 Sep 2026):
@@ -50,10 +50,10 @@ Layout
                                  pad_windows  windows 32..64 (pad layer)
                                  from_64    default run, windows >= 64
                                             (mode 'none' = no padding)
-  <root>/padding_control.csv   ext/symmetric and pad/reflect against the T1.5
+  <root>/padding_control.csv   ext/symmetric and pad/reflect against the main
                                causal run of each method, window by window
   <root>/padded_share.csv      share of padded windows among the windows
-                               common to the 9 methods of the T1.5 causal run
+                               common to the 9 methods of the main causal run
   <root>/boundary_weight.csv   per DTCWT lowpass coefficient (N=64, J=3):
                                share of its filter weight on extended samples
                                (symmetric mode) and its mu_L weight

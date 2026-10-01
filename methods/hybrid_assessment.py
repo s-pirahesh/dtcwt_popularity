@@ -1,15 +1,14 @@
 """
-WSPI: Wavelet Structural Popularity Index (Gold Version)
-========================================================
-Core contribution: A structural, wavelet-based popularity metric.
+Earlier WSPI formula of the first submission (kept for reference only)
+=====================================================================
+    Score = mu_L * exp( clip( alpha*Slope_Norm + beta*R - gamma*WE, -3, 3 ) )
 
-Final Refinements (Stability & Robustness):
-1. Numerical Stability: Added epsilon to slope normalization to prevent explosion for small means.
-2. Range Control: Reduced clamping range to [-3, 3] to prevent extreme score multipliers.
-3. Weighting: Exponential weighting (2^-i) strictly enforced for volume calculation.
-
-Formula:
-    Score = μ_L * exp( clip( α*Slope_Norm + β*R - γ*WE, -3, 3 ) )
+This is NOT the index of the revised paper and is not used for any of its
+results.  The index of the paper is P = mu_L * exp(alpha*R - beta*W_E) with
+alpha = beta = 1 (``methods/wspi_assessment.py``; batched in
+``evaluation/fast_evaluator.py`` and run by ``evaluation/protocol_v5.py``).
+The class is kept because ``methods/wspi_ablation.py`` subclasses it and a
+unit test (``tools/test_ablation_v5.py``) compares the DWT ablation with it.
 """
 
 import numpy as np

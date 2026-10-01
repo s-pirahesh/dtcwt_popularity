@@ -1,6 +1,6 @@
 r"""
-Unit tests for tools/prepare_movielens_v5.py (task T3.9)
-========================================================
+Unit tests for tools/prepare_movielens_v5.py
+============================================
 Synthetic ratings.csv with known answers.  Checks:
   1. daily aggregation on the UTC day (a rating at 23:59:59 and 00:00:00);
   2. period cut [start, end] inclusive;
