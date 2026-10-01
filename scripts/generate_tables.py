@@ -73,9 +73,9 @@ PATHS = gf.PATHS
 
 # Numbers of the paper tables cited in SI captions, and of the SI tables cited in
 # paper captions (order of first citation; change here when the numbering changes).
-PAPER_TABLE = {'tab:main_default': '6', 'tab:resp': '10'}
-SI_NUM = {'default': ('S8', 'S9'), 'equal64': ('S10', 'S11'),
-          'fig:si_spike_size': 'S5', 'tab:si_runtime_grid': 'S17', 'tab:si_runtime_real': 'S19'}
+PAPER_TABLE = {'tab:main_default': '2'}
+SI_NUM = {'default': ('S12', 'S13'), 'equal64': ('S14', 'S15'),
+          'fig:si_spike_size': 'S5', 'tab:si_runtime_grid': 'S22', 'tab:si_runtime_real': 'S24', 'tab:resp': 'S29'}
 
 
 def src(key, *parts):
@@ -1044,7 +1044,7 @@ def t_resp_strict(c):
     c.check('main variant YouTube WSPI miss rate (paper table of responsiveness)', round(main.loc['youtube_hourly'].miss_rate, 3), 0.312)
     st = s[s.variant == 'strict']
     cap = (r'Responsiveness with a stricter entry rule: the item was outside the ground-truth Top-20 (instead of '
-           r'the Top-10) in the six slots before the entry. Miss rate / median delay in slots, as in Table~' + PAPER_TABLE['tab:resp'] + r'; '
+           r'the Top-10) in the six slots before the entry. Miss rate / median delay in slots, as in Supplementary Table~' + SI_NUM['tab:resp'] + r'; '
            r'-- : median undefined (more than half of the entries missed). The window length of each method is '
            r'given in parentheses.')
     L = head(cap, 'tab:si_resp_strict', 'lr' + 'c' * len(RESP_COLS), sep='3.3pt')
