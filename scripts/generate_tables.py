@@ -238,7 +238,7 @@ SCEN4 = [s for s, _ in gf.V4_SCENARIOS]
 ML2 = [s for s, _ in gf.ML_SCENARIOS]
 SCEN6 = SCEN4 + ML2
 LABEL6 = {**dict(gf.V4_SCENARIOS), **dict(gf.ML_SCENARIOS)}
-# column heads of the main tables: the labels of Table 5 (tab:data)
+# column heads of the main tables: the labels of the dataset table (tab:data)
 HEAD6 = {'youtube_hourly': r'\shortstack{YouTube\\(1h)}', 'taxi_hourly': r'\shortstack{Taxi\\Hourly}',
          'taxi_30min': r'\shortstack{Taxi\\30min}', 'taxi_5min': r'\shortstack{Taxi\\5min}',
          'movielens_daily': r'\shortstack{MovieLens\\(1d)}', 'movielens_weekly': r'\shortstack{MovieLens\\(1w)}'}
@@ -1002,11 +1002,11 @@ def t_ml_profile(c):
             j['files']['daily']['ratings_in_period'], tol=0)
     c.check('weighted yearly first-day share = row all',
             float((y.ratings * y.share_on_user_first_day).sum() / y.ratings.sum()), share, tol=1e-9)
-    cap = (r'MovieLens (ML-32M) in the period used, 1 January 1998 to 12 October 2023. (a) Data sets after '
+    cap = (r'MovieLens (ML-32M) in the period used, 1 January 1998 to 12 October 2023. (a) Datasets after '
            r'the filter on the total count ($\ge 24$ ratings). (b) Ratings per year (all movies); first-day '
            r'share: share of the ratings made on the user\textquotesingle s first day of rating.')
     L = head(cap, 'tab:si_ml_profile', 'lrrrr', size=r'\footnotesize')
-    L.append(r'\multicolumn{5}{@{}l}{\textit{(a) Data sets}}\\')
+    L.append(r'\multicolumn{5}{@{}l}{\textit{(a) Datasets}}\\')
     L.append(r' & \multicolumn{2}{r}{Daily} & \multicolumn{2}{r}{Weekly}\\')
     L.append(r'\midrule')
     rows = [('Movies', lambda r: f'{int(r["items"]):,}'), ('Slots', lambda r: f'{int(r.slots):,}'),
