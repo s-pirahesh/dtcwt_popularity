@@ -8,6 +8,9 @@ scipy==1.17.0
 PyWavelets==1.9.0
 dtcwt==0.14.0
 #
+# Forecasting baselines (ARIMA and the ARMA(1,1) coefficient forecaster; paper 2)
+statsmodels==0.15.0
+#
 # Figures
 matplotlib==3.10.8
 seaborn==0.13.2
