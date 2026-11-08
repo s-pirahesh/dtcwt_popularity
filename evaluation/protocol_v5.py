@@ -202,8 +202,13 @@ class ProtocolV5Evaluator(FastEvaluator):
     """Dense, exact-W evaluator with stable tie-breaking (protocol V5)."""
 
     def __init__(self, data: pd.DataFrame, dataset_min_obs: int, seed: int = 42,
-                 robustness: bool = True, causal_universe: bool = False, **kw):
-        """causal_universe=False (default): the item catalogue is fixed once from
+                 robustness: bool = True, causal_universe: bool = False,
+                 horizon: int = 1, **kw):
+        """horizon=h: the ground truth of window k is the sum of the h slots
+        k..k+h-1, and window k is evaluated only if k+h-1 is inside the data;
+        h=1 is protocol V5.
+
+        causal_universe=False (default): the item catalogue is fixed once from
         the whole file (total count >= dataset_min_obs), as in V4 and the
         first V5 runs.  causal_universe=True (the setting of the paper): every
         item of the file is kept, and an item can enter window k only if its
@@ -214,6 +219,9 @@ class ProtocolV5Evaluator(FastEvaluator):
         kw.pop('rsi_by_item', None)
         kw.pop('tie_info', None)
         self.causal_universe = bool(causal_universe)
+        self.horizon = int(horizon)
+        if self.horizon < 1:
+            raise ValueError('horizon must be >= 1')
         self.universe_min_count = dataset_min_obs
         super().__init__(data, 0 if self.causal_universe else dataset_min_obs,
                          mode='dense', seed=seed,
@@ -291,6 +299,8 @@ class ProtocolV5Evaluator(FastEvaluator):
         for k in range(self.num_slots + 1):
             if cum is not None and k > 0:
                 cum += self.V[:, k - 1]
+            if k + self.horizon - 1 > self.num_slots:
+                break                 # no complete future of h slots (never for h = 1)
             lo, hi = self.window_bounds(k, W)
             if self.any_cum[hi] - self.any_cum[lo] == 0 or not self.any_row[k]:
                 continue
@@ -303,7 +313,8 @@ class ProtocolV5Evaluator(FastEvaluator):
                 continue
             X = self._matrix(idx, k, W)
             sc = self._safe_score(fm.scorer, X)
-            act = self.V[idx, k]
+            act = (self.V[idx, k] if self.horizon == 1
+                   else self.V[idx, k:k + self.horizon].sum(axis=1))
             order = stable_order(sc)
             rec = {'window_id': k,
                    'timestamp': int((self.start + k * self.slot).timestamp() * 1000),
