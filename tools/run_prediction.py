@@ -23,12 +23,22 @@ Examples (from the project root, Windows):
          --min-obs 50 --horizons 8 --methods WSPI WSPI-FA ARIMA ^
          --out results\paper2\run_B\youtube_hourly
 
+  # a long run that can be interrupted: give the same command again and it
+  # continues (complete methods are skipped, the slow methods continue from
+  # the last scored window); see tools/prediction_resume.py
+  python tools\run_prediction.py --data data\datasets\youtube_hourly.csv ^
+         --min-obs 50 --horizons 8 --methods WSPI WSPI-FA ARIMA --resume ^
+         --bound-check --out results\paper2\run_B\youtube_hourly
+
 Outputs, for every horizon h (``--out``/h<h>/):
   protocol/<method>_protocol.csv         window by window (V5 columns)
   comparison/summary_{all,common}_windows.csv
   metadata/protocol_v5_run.json          settings, versions, runtime per method
   scorer_timing.csv                      time spent inside each scorer (see below)
   gate_profile.csv, gate_hist.csv        (--gate-profile) gates of WSPI-F2 and WSPI-FG
+  bound_check.csv                        (--bound-check) smallest and largest ratio
+                                         P_method / P_WSPI of every clamped method
+                                         against the bounds [L, U] of the method
 
 scorer_timing.csv has one row per method: the number of scorer calls and rows,
 the seconds spent inside the scorer, the milliseconds per row, the seconds of
@@ -43,8 +53,16 @@ quartile and median of the raw product p = R(1-W_E)) and of the WSPI-FG gate
 (median and mean of g, share of g = 0, which is exactly WSPI).
 gate_hist.csv: counts of p, g(F2) and g(FG) over all item-windows in bins of
 width 1e-4 on [0, 1].
+
+--resume does not change any result file; the state is kept in --resume-dir
+(default logs/prediction_resume/).  scorer_timing.csv and the run time in the
+metadata of a resumed method are the times of an uninterrupted run (the scorer
+time of the earlier sessions is added), and scorer_timing.csv gets the column
+``replayed_calls`` (scorer calls answered from the journal).
 """
 import argparse
+import gc
+import platform
 import sys
 import time
 from pathlib import Path
@@ -60,6 +78,9 @@ from methods.wspi_forecast import n_forecast_coefficients         # noqa: E402
 from tools.prediction_protocol import (ALL_METHODS, MIN_OBS, RUN_A_METHODS,  # noqa: E402
                                        WINDOW, build_prediction_methods,
                                        gate_features)
+from tools.prediction_resume import (CODE_FILES, ResumableEvaluator,   # noqa: E402
+                                     ResumeState, add_bound_recorders,
+                                     default_resume_dir, sha256_file)
 
 HIST_BINS = 10000
 
@@ -105,11 +126,14 @@ def gate_profile(fe: ProtocolV5Evaluator, window: int, min_obs: int):
     return pd.DataFrame(rows), hist
 
 
-def timing_table(methods, res, horizon: int) -> pd.DataFrame:
-    """One row per method: time inside the scorer and the whole evaluation."""
+def timing_table(methods, res, horizon: int, stored=None) -> pd.DataFrame:
+    """One row per method: time inside the scorer and the whole evaluation.
+    ``stored``: scorer statistics of the methods that were not run again in
+    this session (--resume)."""
     rows = []
+    stored = stored or {}
     for name, fm in methods.items():
-        st = fm.scorer.stats()
+        st = stored[name] if name in stored else fm.scorer.stats()
         total = float(res[name].attrs.get('duration_s', float('nan')))
         rows.append(dict(horizon=horizon, method=name, scorer=st['scorer'],
                          windows=len(res[name]), calls=st['calls'], rows=st['rows'],
@@ -118,6 +142,8 @@ def timing_table(methods, res, horizon: int) -> pd.DataFrame:
                          n_fits=st.get('n_fits', np.nan),
                          n_fallbacks=st.get('n_fallbacks', np.nan),
                          fallback_share=st.get('fallback_share', np.nan)))
+        if 'replayed_calls' in st:
+            rows[-1]['replayed_calls'] = st['replayed_calls']
     return pd.DataFrame(rows)
 
 
@@ -134,6 +160,12 @@ def main(argv=None):
     ap.add_argument('--gate-profile', action='store_true')
     ap.add_argument('--no-robustness', action='store_true')
     ap.add_argument('--seed', type=int, default=42)
+    ap.add_argument('--bound-check', action='store_true',
+                    help='write bound_check.csv (ratio to WSPI of the clamped methods)')
+    ap.add_argument('--resume', action='store_true',
+                    help='continue an interrupted run with the same command')
+    ap.add_argument('--resume-dir', default=None,
+                    help='folder of the resume state (default: logs/prediction_resume/<out>)')
     a = ap.parse_args(argv)
 
     names = a.methods or list(RUN_A_METHODS)
@@ -145,23 +177,71 @@ def main(argv=None):
     out = Path(a.out)
     if not out.is_absolute():
         out = ROOT / out
-    df = pd.read_csv(data)
-    df['item_id'] = df['item_id'].astype(str)
+    df = None
+    data_sha = sha256_file(data) if a.resume else None
 
     for h in a.horizons:
         print(f'\n===== horizon {h} (m = {n_forecast_coefficients(h)} coefficients) =====')
-        fe = ProtocolV5Evaluator(df, dataset_min_obs=a.min_obs, seed=a.seed,
-                                 robustness=not a.no_robustness, causal_universe=True,
-                                 horizon=h)
-        methods = build_prediction_methods(horizon=h, names=names, timed=True)
         out_h = out / f'h{h}'
+        methods = build_prediction_methods(horizon=h, names=names, timed=True)
+        state = None
+        if a.resume:
+            required = ['metadata/protocol_v5_run.json', 'scorer_timing.csv',
+                        'comparison/summary_common_windows.csv']
+            required += [f'protocol/{n}_protocol.csv' for n in names]
+            required += ['gate_profile.csv', 'gate_hist.csv'] if a.gate_profile else []
+            required += ['bound_check.csv'] if a.bound_check else []
+            rdir = (Path(a.resume_dir) / f'h{h}') if a.resume_dir else default_resume_dir(out_h)
+            if not rdir.is_absolute():
+                rdir = ROOT / rdir
+            config = dict(data_sha256=data_sha, dataset_min_obs=a.min_obs, horizon=h,
+                          seed=a.seed, robustness=not a.no_robustness, methods=list(names),
+                          gate_profile=bool(a.gate_profile), bound_check=bool(a.bound_check),
+                          python=platform.python_version(), numpy=np.__version__,
+                          code={f: sha256_file(ROOT / f) for f in CODE_FILES})
+            state = ResumeState(rdir, config, required)
+            if state.horizon_complete(out_h):
+                print(f'horizon {h} is complete in {out_h}; not run again')
+                continue
+            methods = state.wrap_journals(methods)
+        recorders = {}
+        if a.bound_check:
+            methods, recorders = add_bound_recorders(methods, h)
+            if state is not None:
+                state.recorders = recorders
+        if df is None:
+            df = pd.read_csv(data)
+            df['item_id'] = df['item_id'].astype(str)
+        fe = ResumableEvaluator(df, dataset_min_obs=a.min_obs, seed=a.seed,
+                                robustness=not a.no_robustness, causal_universe=True,
+                                horizon=h, resume_state=state)
         res = fe.run(methods, out_dir=out_h,
                      extra_meta=dict(data=str(a.data), dataset_min_obs=a.min_obs,
                                      horizon=h, n_forecast_coefficients=n_forecast_coefficients(h),
                                      window=WINDOW, min_obs=MIN_OBS, causal_universe=True,
                                      runner='tools/run_prediction.py'))
-        timing_table(methods, res, h).to_csv(out_h / 'scorer_timing.csv',
-                                             index=False, encoding='utf-8')
+        stored = None
+        if state is not None:
+            stored = {n: state.done[n]['stats'] for n in state.skipped}
+            for n in state.journals:
+                if n not in stored:
+                    stored[n] = state.journals[n].stats()
+        timing_table(methods, res, h, stored).to_csv(out_h / 'scorer_timing.csv',
+                                                     index=False, encoding='utf-8')
+        if a.bound_check:
+            brows = []
+            for n in methods:
+                if state is not None and n in state.skipped:
+                    if state.done[n].get('bound'):
+                        brows.append(state.done[n]['bound'])
+                elif n in recorders:
+                    brows.append(recorders[n].bound_stats())
+            bc = pd.DataFrame(brows)
+            bc.to_csv(out_h / 'bound_check.csv', index=False, encoding='utf-8')
+            for _, r in bc.iterrows():
+                print(f"bound check {r['method']:<9} ratio to WSPI in [{r['min_ratio']:.6g}, "
+                      f"{r['max_ratio']:.6g}]  bounds [{r['lower_bound']:.6g}, "
+                      f"{r['upper_bound']:.6g}]  {r['status']}")
         if a.gate_profile:
             t0 = time.time()
             gp, gh = gate_profile(fe, WINDOW, MIN_OBS)
@@ -176,6 +256,10 @@ def main(argv=None):
             print(f"{n:<12} {len(d):>8}  {d['ndcg@10'].mean():.4f}  {d['spearman_rho'].mean():.4f}  "
                   f"{d['rsi@10'].mean():.4f}  {d['robustness_distortion'].mean():7.2f}")
         print(f'\nSaved to {out_h}')
+        if state is not None:
+            state.mark_horizon_complete(dict(out=str(out_h), methods=list(names)))
+        del fe, res
+        gc.collect()
 
 
 if __name__ == '__main__':
