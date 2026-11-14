@@ -36,6 +36,9 @@ Methods
   WSPI-FT    Theil-Sen          c = 4   1
   WSPI-FG    AR(2) Yule-Walker  c = 4   phi_d * g  (forecastability gate, below)
   WSPI-FA    ARMA(1,1), MLE     c = 4   1
+  WSPI-S     level (mean of the c = 4   1          (smoothing control: no trend)
+             last two coeffs)
+  WSPI-FS    AR(2) Yule-Walker  c = 4   phi_d * (R (1 - W_E))^0.3 * min(1, kappa S_mu / S_F)
 
 Clamp.  A forecast coefficient is kept inside [a_n / c, c * a_n], where a_n is
 the last observed coefficient.  The last element of the extended sequence has
@@ -54,6 +57,17 @@ coefficients that followed:
 g lies in [0, 1].  g = 0 gives exactly WSPI for that item.  The sum of e_mu is
 treated as zero if it is below 1e-9 * mu_L(a) * k (rounding on constant
 windows).  The method uses k = 2.  No data after the observed window is used.
+
+Structure-and-skill gate (WSPI-FS).  The structural gate of WSPI-F2 is kept
+and is reduced only where the forecaster did clearly worse than mu_L in the
+backtest of the same window (same sums S_F, S_mu as WSPI-FG):
+
+    lam = phi_d * (R (1 - W_E))^0.3 * min(1, kappa * S_mu / S_F)
+
+Both sums are treated as zero below 1e-9 * mu_L(a) * k (the WSPI-FG rule).
+If S_F is zero, or there is no backtest, the factor is 1 (no evidence against
+the forecaster).  lam <= lam of WSPI-F2, so the exact reduction to WSPI and
+the bounds hold; kappa = infinity is WSPI-F2.
 
 Bounds.  With the clamp and lam in [0, 1], for n observed and m forecast
 coefficients (W_n = 2 - 2^(1-n)):
@@ -92,8 +106,10 @@ ARMA_MIN_LENGTH = 8         # shorter sequences fall back to persistence
 ARMA_MAXITER = 50
 MA_WINDOW = 64
 
-PREDICTORS = ('nlms', 'aryw', 'theilsen', 'arma11')
-GATES = ('none', 'structural', 'backtest')
+SKILL_KAPPAS = (1.0, 1.5, 2.0, 3.0)   # candidate kappa of WSPI-FS (chosen on the tuning part)
+
+PREDICTORS = ('nlms', 'aryw', 'theilsen', 'arma11', 'level')
+GATES = ('none', 'structural', 'backtest', 'skill')
 
 
 # =============================================================================
@@ -266,6 +282,16 @@ def arma11_forecast(seq: np.ndarray, steps: int) -> Tuple[np.ndarray, bool]:
     return fc, False
 
 
+def level_forecast(seq: np.ndarray, steps: int) -> np.ndarray:
+    """Level without trend: the mean of the last two values, repeated
+    ``steps`` times (one value: that value).  Forecaster of WSPI-S."""
+    seq = np.asarray(seq, dtype=float)
+    if len(seq) == 0:
+        return np.zeros(steps)
+    level = float(np.mean(seq[-2:]))
+    return np.full(steps, level)
+
+
 def clamp_forecast(raw: np.ndarray, anchor: float, c: Optional[float]) -> np.ndarray:
     """anchor * clip(raw / anchor, 1/c, c), zero if anchor <= 0, then clipped
     at zero.  c = None only clips at zero (no bound)."""
@@ -314,6 +340,41 @@ def backtest_gate(a: np.ndarray, steps: int,
     return float(max(0.0, 1.0 - s_f / s_mu))
 
 
+def backtest_sums(a: np.ndarray, steps: int,
+                  predict: Callable[[np.ndarray, int], np.ndarray],
+                  k: int = BACKTEST_K, c: Optional[float] = CLAMP) -> Tuple[float, float, int]:
+    """The sums S_F and S_mu of the backtest of ``backtest_gate`` (same
+    origins, clamp and weights) and the number of origins used, k_eff.
+    k_eff = 0: no backtest (window too short), both sums are 0."""
+    a = np.asarray(a, dtype=float)
+    n = len(a)
+    k_eff = min(int(k), n - steps - 3)
+    if k_eff < 1:
+        return 0.0, 0.0, 0
+    w = recency_weights(steps)
+    s_f = 0.0
+    s_mu = 0.0
+    for t in range(n - steps - k_eff + 1, n - steps + 1):
+        prefix = a[:t]
+        f = clamp_forecast(predict(prefix, steps), float(prefix[-1]), c)
+        ref = recency_mean(prefix)
+        y = a[t:t + steps]
+        s_f += float(np.sum(w * np.abs(f - y)))
+        s_mu += float(np.sum(w * np.abs(ref - y)))
+    return s_f, s_mu, k_eff
+
+
+def skill_factor(s_f: float, s_mu: float, scale: float, kappa: float) -> float:
+    """min(1, kappa * S_mu / S_F) of WSPI-FS.  ``scale`` = mu_L(a) * k_eff;
+    a sum below ZERO_REL * scale counts as zero.  S_F zero (or no backtest,
+    scale zero): 1."""
+    tol = ZERO_REL * scale
+    if s_f <= tol:
+        return 1.0
+    s_mu = 0.0 if s_mu <= tol else s_mu
+    return float(min(1.0, kappa * s_mu / s_f))
+
+
 # =============================================================================
 # The methods
 # =============================================================================
@@ -323,13 +384,16 @@ class WSPIForecast(BaseMethod):
 
     Parameters
     ----------
-    predictor : 'nlms', 'aryw', 'theilsen' or 'arma11'.
-    gate : 'none' (lam = phi_d), 'structural' (lam = phi_d * (R (1 - W_E))^gate_gamma)
-        or 'backtest' (lam = phi_d * g, forecastability gate).
+    predictor : 'nlms', 'aryw', 'theilsen', 'arma11' or 'level' (mean of the
+        last two coefficients, no trend).
+    gate : 'none' (lam = phi_d), 'structural' (lam = phi_d * (R (1 - W_E))^gate_gamma),
+        'backtest' (lam = phi_d * g, forecastability gate) or 'skill'
+        (structural gate times min(1, skill_kappa * S_mu / S_F)).
     horizon : evaluation horizon in slots; m = ceil(h / 2^(J-1)).
     clamp : c >= 1, or None for no clamp.
     phi_d : global trust in [0, 1].  phi_d = 0 gives exactly WSPI.
-    backtest_k : number of backtest origins of the 'backtest' gate.
+    backtest_k : number of backtest origins of the 'backtest' and 'skill' gates.
+    skill_kappa : kappa > 0 of the 'skill' gate (required for that gate).
     alpha, beta : WSPI coefficients on R and W_E.
     order, mu : predictor order (nlms, aryw) and NLMS step size.
 
@@ -341,7 +405,8 @@ class WSPIForecast(BaseMethod):
                  clamp: Optional[float] = CLAMP, phi_d: float = 1.0,
                  gate_gamma: float = GATE_GAMMA, backtest_k: int = BACKTEST_K,
                  alpha: float = 1.0, beta: float = 1.0, order: int = AR_ORDER,
-                 mu: float = NLMS_MU, name: Optional[str] = None):
+                 mu: float = NLMS_MU, name: Optional[str] = None,
+                 skill_kappa: Optional[float] = None):
         super().__init__(name=name or 'WSPI-forecast')
         if predictor not in PREDICTORS:
             raise ValueError(f"Unknown predictor: {predictor}")
@@ -353,8 +418,10 @@ class WSPIForecast(BaseMethod):
             raise ValueError("phi_d must be in [0, 1]")
         if gate == 'structural' and gate_gamma <= 0.0:
             raise ValueError("gate_gamma must be > 0")
-        if gate == 'backtest' and int(backtest_k) < 1:
+        if gate in ('backtest', 'skill') and int(backtest_k) < 1:
             raise ValueError("backtest_k must be >= 1")
+        if gate == 'skill' and (skill_kappa is None or not skill_kappa > 0.0):
+            raise ValueError("the 'skill' gate needs skill_kappa > 0")
         if predictor == 'arma11':
             import statsmodels  # noqa: F401  (fail early if it is missing)
 
@@ -369,6 +436,7 @@ class WSPIForecast(BaseMethod):
         self.beta = float(beta)
         self.order = int(order)
         self.mu = float(mu)
+        self.skill_kappa = None if skill_kappa is None else float(skill_kappa)
 
         self.biort = WAVELET_CONFIG['dtcwt_biort']
         self.qshift = WAVELET_CONFIG['dtcwt_qshift']
@@ -412,6 +480,8 @@ class WSPIForecast(BaseMethod):
             return aryw_forecast(seq, steps, order=self.order)
         if self.predictor == 'theilsen':
             return theilsen_forecast(seq, steps)
+        if self.predictor == 'level':
+            return level_forecast(seq, steps)
         fc, self._last_fallback = arma11_forecast(seq, steps)
         return fc
 
@@ -441,9 +511,14 @@ class WSPIForecast(BaseMethod):
         """Gate value in [0, 1] (1 if gate = 'none')."""
         if self.gate == 'none':
             return 1.0
-        if self.gate == 'structural':
+        if self.gate in ('structural', 'skill'):
             raw = max(0.0, min(1.0, R * (1.0 - WE)))
-            return float(raw ** self.gate_gamma)
+            g = float(raw ** self.gate_gamma)
+            if self.gate == 'structural':
+                return g
+            s_f, s_mu, k_eff = backtest_sums(a, self.n_forecast, self._predict,
+                                             self.backtest_k, self.clamp)
+            return g * skill_factor(s_f, s_mu, recency_mean(a) * k_eff, self.skill_kappa)
         return backtest_gate(a, self.n_forecast, self._predict, self.backtest_k, self.clamp)
 
     def gate_value(self, time_series: np.ndarray) -> float:
@@ -518,4 +593,17 @@ def get_coefficient_domain_methods(horizon: int = 1, include_arma: bool = True) 
     if include_arma:
         out['WSPI-FA'] = WSPIForecast(predictor='arma11', gate='none', horizon=horizon,
                                       clamp=CLAMP, name='WSPI-FA')
+    return out
+
+
+def get_control_methods(horizon: int = 1, kappas=SKILL_KAPPAS) -> Dict[str, WSPIForecast]:
+    """The smoothing control WSPI-S and WSPI-FS for every candidate kappa
+    (names 'WSPI-FS1', 'WSPI-FS1.5', ...)."""
+    out = {'WSPI-S': WSPIForecast(predictor='level', gate='none', horizon=horizon,
+                                  clamp=CLAMP, name='WSPI-S')}
+    for kappa in kappas:
+        nm = f'WSPI-FS{float(kappa):g}'
+        out[nm] = WSPIForecast(predictor='aryw', gate='skill', horizon=horizon, clamp=CLAMP,
+                               gate_gamma=GATE_GAMMA, backtest_k=BACKTEST_K,
+                               skill_kappa=float(kappa), name=nm)
     return out

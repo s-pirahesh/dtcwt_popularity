@@ -42,6 +42,22 @@ protocol V5 (the per-item classes pad to the next power of two).
 ``TimedScorer`` wraps a scorer and measures the time spent inside it
 (``scorer_timing.csv`` of ``tools/run_prediction.py``).
 
+Supplementary methods (run C and its sensitivity run; the methods of run A and
+run B are unchanged):
+    WSPI-S       smoothing control: clamped level forecast (mean of the last two
+                 trend-band coefficients, no trend), lam = 1
+    WSPI-FS<k>   WSPI-F2 with the structure-and-skill gate
+                 (R(1-W_E))^0.3 * min(1, k S_mu / S_F), k in 1, 1.5, 2, 3
+    SMA<N>       mean of the last N slots times h, N in 8, 16, 32, 64 (SMA64 = MA64)
+    EWMA<N>      exponential mean over the window, alpha = 2 / (N + 1), started at
+                 the first slot (the EWMA recursion of the first paper), times h
+    WSPI-F2_c<c>_g<gamma>_p<phi_d>
+                 WSPI-F2 with clamp c, gate exponent gamma and trust phi_d
+                 (sensitivity: c in 2, 4, 8; gamma in 0.1, 0.3, 0.5; phi_d in 0.8, 1)
+    GBM, GBM+W   learned baselines, trained before the run on the tuning windows
+                 (``tools/learned_baseline.py``); passed to
+                 ``build_prediction_methods`` with ``learned=``
+
 Author: Sajjad Pirahesh
 Date: November 2026
 """
@@ -54,11 +70,11 @@ from typing import Callable, Dict, List, Optional
 import numpy as np
 import dtcwt
 
-from evaluation.fast_evaluator import FastMethod, _dtcwt_forward_rows
+from evaluation.fast_evaluator import FastMethod, _dtcwt_forward_rows, batch_ewma
 from evaluation.protocol_v5 import _pad_left_reflect, make_v5_wspi
 from evaluation.sweep_methods import make_batch_holt
 from methods.wspi_forecast import (AR_ORDER, BACKTEST_K, CLAMP, GATE_GAMMA, MA_WINDOW,
-                                   NLMS_MU, ZERO_REL, arma11_forecast,
+                                   NLMS_MU, SKILL_KAPPAS, ZERO_REL, arma11_forecast,
                                    n_forecast_coefficients)
 
 LEVEL = 3
@@ -74,6 +90,27 @@ ALL_METHODS = ('WSPI',) + COEF_METHODS + VALUE_METHODS
 RUN_A_METHODS = ('WSPI', 'WSPI-FG', 'WSPI-F2', 'WSPI-F-YW', 'WSPI-F', 'WSPI-FT',
                  'Persistence', 'Holt', 'ARYW', 'MA64')
 RUN_B_METHODS = ('WSPI', 'WSPI-FA', 'ARIMA')
+
+# Supplementary methods (run C, sensitivity run C_sens)
+FS_METHODS = tuple(f'WSPI-FS{float(k):g}' for k in SKILL_KAPPAS)
+MA_LENGTHS = (8, 16, 32, 64)
+SMA_METHODS = tuple(f'SMA{n}' for n in MA_LENGTHS)
+EWMA_METHODS = tuple(f'EWMA{n}' for n in MA_LENGTHS)
+LEARNED_METHODS = ('GBM', 'GBM+W')
+SENS_CLAMPS = (2.0, 4.0, 8.0)
+SENS_GAMMAS = (0.1, 0.3, 0.5)
+SENS_PHI_D = (0.8, 1.0)
+
+
+def sens_name(c: float, gamma: float, phi_d: float) -> str:
+    """Name of one sensitivity configuration of WSPI-F2."""
+    return f'WSPI-F2_c{float(c):g}_g{float(gamma):g}_p{float(phi_d):g}'
+
+
+SENS_METHODS = tuple(sens_name(c, g, p) for c in SENS_CLAMPS for g in SENS_GAMMAS
+                     for p in SENS_PHI_D)
+RUN_C_METHODS = ('WSPI', 'WSPI-S') + FS_METHODS + SMA_METHODS + EWMA_METHODS + LEARNED_METHODS
+RUN_C_SENS_METHODS = ('WSPI',) + SENS_METHODS
 
 
 # =============================================================================
@@ -406,6 +443,186 @@ def make_arima(horizon: int = 1) -> Callable:
 
 
 # =============================================================================
+# Supplementary methods (run C)
+# =============================================================================
+
+def level_rows(seq: np.ndarray, steps: int) -> np.ndarray:
+    """Row-wise replica of ``methods.wspi_forecast.level_forecast``: the mean
+    of the last two values, repeated ``steps`` times."""
+    seq = np.asarray(seq, dtype=np.float64)
+    level = seq[:, -2:].mean(axis=1)
+    return np.repeat(level[:, None], steps, axis=1)
+
+
+def backtest_sums_rows(a: np.ndarray, m: int, k: int = BACKTEST_K):
+    """S_F, S_mu and k_eff of the WSPI-FG backtest (same loop as
+    ``backtest_gate_rows``).  Replica of ``methods.wspi_forecast.backtest_sums``."""
+    a = np.asarray(a, dtype=np.float64)
+    nr, n = a.shape
+    k_eff = min(int(k), n - m - 3)
+    s_f = np.zeros(nr)
+    s_mu = np.zeros(nr)
+    if k_eff < 1:
+        return s_f, s_mu, 0
+    for t in range(n - m - k_eff + 1, n - m + 1):
+        pre = a[:, :t]
+        f = clamp_rows(ar2_yw_rows(pre, m), pre[:, -1])
+        r = np.repeat(recency_mean_rows(pre)[:, None], m, axis=1)
+        y = a[:, t:t + m]
+        s_f += weighted_abs_rows(f - y)
+        s_mu += weighted_abs_rows(r - y)
+    return s_f, s_mu, k_eff
+
+
+def skill_factor_rows(s_f: np.ndarray, s_mu: np.ndarray, scale: np.ndarray,
+                      kappa: float) -> np.ndarray:
+    """min(1, kappa S_mu / S_F) per row; a sum below ZERO_REL * scale is zero;
+    1 where S_F is zero.  Replica of ``methods.wspi_forecast.skill_factor``."""
+    tol = ZERO_REL * scale
+    pos_f = s_f > tol
+    s_mu = np.where(s_mu > tol, s_mu, 0.0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratio = kappa * s_mu / np.where(pos_f, s_f, 1.0)
+    return np.where(pos_f, np.minimum(1.0, ratio), 1.0)
+
+
+def parse_sens_name(name: str):
+    """(c, gamma, phi_d) of a sensitivity name, or None."""
+    if not name.startswith('WSPI-F2_c'):
+        return None
+    try:
+        c, g, p = name[len('WSPI-F2_c'):].split('_')
+        if not (g.startswith('g') and p.startswith('p')):
+            return None
+        return float(c), float(g[1:]), float(p[1:])
+    except ValueError:
+        return None
+
+
+def make_control_scorer(name: str, horizon: int = 1, window: int = WINDOW,
+                        level: int = LEVEL, alpha: float = 1.0, beta: float = 1.0,
+                        clamp: float = CLAMP, gamma: float = GATE_GAMMA,
+                        phi_d: float = PHI_D, kappa: Optional[float] = None,
+                        k: int = BACKTEST_K) -> Callable:
+    """Batch scorer of a clamped coefficient-domain method of run C:
+
+      'WSPI-S'   level forecast, lam = phi_d
+      'WSPI-FS'  AR(2) forecast, lam = phi_d * (R(1-W_E))^gamma * min(1, kappa S_mu / S_F)
+      'WSPI-F2'  AR(2) forecast, lam = phi_d * (R(1-W_E))^gamma, with any clamp, gamma
+                 and phi_d (sensitivity).  With c = 4, gamma = 0.3, phi_d = 1 it gives
+                 the same floating-point result as ``make_coef_scorer('WSPI-F2')``.
+
+    Same steps as the clamped branch of ``make_coef_scorer``."""
+    if name not in ('WSPI-S', 'WSPI-FS', 'WSPI-F2'):
+        raise ValueError(name)
+    if name == 'WSPI-FS' and (kappa is None or not kappa > 0):
+        raise ValueError('WSPI-FS needs kappa > 0')
+    if clamp < 1.0 or not (0.0 <= phi_d <= 1.0) or gamma <= 0.0:
+        raise ValueError('clamp >= 1, 0 <= phi_d <= 1 and gamma > 0 are required')
+    tr = dtcwt.Transform1d(biort='near_sym_a', qshift='qshift_a')
+    tgt = max(window, 2 ** (level + 1))
+    m = n_forecast_coefficients(horizon, level)
+
+    def f(X):
+        F = CoefFeatures(_pad_left_reflect(np.asarray(X, dtype=np.float64), tgt), tr, level)
+        a = F.a
+        raw = level_rows(a, m) if name == 'WSPI-S' else ar2_yw_rows(a, m)
+        struct = np.exp(alpha * F.R - beta * F.WE)
+        fc = clamp_rows(raw, a[:, -1], clamp)
+        mu_L = recency_mean_rows(a)
+        mu_hat = recency_mean_rows(np.concatenate([a, fc], axis=1))
+        ok = np.isfinite(mu_L) & (mu_L > 1e-12)
+        mu_hat = np.where(np.isfinite(mu_hat) & (mu_hat > 1e-12), mu_hat, mu_L)
+        if name == 'WSPI-S':
+            g = np.ones_like(mu_L)
+        else:
+            g = structural_gate(F.R, F.WE, gamma)
+            if name == 'WSPI-FS':
+                s_f, s_mu, k_eff = backtest_sums_rows(a, m, k)
+                g = g * skill_factor_rows(s_f, s_mu, mu_L * k_eff, kappa)
+        lam = phi_d * g
+        with np.errstate(divide='ignore', invalid='ignore'):
+            blended = mu_L * np.power(np.where(ok, mu_hat / np.where(ok, mu_L, 1.0), 1.0), lam)
+        return np.where(ok, blended * struct, 0.0)
+
+    if name == 'WSPI-S':
+        tag = 'wspi_s'
+    elif name == 'WSPI-FS':
+        tag = f'wspi_fs{kappa:g}'
+    else:
+        tag = f'wspi_f2_c{clamp:g}_g{gamma:g}_p{phi_d:g}'
+    f.__name__ = f'{tag}_h{horizon}_W{window}'
+    return f
+
+
+def make_sma(horizon: int = 1, n: int = MA_WINDOW) -> Callable:
+    """SMA<n>: mean of the last n slots times h (``make_ma`` with window n)."""
+    f = make_ma(horizon, window=n)
+    f.__name__ = f'sma{n}_h{horizon}'
+    return f
+
+
+def make_ewma(horizon: int = 1, n: int = 16) -> Callable:
+    """EWMA<n>: exponential mean of the window with alpha = 2 / (n + 1),
+    started at the first slot (``batch_ewma`` of the first paper), times h."""
+    alpha = 2.0 / (n + 1.0)
+
+    def f(X):
+        return batch_ewma(np.asarray(X, dtype=np.float64), alpha) * horizon
+    f.__name__ = f'ewma{n}_h{horizon}'
+    return f
+
+
+def control_clamp(name: str) -> Optional[float]:
+    """Clamp c of a clamped supplementary method (for the bound check), or None."""
+    if name == 'WSPI-S' or name in FS_METHODS:
+        return CLAMP
+    p = parse_sens_name(name)
+    return p[0] if p else None
+
+
+def supplementary_maker(name: str, horizon: int = 1, window: int = WINDOW) -> Optional[Callable]:
+    """Factory of the scorer of a supplementary method, or None if the name
+    is not one (learned methods are built in ``tools/learned_baseline.py``)."""
+    if name == 'WSPI-S':
+        return lambda: make_control_scorer('WSPI-S', horizon, window)
+    if name in FS_METHODS:
+        kappa = float(name[len('WSPI-FS'):])
+        return lambda: make_control_scorer('WSPI-FS', horizon, window, kappa=kappa)
+    if name in SMA_METHODS:
+        return lambda: make_sma(horizon, int(name[3:]))
+    if name in EWMA_METHODS:
+        return lambda: make_ewma(horizon, int(name[4:]))
+    p = parse_sens_name(name)
+    if p is not None:
+        c, g, ph = p
+        return lambda: make_control_scorer('WSPI-F2', horizon, window, clamp=c, gamma=g, phi_d=ph)
+    return None
+
+
+def iter_eligible_windows(fe, window: int = WINDOW, min_obs: int = MIN_OBS):
+    """(k, item rows) of every window that ``ProtocolV5Evaluator.run_method``
+    evaluates for a method with this window and min_obs (same rule, with the
+    horizon of ``fe``)."""
+    cum = np.zeros(len(fe.items)) if fe.causal_universe else None
+    for k in range(fe.num_slots + 1):
+        if cum is not None and k > 0:
+            cum += fe.V[:, k - 1]
+        if k + fe.horizon - 1 > fe.num_slots:
+            break
+        lo, hi = fe.window_bounds(k, window)
+        if fe.any_cum[hi] - fe.any_cum[lo] == 0 or not fe.any_row[k]:
+            continue
+        ok = (fe.C[:, hi] - fe.C[:, lo]) >= min_obs
+        if cum is not None:
+            ok &= cum >= fe.universe_min_count
+        idx = np.where(ok)[0]
+        if len(idx) < 2:
+            continue
+        yield k, idx
+
+
+# =============================================================================
 # Method set and timing
 # =============================================================================
 
@@ -447,10 +664,12 @@ class TimedScorer:
 
 def build_prediction_methods(horizon: int = 1, names: Optional[List[str]] = None,
                              window: int = WINDOW, min_obs: int = MIN_OBS,
-                             timed: bool = False) -> Dict[str, FastMethod]:
+                             timed: bool = False,
+                             learned: Optional[Dict[str, Callable]] = None) -> Dict[str, FastMethod]:
     """FastMethod objects of the named methods (default: run A).
 
-    timed=True wraps every scorer in a ``TimedScorer``."""
+    timed=True wraps every scorer in a ``TimedScorer``.  The scorers of the
+    learned methods (GBM, GBM+W) are trained elsewhere and given in ``learned``."""
     makers = {
         'WSPI': lambda: make_v5_wspi(window=window, level=LEVEL),
         'Persistence': lambda: make_persistence(horizon),
@@ -462,6 +681,18 @@ def build_prediction_methods(horizon: int = 1, names: Optional[List[str]] = None
     for n in COEF_METHODS:
         makers[n] = (lambda nn: (lambda: make_coef_scorer(nn, horizon, window)))(n)
     names = list(names) if names else list(RUN_A_METHODS)
+    for n in names:
+        if n in makers:
+            continue
+        if n in LEARNED_METHODS:
+            if not learned or n not in learned:
+                raise ValueError(f'{n} is a learned method: train it first '
+                                 f'(tools/learned_baseline.py) and pass it in learned=')
+            makers[n] = (lambda sc: (lambda: sc))(learned[n])
+            continue
+        mk = supplementary_maker(n, horizon, window)
+        if mk is not None:
+            makers[n] = mk
     out = {}
     for n in names:
         if n not in makers:

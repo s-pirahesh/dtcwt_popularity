@@ -13,6 +13,16 @@ same command again: complete jobs finish in seconds, interrupted jobs continue
   run B   WSPI, WSPI-FA, ARIMA; YouTube and hourly taxi,
           horizons 1, 8, 24 (one MLE fit per item and window)  -> <root>/run_B/<scenario>/h<h>/
 
+Supplementary runs (Experiment_Design_v2; same scenarios and horizons as run A):
+  run C       WSPI, WSPI-S, WSPI-FS1, WSPI-FS1.5, WSPI-FS2, WSPI-FS3, SMA8 to SMA64,
+              EWMA8 to EWMA64, GBM, GBM+W; with the bound check   -> <root>/run_C/...
+  run C_sens  WSPI and the 18 configurations WSPI-F2_c<c>_g<g>_p<p>
+              (c 2, 4, 8; gamma 0.1, 0.3, 0.5; phi_d 0.8, 1); bound check
+                                                                 -> <root>/run_C_sens/...
+  run C_nlms  convergence of NLMS on the trend-band coefficients
+              (experiments/nlms_convergence.py); YouTube and hourly taxi,
+              horizon 1                                          -> <root>/run_C_nlms/...
+
 Examples (from the project root, Windows):
 
   python tools\run_prediction_plan.py --plan A --jobs 6 --mem-gb 12
@@ -48,11 +58,21 @@ SCENARIOS = {
     'movielens_weekly': ('data/datasets/movielens_v5_weekly.csv', 24),
 }
 HORIZONS = (1, 8, 24)
+RUN_C_METHODS = ('WSPI', 'WSPI-S', 'WSPI-FS1', 'WSPI-FS1.5', 'WSPI-FS2', 'WSPI-FS3',
+                 'SMA8', 'SMA16', 'SMA32', 'SMA64', 'EWMA8', 'EWMA16', 'EWMA32', 'EWMA64',
+                 'GBM', 'GBM+W')
+RUN_C_SENS_METHODS = ('WSPI',) + tuple(f'WSPI-F2_c{c}_g{g}_p{p}' for c in (2, 4, 8)
+                                       for g in (0.1, 0.3, 0.5) for p in (0.8, 1))
 PLANS = {
     'A': dict(scenarios=tuple(SCENARIOS), methods=None,
               flags=('--gate-profile', '--bound-check')),
     'B': dict(scenarios=('youtube_hourly', 'taxi_hourly'),
               methods=('WSPI', 'WSPI-FA', 'ARIMA'), flags=('--bound-check',)),
+    'C': dict(scenarios=tuple(SCENARIOS), methods=RUN_C_METHODS, flags=('--bound-check',)),
+    'C_sens': dict(scenarios=tuple(SCENARIOS), methods=RUN_C_SENS_METHODS,
+                   flags=('--bound-check',)),
+    'C_nlms': dict(scenarios=('youtube_hourly', 'taxi_hourly'), methods=None, flags=(),
+                   horizons=(1,), script='experiments/nlms_convergence.py'),
 }
 # estimated peak memory of one job (GB) and the start order (longest first)
 MEMORY_GB = {'youtube_hourly': 1.0, 'taxi_hourly': 1.0, 'taxi_30min': 1.0,
@@ -60,6 +80,8 @@ MEMORY_GB = {'youtube_hourly': 1.0, 'taxi_hourly': 1.0, 'taxi_30min': 1.0,
 ORDER = {'A': ('taxi_5min', 'movielens_daily', 'taxi_30min', 'movielens_weekly',
                'taxi_hourly', 'youtube_hourly'),
          'B': ('taxi_hourly', 'youtube_hourly')}
+ORDER['C'] = ORDER['C_sens'] = ORDER['A']
+ORDER['C_nlms'] = ORDER['B']
 
 
 def build_jobs(plan: str, root: str, scenarios=None, horizons=None, python=None,
@@ -71,9 +93,10 @@ def build_jobs(plan: str, root: str, scenarios=None, horizons=None, python=None,
         data, min_obs = SCENARIOS[s]
         if data_dir:
             data = str(Path(data_dir) / Path(data).name)
-        for h in (horizons or HORIZONS):
+        for h in (horizons or spec.get('horizons', HORIZONS)):
             out = f'{root}/run_{plan}/{s}'
-            cmd = [python or sys.executable, str(ROOT / 'tools' / 'run_prediction.py'),
+            script = spec.get('script', 'tools/run_prediction.py')
+            cmd = [python or sys.executable, str(ROOT / Path(script)),
                    '--data', data, '--min-obs', str(min_obs), '--horizons', str(h),
                    '--out', out, '--resume', *spec['flags']]
             if spec['methods']:

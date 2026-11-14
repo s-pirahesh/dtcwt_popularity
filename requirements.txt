@@ -11,6 +11,10 @@ dtcwt==0.14.0
 # Forecasting baselines (ARIMA and the ARMA(1,1) coefficient forecaster; paper 2)
 statsmodels==0.15.0
 #
+# Learned baselines GBM and GBM+W (paper 2, tools/learned_baseline.py)
+scikit-learn==1.9.1
+joblib==1.6.0
+#
 # Figures
 matplotlib==3.10.8
 seaborn==0.13.2

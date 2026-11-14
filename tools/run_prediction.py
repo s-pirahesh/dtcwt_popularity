@@ -54,6 +54,21 @@ quartile and median of the raw product p = R(1-W_E)) and of the WSPI-FG gate
 gate_hist.csv: counts of p, g(F2) and g(FG) over all item-windows in bins of
 width 1e-4 on [0, 1].
 
+Supplementary methods (run C, ``tools/prediction_protocol.py``): WSPI-S,
+WSPI-FS<kappa>, SMA<N>, EWMA<N>, the sensitivity variants WSPI-F2_c<c>_g<g>_p<p>
+and the learned baselines GBM and GBM+W.  The learned methods are trained after
+the data are read and before the evaluation, on the tuning windows of the same
+evaluator (``tools/learned_baseline.py``); their training summary is written to
+``metadata/learned_<method>.json``.  With --bound-check, every clamped
+supplementary method is checked against the bounds of its own clamp c.
+
+  # run C on one scenario (supplementary methods, three horizons)
+  python tools\run_prediction.py --data data\datasets\youtube_hourly.csv ^
+         --min-obs 50 --horizons 1 8 24 --bound-check ^
+         --methods WSPI WSPI-S WSPI-FS1 WSPI-FS1.5 WSPI-FS2 WSPI-FS3 SMA8 SMA16 ^
+                   SMA32 SMA64 EWMA8 EWMA16 EWMA32 EWMA64 GBM GBM+W ^
+         --out results\paper2\run_C\youtube_hourly
+
 --resume does not change any result file; the state is kept in --resume-dir
 (default logs/prediction_resume/).  scorer_timing.csv and the run time in the
 metadata of a resumed method are the times of an uninterrupted run (the scorer
@@ -62,6 +77,7 @@ time of the earlier sessions is added), and scorer_timing.csv gets the column
 """
 import argparse
 import gc
+import json
 import platform
 import sys
 import time
@@ -75,12 +91,17 @@ sys.path.insert(0, str(ROOT))
 
 from evaluation.protocol_v5 import ProtocolV5Evaluator            # noqa: E402
 from methods.wspi_forecast import n_forecast_coefficients         # noqa: E402
-from tools.prediction_protocol import (ALL_METHODS, MIN_OBS, RUN_A_METHODS,  # noqa: E402
-                                       WINDOW, build_prediction_methods,
+from tools.prediction_protocol import (ALL_METHODS, LEARNED_METHODS, MIN_OBS,  # noqa: E402
+                                       RUN_A_METHODS, TimedScorer, WINDOW,
+                                       build_prediction_methods, control_clamp,
                                        gate_features)
-from tools.prediction_resume import (CODE_FILES, ResumableEvaluator,   # noqa: E402
+from tools.prediction_resume import (CLAMPED_METHODS, CODE_FILES,       # noqa: E402
+                                     BoundRecorder, ResumableEvaluator,
                                      ResumeState, add_bound_recorders,
                                      default_resume_dir, sha256_file)
+from evaluation.fast_evaluator import FastMethod                  # noqa: E402
+
+LEARNED_CODE_FILES = ('tools/learned_baseline.py', 'tools/run_param_grid.py')
 
 HIST_BINS = 10000
 
@@ -147,13 +168,40 @@ def timing_table(methods, res, horizon: int, stored=None) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def add_learned(methods, names, learned, horizon: int):
+    """Insert the trained learned methods into ``methods`` in the order of
+    ``names`` (timed like the other methods)."""
+    out = {}
+    for n in names:
+        if n in methods:
+            out[n] = methods[n]
+        elif n in learned:
+            out[n] = FastMethod(n, WINDOW, MIN_OBS, TimedScorer(learned[n]))
+    return out
+
+
+def add_control_bound_recorders(methods, recorders, horizon: int):
+    """Bound check of the clamped supplementary methods, each with its own c."""
+    out = {}
+    for name, fm in methods.items():
+        c = control_clamp(name)
+        if c is not None and name not in CLAMPED_METHODS:
+            recorders[name] = BoundRecorder(fm.scorer, name, horizon, window=fm.window_slots,
+                                            clamp=c)
+            out[name] = FastMethod(fm.name, fm.window_slots, fm.min_obs, recorders[name])
+        else:
+            out[name] = fm
+    return out, recorders
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--data', required=True)
     ap.add_argument('--min-obs', type=int, required=True, help='causal item threshold')
     ap.add_argument('--out', required=True)
     ap.add_argument('--methods', nargs='*', default=None,
-                    help=f'subset of {", ".join(ALL_METHODS)} (default: run A, '
+                    help=f'subset of {", ".join(ALL_METHODS)} or of the supplementary '
+                         f'methods of tools/prediction_protocol.py (default: run A, '
                          f'{", ".join(RUN_A_METHODS)})')
     ap.add_argument('--horizons', nargs='+', type=int, default=[1],
                     help='horizons h in slots (default: 1, protocol V5)')
@@ -183,7 +231,9 @@ def main(argv=None):
     for h in a.horizons:
         print(f'\n===== horizon {h} (m = {n_forecast_coefficients(h)} coefficients) =====')
         out_h = out / f'h{h}'
-        methods = build_prediction_methods(horizon=h, names=names, timed=True)
+        learned_names = [n for n in names if n in LEARNED_METHODS]
+        methods = build_prediction_methods(
+            horizon=h, names=[n for n in names if n not in LEARNED_METHODS], timed=True)
         state = None
         if a.resume:
             required = ['metadata/protocol_v5_run.json', 'scorer_timing.csv',
@@ -199,6 +249,8 @@ def main(argv=None):
                           gate_profile=bool(a.gate_profile), bound_check=bool(a.bound_check),
                           python=platform.python_version(), numpy=np.__version__,
                           code={f: sha256_file(ROOT / f) for f in CODE_FILES})
+            if learned_names:
+                config['code'].update({f: sha256_file(ROOT / f) for f in LEARNED_CODE_FILES})
             state = ResumeState(rdir, config, required)
             if state.horizon_complete(out_h):
                 print(f'horizon {h} is complete in {out_h}; not run again')
@@ -207,6 +259,7 @@ def main(argv=None):
         recorders = {}
         if a.bound_check:
             methods, recorders = add_bound_recorders(methods, h)
+            methods, recorders = add_control_bound_recorders(methods, recorders, h)
             if state is not None:
                 state.recorders = recorders
         if df is None:
@@ -215,6 +268,18 @@ def main(argv=None):
         fe = ResumableEvaluator(df, dataset_min_obs=a.min_obs, seed=a.seed,
                                 robustness=not a.no_robustness, causal_universe=True,
                                 horizon=h, resume_state=state)
+        if learned_names:
+            from tools.learned_baseline import train_learned
+            t0 = time.time()
+            learned, linfo = train_learned(fe, learned_names, h)
+            methods = add_learned(methods, names, learned, h)
+            (out_h / 'metadata').mkdir(parents=True, exist_ok=True)
+            for n, inf in linfo.items():
+                fn = 'learned_' + n.replace('+', '_') + '.json'
+                (out_h / 'metadata' / fn).write_text(json.dumps(inf, indent=2), encoding='utf-8')
+                print(f"trained {n}: {inf['n_rows_used']} rows of {inf['n_train_windows']} "
+                      f"windows, {inf['fit_seconds']:.1f}s")
+            print(f'learned methods ready in {time.time() - t0:.1f}s')
         res = fe.run(methods, out_dir=out_h,
                      extra_meta=dict(data=str(a.data), dataset_min_obs=a.min_obs,
                                      horizon=h, n_forecast_coefficients=n_forecast_coefficients(h),
