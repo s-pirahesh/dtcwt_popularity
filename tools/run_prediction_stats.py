@@ -66,6 +66,12 @@ of run A in every metric column.
                 configurations on the test windows; description only).
                 Output <root>/stats_test/.
 
+  --references  only with --part test: the references of the test reports, in
+                place of the five above (same 21 methods, block, B and seed).  For
+                an extra reference after the test reports exist; --out must then
+                name another folder, so stats_test/ stays as it is:
+                --part test --runs C --references WSPI-F-YW --out results/paper2/stats_explore
+
 The learned methods are trained on the tuning windows, so they are only part of
 the test report.  Both parts write window_check.csv, part_windows.csv (number
 and range of the windows of each part), all_paired_tests.csv,
@@ -73,6 +79,8 @@ all_method_summary.csv and stats_plan.json.
 
     python tools\run_prediction_stats.py --root results\paper2 --part tune --runs C
     python tools\run_prediction_stats.py --root results\paper2 --part test --runs C C_sens
+    python tools\run_prediction_stats.py --root results\paper2 --part test --runs C ^
+        --references WSPI-F-YW --out results\paper2\stats_explore
 """
 import argparse
 import json
@@ -117,6 +125,7 @@ SUPP_RUNS = {
 }
 TEST_FROM_C = ('WSPI-S', 'SMA8', 'SMA16', 'SMA32', 'EWMA8', 'EWMA16', 'EWMA32', 'EWMA64',
                'GBM', 'GBM+W')
+TEST_REFERENCES = ('WSPI-F2', 'WSPI', 'GBM', 'GBM+W')        # after WSPI-FS<selected>
 MAIN_METRICS = ('ndcg@10', 'spearman_rho', 'rsi@10', 'robustness_distortion')
 ID_COLS = ('window_id', 'timestamp', 'method', 'num_items')
 
@@ -311,6 +320,13 @@ def main_part(a, root: Path) -> int:
         return 2
     out = Path(a.out) if a.out else root / f'stats_{part}'
     out = out if out.is_absolute() else ROOT / out
+    if a.references is not None:
+        if part != 'test':
+            print('--references works with --part test only')
+            return 2
+        if out.resolve() == (root / 'stats_test').resolve():
+            print('--references: give --out another folder (stats_test/ is kept as it is)')
+            return 2
     out.mkdir(parents=True, exist_ok=True)
     kappa = None
     if part == 'test':
@@ -323,6 +339,12 @@ def main_part(a, root: Path) -> int:
             print(f'{sf} has no selected kappa (incomplete tuning reports)')
             return 2
         fs_sel = f'WSPI-FS{float(kappa):g}'
+        refs = tuple(a.references) if a.references is not None else (fs_sel,) + TEST_REFERENCES
+        family = set(RUNS['A']['methods']) | set(TEST_FROM_C) | {fs_sel}
+        unknown = [r for r in refs if r not in family]
+        if unknown:
+            print(f'--references not among the methods of the test report: {unknown}')
+            return 2
     t0 = time.time()
     wrows, prow, missing, failed, reports, sens_rows = [], [], [], [], [], []
     for s in BASE_BLOCK:
@@ -385,7 +407,7 @@ def main_part(a, root: Path) -> int:
                 src = dict(base)
                 for m in TEST_FROM_C + (fs_sel,):
                     src[m] = fc / 'protocol' / f'{m}_protocol.csv'
-                jobs = [(ref, src) for ref in (fs_sel, 'WSPI-F2', 'WSPI', 'GBM', 'GBM+W')]
+                jobs = [(ref, src) for ref in refs]
             for ref, src in jobs:
                 o = out / s / f'h{h}' / f'ref_{ref}'
                 done = (o / 'paired_tests.csv').exists() and                     (o / 'metadata' / 'stats_run.json').exists()
@@ -447,6 +469,8 @@ def main_part(a, root: Path) -> int:
                 reports=reports, missing=missing, window_check_failed=failed,
                 created=time.strftime('%Y-%m-%d %H:%M:%S'),
                 runtime_seconds=round(time.time() - t0, 1))
+    if a.references is not None:
+        plan['references'] = list(refs)
     (out / 'stats_plan.json').write_text(json.dumps(plan, indent=2), encoding='utf-8')
     print(f'\nreports: {len(reports)}; run folders missing: {len(missing)}; '
           f'window check failed: {len(failed)}; {time.time() - t0:.0f}s')
@@ -476,6 +500,9 @@ def main(argv=None):
     ap.add_argument('--horizons', nargs='+', type=int, default=list(HORIZONS))
     ap.add_argument('--B', type=int, default=N_BOOT, help='bootstrap resamples (fixed: 10000)')
     ap.add_argument('--force', action='store_true', help='recompute existing reports')
+    ap.add_argument('--references', nargs='+', default=None,
+                    help='--part test only: references in place of the five fixed ones '
+                         '(needs --out other than stats_test)')
     ap.add_argument('--allow-missing', action='store_true')
     a = ap.parse_args(argv)
 
