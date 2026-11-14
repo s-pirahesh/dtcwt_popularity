@@ -58,6 +58,13 @@ run B are unchanged):
                  (``tools/learned_baseline.py``); passed to
                  ``build_prediction_methods`` with ``learned=``
 
+Window-mean level methods (run D; the methods of runs A, B and C are unchanged):
+    WSPI-M       every forecast trend-band coefficient is the plain mean of the
+                 window coefficients, no clamp, lam = 1 (mean-reversion control)
+    WSPI-H       the same, clamped to [mu_L / c, c mu_L] with c = 4, lam = 1;
+                 P_H / WSPI lies in [1 - s_m (1 - 1/c), 1 + s_m (c - 1)], inside
+                 [1/c, c] (``methods.wspi_forecast.level_anchor_bounds``)
+
 Author: Sajjad Pirahesh
 Date: November 2026
 """
@@ -75,7 +82,7 @@ from evaluation.protocol_v5 import _pad_left_reflect, make_v5_wspi
 from evaluation.sweep_methods import make_batch_holt
 from methods.wspi_forecast import (AR_ORDER, BACKTEST_K, CLAMP, GATE_GAMMA, MA_WINDOW,
                                    NLMS_MU, SKILL_KAPPAS, ZERO_REL, arma11_forecast,
-                                   n_forecast_coefficients)
+                                   level_anchor_bounds, n_forecast_coefficients)
 
 LEVEL = 3
 WINDOW = 64
@@ -111,6 +118,10 @@ SENS_METHODS = tuple(sens_name(c, g, p) for c in SENS_CLAMPS for g in SENS_GAMMA
                      for p in SENS_PHI_D)
 RUN_C_METHODS = ('WSPI', 'WSPI-S') + FS_METHODS + SMA_METHODS + EWMA_METHODS + LEARNED_METHODS
 RUN_C_SENS_METHODS = ('WSPI',) + SENS_METHODS
+
+# Window-mean level methods (run D)
+LEVEL_METHODS = ('WSPI-M', 'WSPI-H')
+RUN_D_METHODS = ('WSPI',) + LEVEL_METHODS
 
 
 # =============================================================================
@@ -573,12 +584,71 @@ def make_ewma(horizon: int = 1, n: int = 16) -> Callable:
     return f
 
 
+def mean_rows(seq: np.ndarray, steps: int) -> np.ndarray:
+    """Row-wise replica of ``methods.wspi_forecast.mean_forecast``: the plain
+    mean of every row, repeated ``steps`` times."""
+    seq = np.asarray(seq, dtype=np.float64)
+    return np.repeat(seq.mean(axis=1)[:, None], steps, axis=1)
+
+
+def make_level_scorer(name: str, horizon: int = 1, window: int = WINDOW,
+                      level: int = LEVEL, alpha: float = 1.0, beta: float = 1.0,
+                      clamp: float = CLAMP) -> Callable:
+    """Batch scorer of a window-mean level method (run D):
+
+      'WSPI-M'   forecast = mean of the window coefficients, no clamp, lam = 1
+                 (same steps as the unclamped branch of ``make_coef_scorer``)
+      'WSPI-H'   the same forecast clamped relative to mu_L with c = ``clamp``,
+                 lam = 1 (same steps as the clamped branch, anchor mu_L)
+
+    Replica of ``methods.wspi_forecast.get_level_methods``."""
+    if name not in LEVEL_METHODS:
+        raise ValueError(name)
+    if clamp < 1.0:
+        raise ValueError('clamp >= 1 is required')
+    tr = dtcwt.Transform1d(biort='near_sym_a', qshift='qshift_a')
+    tgt = max(window, 2 ** (level + 1))
+    m = n_forecast_coefficients(horizon, level)
+
+    def f(X):
+        F = CoefFeatures(_pad_left_reflect(np.asarray(X, dtype=np.float64), tgt), tr, level)
+        a = F.a
+        raw = mean_rows(a, m)
+        struct = np.exp(alpha * F.R - beta * F.WE)
+        if name == 'WSPI-M':
+            fc = np.clip(raw, 0.0, None)
+            return recency_mean_rows(np.concatenate([a, fc], axis=1)) * struct
+        mu_L = recency_mean_rows(a)
+        fc = clamp_rows(raw, mu_L, clamp)                  # anchor mu_L, not a_n
+        mu_hat = recency_mean_rows(np.concatenate([a, fc], axis=1))
+        ok = np.isfinite(mu_L) & (mu_L > 1e-12)
+        mu_hat = np.where(np.isfinite(mu_hat) & (mu_hat > 1e-12), mu_hat, mu_L)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            blended = mu_L * np.where(ok, mu_hat / np.where(ok, mu_L, 1.0), 1.0)
+        return np.where(ok, blended * struct, 0.0)
+
+    tag = 'wspi_m' if name == 'WSPI-M' else f'wspi_h_c{clamp:g}'
+    f.__name__ = f'{tag}_h{horizon}_W{window}'
+    return f
+
+
 def control_clamp(name: str) -> Optional[float]:
     """Clamp c of a clamped supplementary method (for the bound check), or None."""
-    if name == 'WSPI-S' or name in FS_METHODS:
+    if name in ('WSPI-S', 'WSPI-H') or name in FS_METHODS:
         return CLAMP
     p = parse_sens_name(name)
     return p[0] if p else None
+
+
+def control_bounds(name: str, horizon: int, n_trend: int = 16,
+                   level: int = LEVEL):
+    """(lower, upper) limits of P / WSPI for a supplementary method whose limits
+    differ from ``methods.wspi_forecast.ratio_bounds`` (clamp anchored at a_n),
+    or None.  WSPI-H: ``level_anchor_bounds`` (anchor mu_L), n_trend = 16
+    trend-band coefficients of a 64-slot window with J = 3."""
+    if name == 'WSPI-H':
+        return level_anchor_bounds(n_trend, n_forecast_coefficients(horizon, level), CLAMP)
+    return None
 
 
 def supplementary_maker(name: str, horizon: int = 1, window: int = WINDOW) -> Optional[Callable]:
@@ -586,6 +656,8 @@ def supplementary_maker(name: str, horizon: int = 1, window: int = WINDOW) -> Op
     is not one (learned methods are built in ``tools/learned_baseline.py``)."""
     if name == 'WSPI-S':
         return lambda: make_control_scorer('WSPI-S', horizon, window)
+    if name in LEVEL_METHODS:
+        return lambda: make_level_scorer(name, horizon, window)
     if name in FS_METHODS:
         kappa = float(name[len('WSPI-FS'):])
         return lambda: make_control_scorer('WSPI-FS', horizon, window, kappa=kappa)

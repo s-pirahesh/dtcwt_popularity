@@ -39,11 +39,15 @@ Methods
   WSPI-S     level (mean of the c = 4   1          (smoothing control: no trend)
              last two coeffs)
   WSPI-FS    AR(2) Yule-Walker  c = 4   phi_d * (R (1 - W_E))^0.3 * min(1, kappa S_mu / S_F)
+  WSPI-M     window mean of a   no      1          (mean-reversion control)
+  WSPI-H     window mean of a   c = 4,  1          (level with a memory that grows
+                                anchor mu_L         with the horizon)
 
 Clamp.  A forecast coefficient is kept inside [a_n / c, c * a_n], where a_n is
 the last observed coefficient.  The last element of the extended sequence has
 weight 1 out of about 2, so one coefficient moves mu_hat by up to 50 percent.
-The clamp bounds this leverage.
+The clamp bounds this leverage.  WSPI-H anchors the clamp at mu_L instead of
+a_n (``clamp_anchor='level'``).
 
 Forecastability gate (WSPI-FG).  The gate asks whether the forecaster beat the
 implicit WSPI forecast (repeat mu_L) inside the observed window itself.  For
@@ -68,6 +72,20 @@ Both sums are treated as zero below 1e-9 * mu_L(a) * k (the WSPI-FG rule).
 If S_F is zero, or there is no backtest, the factor is 1 (no evidence against
 the forecaster).  lam <= lam of WSPI-F2, so the exact reduction to WSPI and
 the bounds hold; kappa = infinity is WSPI-F2.
+
+Window-mean level (WSPI-M, WSPI-H).  Every forecast coefficient is the plain
+mean a_bar of the n observed coefficients.  Then mu_hat has a closed form:
+
+    mu_hat = (1 - s_m) mu_L + s_m f,   s_m = (2 - 2^(1-m)) / W_(n+m)
+
+with f = a_bar (WSPI-M) or f = mu_L clip(a_bar / mu_L, 1/c, c) (WSPI-H).  s_m is
+the weight share of the m forecast coefficients (about 0.50, 0.75 and 0.98 for
+m = 1, 2, 6 and n = 16), so the memory of the level grows with the horizon.
+Neither method has a new free parameter (c = 4 as above).  For WSPI-H
+
+    1 - s_m (1 - 1/c)  <=  P_H / WSPI  <=  1 + s_m (c - 1)
+
+which lies inside [1/c, c] for every n and m.  WSPI-M has no upper bound.
 
 Bounds.  With the clamp and lam in [0, 1], for n observed and m forecast
 coefficients (W_n = 2 - 2^(1-n)):
@@ -108,8 +126,9 @@ MA_WINDOW = 64
 
 SKILL_KAPPAS = (1.0, 1.5, 2.0, 3.0)   # candidate kappa of WSPI-FS (chosen on the tuning part)
 
-PREDICTORS = ('nlms', 'aryw', 'theilsen', 'arma11', 'level')
+PREDICTORS = ('nlms', 'aryw', 'theilsen', 'arma11', 'level', 'mean')
 GATES = ('none', 'structural', 'backtest', 'skill')
+CLAMP_ANCHORS = ('last', 'level')   # a_n (every method before WSPI-H) or mu_L (WSPI-H)
 
 
 # =============================================================================
@@ -151,6 +170,23 @@ def ratio_bounds(n: int, m: int, c: float, lam: float = 1.0) -> Tuple[float, flo
     w_nm = 2.0 - 2.0 ** (1 - (n + m))
     lower = 2.0 ** (-m) * w_n / w_nm
     upper = bound_factor(m, c) * w_n / w_nm
+    return float(lower ** lam), float(upper ** lam)
+
+
+def mean_share(n: int, m: int) -> float:
+    """s_m = (2 - 2^(1-m)) / W_(n+m): weight share of m forecast coefficients
+    after n observed ones in the recency-weighted mean."""
+    return float((2.0 - 2.0 ** (1 - m)) / (2.0 - 2.0 ** (1 - (n + m))))
+
+
+def level_anchor_bounds(n: int, m: int, c: float, lam: float = 1.0) -> Tuple[float, float]:
+    """Lower and upper limit of P / WSPI when the forecast coefficients are
+    clamped relative to mu_L (WSPI-H): every forecast lies in [mu_L / c, c mu_L],
+    so mu_hat / mu_L lies in [1 - s_m (1 - 1/c), 1 + s_m (c - 1)], inside
+    [1/c, c].  Both limits are attained (a_bar / mu_L at or beyond 1/c or c)."""
+    s = mean_share(n, m)
+    lower = 1.0 - s * (1.0 - 1.0 / c)
+    upper = 1.0 + s * (c - 1.0)
     return float(lower ** lam), float(upper ** lam)
 
 
@@ -292,6 +328,15 @@ def level_forecast(seq: np.ndarray, steps: int) -> np.ndarray:
     return np.full(steps, level)
 
 
+def mean_forecast(seq: np.ndarray, steps: int) -> np.ndarray:
+    """The plain mean of all values, repeated ``steps`` times.  Forecaster of
+    WSPI-M and WSPI-H."""
+    seq = np.asarray(seq, dtype=float)
+    if len(seq) == 0:
+        return np.zeros(steps)
+    return np.full(steps, float(np.mean(seq)))
+
+
 def clamp_forecast(raw: np.ndarray, anchor: float, c: Optional[float]) -> np.ndarray:
     """anchor * clip(raw / anchor, 1/c, c), zero if anchor <= 0, then clipped
     at zero.  c = None only clips at zero (no bound)."""
@@ -384,13 +429,16 @@ class WSPIForecast(BaseMethod):
 
     Parameters
     ----------
-    predictor : 'nlms', 'aryw', 'theilsen', 'arma11' or 'level' (mean of the
-        last two coefficients, no trend).
+    predictor : 'nlms', 'aryw', 'theilsen', 'arma11', 'level' (mean of the
+        last two coefficients, no trend) or 'mean' (mean of all observed
+        coefficients).
     gate : 'none' (lam = phi_d), 'structural' (lam = phi_d * (R (1 - W_E))^gate_gamma),
         'backtest' (lam = phi_d * g, forecastability gate) or 'skill'
         (structural gate times min(1, skill_kappa * S_mu / S_F)).
     horizon : evaluation horizon in slots; m = ceil(h / 2^(J-1)).
     clamp : c >= 1, or None for no clamp.
+    clamp_anchor : 'last' (clamp relative to a_n) or 'level' (relative to
+        mu_L; only with gate = 'none').
     phi_d : global trust in [0, 1].  phi_d = 0 gives exactly WSPI.
     backtest_k : number of backtest origins of the 'backtest' and 'skill' gates.
     skill_kappa : kappa > 0 of the 'skill' gate (required for that gate).
@@ -406,7 +454,7 @@ class WSPIForecast(BaseMethod):
                  gate_gamma: float = GATE_GAMMA, backtest_k: int = BACKTEST_K,
                  alpha: float = 1.0, beta: float = 1.0, order: int = AR_ORDER,
                  mu: float = NLMS_MU, name: Optional[str] = None,
-                 skill_kappa: Optional[float] = None):
+                 skill_kappa: Optional[float] = None, clamp_anchor: str = 'last'):
         super().__init__(name=name or 'WSPI-forecast')
         if predictor not in PREDICTORS:
             raise ValueError(f"Unknown predictor: {predictor}")
@@ -422,6 +470,10 @@ class WSPIForecast(BaseMethod):
             raise ValueError("backtest_k must be >= 1")
         if gate == 'skill' and (skill_kappa is None or not skill_kappa > 0.0):
             raise ValueError("the 'skill' gate needs skill_kappa > 0")
+        if clamp_anchor not in CLAMP_ANCHORS:
+            raise ValueError(f"Unknown clamp_anchor: {clamp_anchor}")
+        if clamp_anchor == 'level' and gate != 'none':
+            raise ValueError("clamp_anchor='level' is only defined with gate='none'")
         if predictor == 'arma11':
             import statsmodels  # noqa: F401  (fail early if it is missing)
 
@@ -437,6 +489,7 @@ class WSPIForecast(BaseMethod):
         self.order = int(order)
         self.mu = float(mu)
         self.skill_kappa = None if skill_kappa is None else float(skill_kappa)
+        self.clamp_anchor = clamp_anchor
 
         self.biort = WAVELET_CONFIG['dtcwt_biort']
         self.qshift = WAVELET_CONFIG['dtcwt_qshift']
@@ -482,6 +535,8 @@ class WSPIForecast(BaseMethod):
             return theilsen_forecast(seq, steps)
         if self.predictor == 'level':
             return level_forecast(seq, steps)
+        if self.predictor == 'mean':
+            return mean_forecast(seq, steps)
         fc, self._last_fallback = arma11_forecast(seq, steps)
         return fc
 
@@ -496,7 +551,12 @@ class WSPIForecast(BaseMethod):
         if self.predictor == 'arma11':
             self.n_forecasts += 1
             self.n_fallbacks += int(self._last_fallback)
-        anchor = float(a[-1]) if len(a) else 0.0
+        if not len(a):
+            anchor = 0.0
+        elif self.clamp_anchor == 'level':
+            anchor = recency_mean(a)
+        else:
+            anchor = float(a[-1])
         return a, clamp_forecast(raw, anchor, self.clamp), pyramid
 
     def _structure(self, a: np.ndarray, pyramid) -> Tuple[float, float]:
@@ -547,8 +607,10 @@ class WSPIForecast(BaseMethod):
         """Limits of P_F / WSPI for n observed coefficients (clamped methods)."""
         if self.clamp is None:
             raise ValueError("methods without a clamp have no bound")
-        return ratio_bounds(n, self.n_forecast, self.clamp,
-                            self.phi_d if lam is None else lam)
+        lam = self.phi_d if lam is None else lam
+        if self.clamp_anchor == 'level':
+            return level_anchor_bounds(n, self.n_forecast, self.clamp, lam)
+        return ratio_bounds(n, self.n_forecast, self.clamp, lam)
 
 
 class MovingAverageForecast(BaseMethod):
@@ -607,3 +669,15 @@ def get_control_methods(horizon: int = 1, kappas=SKILL_KAPPAS) -> Dict[str, WSPI
                                gate_gamma=GATE_GAMMA, backtest_k=BACKTEST_K,
                                skill_kappa=float(kappa), name=nm)
     return out
+
+
+def get_level_methods(horizon: int = 1) -> Dict[str, WSPIForecast]:
+    """The window-mean level methods: the control WSPI-M (no clamp) and the
+    candidate WSPI-H (clamp c = 4 relative to mu_L).  Both have lam = 1 and no
+    new free parameter."""
+    return {
+        'WSPI-M': WSPIForecast(predictor='mean', gate='none', horizon=horizon,
+                               clamp=None, name='WSPI-M'),
+        'WSPI-H': WSPIForecast(predictor='mean', gate='none', horizon=horizon,
+                               clamp=CLAMP, clamp_anchor='level', name='WSPI-H'),
+    }

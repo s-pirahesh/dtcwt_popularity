@@ -22,11 +22,15 @@ Supplementary runs (Experiment_Design_v2; same scenarios and horizons as run A):
   run C_nlms  convergence of NLMS on the trend-band coefficients
               (experiments/nlms_convergence.py); YouTube and hourly taxi,
               horizon 1                                          -> <root>/run_C_nlms/...
+  run D       WSPI and the window-mean level methods WSPI-M (control, no clamp)
+              and WSPI-H (clamp c = 4 relative to mu_L); six scenarios, horizons
+              1, 8, 24; bound check                              -> <root>/run_D/...
 
 Examples (from the project root, Windows):
 
   python tools\run_prediction_plan.py --plan A --jobs 6 --mem-gb 12
   python tools\run_prediction_plan.py --plan B --jobs 6
+  python tools\run_prediction_plan.py --plan D --jobs 6 --mem-gb 12
   python tools\run_prediction_plan.py --plan A --dry-run        # print the commands only
 
 Every job writes its console output to ``logs/prediction_plan/run_<plan>/
@@ -63,6 +67,7 @@ RUN_C_METHODS = ('WSPI', 'WSPI-S', 'WSPI-FS1', 'WSPI-FS1.5', 'WSPI-FS2', 'WSPI-F
                  'GBM', 'GBM+W')
 RUN_C_SENS_METHODS = ('WSPI',) + tuple(f'WSPI-F2_c{c}_g{g}_p{p}' for c in (2, 4, 8)
                                        for g in (0.1, 0.3, 0.5) for p in (0.8, 1))
+RUN_D_METHODS = ('WSPI', 'WSPI-M', 'WSPI-H')
 PLANS = {
     'A': dict(scenarios=tuple(SCENARIOS), methods=None,
               flags=('--gate-profile', '--bound-check')),
@@ -73,6 +78,7 @@ PLANS = {
                    flags=('--bound-check',)),
     'C_nlms': dict(scenarios=('youtube_hourly', 'taxi_hourly'), methods=None, flags=(),
                    horizons=(1,), script='experiments/nlms_convergence.py'),
+    'D': dict(scenarios=tuple(SCENARIOS), methods=RUN_D_METHODS, flags=('--bound-check',)),
 }
 # estimated peak memory of one job (GB) and the start order (longest first)
 MEMORY_GB = {'youtube_hourly': 1.0, 'taxi_hourly': 1.0, 'taxi_30min': 1.0,
@@ -80,7 +86,7 @@ MEMORY_GB = {'youtube_hourly': 1.0, 'taxi_hourly': 1.0, 'taxi_30min': 1.0,
 ORDER = {'A': ('taxi_5min', 'movielens_daily', 'taxi_30min', 'movielens_weekly',
                'taxi_hourly', 'youtube_hourly'),
          'B': ('taxi_hourly', 'youtube_hourly')}
-ORDER['C'] = ORDER['C_sens'] = ORDER['A']
+ORDER['C'] = ORDER['C_sens'] = ORDER['D'] = ORDER['A']
 ORDER['C_nlms'] = ORDER['B']
 
 

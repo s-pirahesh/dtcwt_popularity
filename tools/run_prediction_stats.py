@@ -80,6 +80,21 @@ of run A in every metric column.
                 <root>/stats_test_B/ (--out may not be stats_test/):
                 --part test --runs B
 
+  --runs D     with --part tune or --part test: the window-mean level methods
+                WSPI-M (control) and WSPI-H (candidate) of run D, added to the
+                methods of the test report (on the tuning part without GBM and
+                GBM+W, whose tuning scores are in-sample).  References:
+                  tune  WSPI-H, WSPI-M, WSPI-F2, WSPI, WSPI-F-YW
+                  test  WSPI-H, WSPI-M
+                Same split, block, B and seed; the selected kappa of
+                stats_tune/kappa_selection.json gives WSPI-FS<kappa>.  Checks first:
+                the run A, C and D folders pass the window check, the WSPI files of
+                runs C and D equal the one of run A, and SMA64 equals MA64.  Output
+                <root>/stats_tune_D/ or <root>/stats_test_D/ (--out may not be
+                stats_tune/ or stats_test/), so the earlier reports stay as they are:
+                --part tune --runs D
+                --part test --runs D
+
 The learned methods are trained on the tuning windows, so they are only part of
 the test report.  Both parts write window_check.csv, part_windows.csv (number
 and range of the windows of each part), all_paired_tests.csv,
@@ -90,6 +105,8 @@ all_method_summary.csv and stats_plan.json.
     python tools\run_prediction_stats.py --root results\paper2 --part test --runs C ^
         --references WSPI-F-YW --out results\paper2\stats_explore
     python tools\run_prediction_stats.py --root results\paper2 --part test --runs B
+    python tools\run_prediction_stats.py --root results\paper2 --part tune --runs D
+    python tools\run_prediction_stats.py --root results\paper2 --part test --runs D
 """
 import argparse
 import json
@@ -131,7 +148,11 @@ SUPP_RUNS = {
               methods=('WSPI', 'WSPI-S') + FS_NAMES + tuple(f'SMA{n}' for n in MA_LENGTHS)
               + tuple(f'EWMA{n}' for n in MA_LENGTHS) + ('GBM', 'GBM+W')),
     'C_sens': dict(scenarios=tuple(BASE_BLOCK), methods=('WSPI',) + SENS_NAMES),
+    'D': dict(scenarios=tuple(BASE_BLOCK), methods=('WSPI', 'WSPI-M', 'WSPI-H')),
 }
+LEVEL_NAMES = ('WSPI-M', 'WSPI-H')
+D_REFERENCES = {'tune': ('WSPI-H', 'WSPI-M', 'WSPI-F2', 'WSPI', 'WSPI-F-YW'),
+                'test': ('WSPI-H', 'WSPI-M')}
 TEST_FROM_C = ('WSPI-S', 'SMA8', 'SMA16', 'SMA32', 'EWMA8', 'EWMA16', 'EWMA32', 'EWMA64',
                'GBM', 'GBM+W')
 TEST_REFERENCES = ('WSPI-F2', 'WSPI', 'GBM', 'GBM+W')        # after WSPI-FS<selected>
@@ -409,14 +430,133 @@ def main_part_b(a, root: Path) -> int:
     return 1 if bad else 0
 
 
+def main_part_d(a, root: Path) -> int:
+    """--part tune|test --runs D: WSPI-M and WSPI-H of run D with the methods of
+    the test report, on one part (references D_REFERENCES[part]).
+
+    The methods of runs A and C are not run again; their protocol files are read
+    and only the windows of the part are kept, as in ``main_part``.  On the
+    tuning part GBM and GBM+W are left out (their tuning scores are in-sample)."""
+    part = a.part
+    if a.references is not None:
+        print('--references is not used with --runs D (the references are fixed)')
+        return 2
+    out = Path(a.out) if a.out else root / f'stats_{part}_D'
+    out = out if out.is_absolute() else ROOT / out
+    if out.resolve() in ((root / 'stats_tune').resolve(), (root / 'stats_test').resolve()):
+        print('--runs D: give --out another folder (stats_tune/ and stats_test/ are kept '
+              'as they are)')
+        return 2
+    sf = root / 'stats_tune' / 'kappa_selection.json'
+    if not sf.exists():
+        print(f'missing {sf}: run --part tune --runs C first')
+        return 2
+    kappa = json.loads(sf.read_text(encoding='utf-8')).get('selected_kappa')
+    if kappa is None:
+        print(f'{sf} has no selected kappa (incomplete tuning reports)')
+        return 2
+    fs_sel = f'WSPI-FS{float(kappa):g}'
+    from_c = tuple(m for m in TEST_FROM_C
+                   if part == 'test' or m not in ('GBM', 'GBM+W')) + (fs_sel,)
+    refs = D_REFERENCES[part]
+    out.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    wrows, prow, missing, failed, reports = [], [], [], [], []
+    for s in BASE_BLOCK:
+        if a.scenarios and s not in a.scenarios:
+            continue
+        for h in a.horizons:
+            fa = root / 'run_A' / s / f'h{h}'
+            fc = root / 'run_C' / s / f'h{h}'
+            fd = root / 'run_D' / s / f'h{h}'
+            tag = f'{s}/h{h}'
+            gone = [str(f.relative_to(root).as_posix()) for f in (fa, fc, fd)
+                    if not (f / 'metadata' / 'protocol_v5_run.json').exists()]
+            if gone:
+                missing += gone
+                continue
+            rows, ok = window_check('A', s, h, fa, RUNS['A']['methods'])
+            r2, ok2 = window_check('C', s, h, fc, SUPP_RUNS['C']['methods'])
+            r3, ok3 = window_check('D', s, h, fd, SUPP_RUNS['D']['methods'])
+            rows += r2 + r3
+            ok &= ok2 and ok3
+            for run, f in (('A=C', fc), ('A=D', fd)):
+                r = cross_run_check(s, h, fa, f)
+                r['run'] = run
+                rows.append(r)
+                ok &= r['status'] == 'OK'
+            r = equal_metric_row('MA64=SMA64', s, h, 'SMA64', fa / 'protocol' / 'MA64_protocol.csv',
+                                 fc / 'protocol' / 'SMA64_protocol.csv')
+            rows.append(r)
+            ok &= r['status'] == 'OK'
+            wrows += rows
+            if not ok:
+                failed.append(tag)
+                print(f'WINDOW CHECK FAILED  {tag}  (no tests for this folder)')
+                continue
+            tune, test = part_ids(fa)
+            ids = tune if part == 'tune' else test
+            prow.append(dict(scenario=s, horizon=h, n_windows=len(tune) + len(test),
+                             n_tune=len(tune), first_tune=tune[0] if tune else np.nan,
+                             last_tune=tune[-1] if tune else np.nan, n_test=len(test),
+                             first_test=test[0] if test else np.nan,
+                             last_test=test[-1] if test else np.nan, part=part))
+            b = block_length(s, h)
+            src = {m: fa / 'protocol' / f'{m}_protocol.csv' for m in RUNS['A']['methods']}
+            for m in from_c:
+                src[m] = fc / 'protocol' / f'{m}_protocol.csv'
+            for m in LEVEL_NAMES:
+                src[m] = fd / 'protocol' / f'{m}_protocol.csv'
+            for ref in refs:
+                o = out / s / f'h{h}' / f'ref_{ref}'
+                done = (o / 'paired_tests.csv').exists() and \
+                    (o / 'metadata' / 'stats_run.json').exists()
+                if done and not a.force:
+                    state = 'kept'
+                else:
+                    t1 = time.time()
+                    analyse_part(src, ids, o, b, ref, a.B, part)
+                    state = f'{time.time() - t1:.1f}s'
+                reports.append(dict(part=part, run='D', scenario=s, horizon=h, reference=ref,
+                                    block=b, folder=str(o.relative_to(out).as_posix())))
+                print(f'{part} run_D/{tag:<20} ref {ref:<10} block {b:<5} {state}', flush=True)
+
+    pd.DataFrame(wrows).to_csv(out / 'window_check.csv', index=False, encoding='utf-8')
+    pd.DataFrame(prow).to_csv(out / 'part_windows.csv', index=False, encoding='utf-8')
+    stack(reports, out, extra_cols=('part', 'run'))
+    plan = dict(root=str(root), part=part, runs=['D'], horizons=a.horizons,
+                base_block=BASE_BLOCK, block_rule='max(base block, horizon)', B=a.B, seed=SEED,
+                split='split_ids of tools/run_param_grid.py on the WSPI windows of run A '
+                      '(first 30 % = tuning part); the WSPI files of runs C and D equal '
+                      'the run A one',
+                selected_kappa=kappa, references=list(refs),
+                methods=sorted(set(src) if reports else []),
+                reports=reports, missing=missing, window_check_failed=failed,
+                created=time.strftime('%Y-%m-%d %H:%M:%S'),
+                runtime_seconds=round(time.time() - t0, 1))
+    (out / 'stats_plan.json').write_text(json.dumps(plan, indent=2), encoding='utf-8')
+    print(f'\nreports: {len(reports)}; run folders missing: {len(missing)}; '
+          f'window check failed: {len(failed)}; {time.time() - t0:.0f}s')
+    for m in missing:
+        print(f'  missing: {m}')
+    print(f'Saved to {out}')
+    bad = bool(failed) or (bool(missing) and not a.allow_missing) or a.B != N_BOOT
+    if a.B != N_BOOT:
+        print(f'NOTE: B = {a.B} is not the registered value {N_BOOT}; test run only')
+    print('STATS FAILED' if bad else 'STATS OK')
+    return 1 if bad else 0
+
+
 def main_part(a, root: Path) -> int:
     part = a.part
     runs = list(a.runs)
     if runs == ['B']:
         return main_part_b(a, root)
+    if runs == ['D']:
+        return main_part_d(a, root)
     if 'C' not in runs or any(r not in ('C', 'C_sens') for r in runs):
-        print('--part tune/test works on run C (and C_sens), or on run B alone with '
-              '--part test: give --runs C [C_sens] or --runs B')
+        print('--part tune/test works on run C (and C_sens), on run D alone, or on run B '
+              'alone with --part test: give --runs C [C_sens], --runs D or --runs B')
         return 2
     out = Path(a.out) if a.out else root / f'stats_{part}'
     out = out if out.is_absolute() else ROOT / out
@@ -594,7 +734,8 @@ def main(argv=None):
     ap.add_argument('--runs', nargs='+', default=None,
                     choices=sorted(RUNS) + sorted(SUPP_RUNS),
                     help='default: A B (--part all) or C (--part tune / test); '
-                         'B alone with --part test: run B on the test part')
+                         'B alone with --part test: run B on the test part; '
+                         'D alone with --part tune / test: WSPI-M and WSPI-H')
     ap.add_argument('--part', default='all', choices=('all', 'tune', 'test'),
                     help='all windows (default, runs A and B) or the tuning / test part')
     ap.add_argument('--scenarios', nargs='+', default=None, choices=sorted(BASE_BLOCK))
@@ -614,7 +755,7 @@ def main(argv=None):
     if a.part != 'all':
         return main_part(a, root)
     if any(r in SUPP_RUNS for r in a.runs):
-        print('runs C and C_sens are only tested on a part: use --part tune or --part test')
+        print('runs C, C_sens and D are only tested on a part: use --part tune or --part test')
         return 2
     out = Path(a.out) if a.out else root / 'stats'
     out = out if out.is_absolute() else ROOT / out

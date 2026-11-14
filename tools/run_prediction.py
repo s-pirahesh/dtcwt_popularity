@@ -69,6 +69,14 @@ supplementary method is checked against the bounds of its own clamp c.
                    SMA32 SMA64 EWMA8 EWMA16 EWMA32 EWMA64 GBM GBM+W ^
          --out results\paper2\run_C\youtube_hourly
 
+Window-mean level methods (run D): WSPI-M (control, no clamp) and WSPI-H (clamp
+c = 4 relative to mu_L).  With --bound-check, WSPI-H is checked against its own
+limits [1 - s_m (1 - 1/c), 1 + s_m (c - 1)], which lie inside [1/c, c].
+
+  python tools\run_prediction.py --data data\datasets\youtube_hourly.csv ^
+         --min-obs 50 --horizons 1 8 24 --bound-check ^
+         --methods WSPI WSPI-M WSPI-H --out results\paper2\run_D\youtube_hourly
+
 --resume does not change any result file; the state is kept in --resume-dir
 (default logs/prediction_resume/).  scorer_timing.csv and the run time in the
 metadata of a resumed method are the times of an uninterrupted run (the scorer
@@ -93,8 +101,8 @@ from evaluation.protocol_v5 import ProtocolV5Evaluator            # noqa: E402
 from methods.wspi_forecast import n_forecast_coefficients         # noqa: E402
 from tools.prediction_protocol import (ALL_METHODS, LEARNED_METHODS, MIN_OBS,  # noqa: E402
                                        RUN_A_METHODS, TimedScorer, WINDOW,
-                                       build_prediction_methods, control_clamp,
-                                       gate_features)
+                                       build_prediction_methods, control_bounds,
+                                       control_clamp, gate_features)
 from tools.prediction_resume import (CLAMPED_METHODS, CODE_FILES,       # noqa: E402
                                      BoundRecorder, ResumableEvaluator,
                                      ResumeState, add_bound_recorders,
@@ -188,6 +196,9 @@ def add_control_bound_recorders(methods, recorders, horizon: int):
         if c is not None and name not in CLAMPED_METHODS:
             recorders[name] = BoundRecorder(fm.scorer, name, horizon, window=fm.window_slots,
                                             clamp=c)
+            limits = control_bounds(name, horizon)
+            if limits is not None:                  # WSPI-H: clamp anchored at mu_L
+                recorders[name].lower, recorders[name].upper = limits
             out[name] = FastMethod(fm.name, fm.window_slots, fm.min_obs, recorders[name])
         else:
             out[name] = fm
