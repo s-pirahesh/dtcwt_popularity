@@ -5,6 +5,7 @@ Converters from the raw datasets to the standard format
 Available Converters:
 - MovieLens: ratings.csv → standard CSV
 - Uber/NYC Taxi: Parquet files → standard CSV
+- Wikipedia: Kaggle Web Traffic train_2.csv → standard CSV
 
 Usage:
     from data.converters import ConverterFactory
@@ -18,6 +19,7 @@ from .base_converter import BaseConverter, ConverterFactory
 from . import movielens_converter
 from . import yellow_taxi_converter
 from . import youtube_converter
+from . import wikipedia_converter
 
 # TODO: Import future converters here
 # from . import youtube_converter

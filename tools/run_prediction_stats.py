@@ -95,6 +95,22 @@ of run A in every metric column.
                 --part tune --runs D
                 --part test --runs D
 
+Confirmation data (``--confirm``, with --part tune or --part test)
+----------------------------------------------------------------
+The held-out scenarios taxi2024_hourly, taxi2024_30min, taxi2024_5min and
+wikipedia_daily, run with ``tools/run_prediction_plan.py --confirm`` (plans A, C
+and D) under <root>/confirm/.  The reports have the method family of the run D
+reports: tune 21 methods (the ten of run A, WSPI-S, SMA8 to SMA32, EWMA8 to
+EWMA64, WSPI-FS<kappa>, WSPI-M, WSPI-H), test the same plus GBM and GBM+W.
+kappa is the one selected on the development data (<root>/stats_tune/
+kappa_selection.json); it is not selected again.  References on both parts:
+WSPI-H, WSPI-F2, WSPI-M, WSPI.  Base blocks: one week (168, 336, 2016 slots for
+the taxi data, 7 days for Wikipedia); block max(b, h), B = 10000, seed 42; the
+split is split_ids of the WSPI windows of the confirmation run A.  Same checks
+as with --runs D.  Output <root>/confirm/stats_tune/ or <root>/confirm/stats_test/:
+                --confirm --part tune
+                --confirm --part test
+
 The learned methods are trained on the tuning windows, so they are only part of
 the test report.  Both parts write window_check.csv, part_windows.csv (number
 and range of the windows of each part), all_paired_tests.csv,
@@ -107,6 +123,8 @@ all_method_summary.csv and stats_plan.json.
     python tools\run_prediction_stats.py --root results\paper2 --part test --runs B
     python tools\run_prediction_stats.py --root results\paper2 --part tune --runs D
     python tools\run_prediction_stats.py --root results\paper2 --part test --runs D
+    python tools\run_prediction_stats.py --root results\paper2 --confirm --part tune
+    python tools\run_prediction_stats.py --root results\paper2 --confirm --part test
 """
 import argparse
 import json
@@ -157,6 +175,12 @@ TEST_FROM_C = ('WSPI-S', 'SMA8', 'SMA16', 'SMA32', 'EWMA8', 'EWMA16', 'EWMA32', 
                'GBM', 'GBM+W')
 TEST_REFERENCES = ('WSPI-F2', 'WSPI', 'GBM', 'GBM+W')        # after WSPI-FS<selected>
 MAIN_METRICS = ('ndcg@10', 'spearman_rho', 'rsi@10', 'robustness_distortion')
+
+# Confirmation data (--confirm): base block (one week) of every held-out scenario
+CONFIRM_BLOCK = {'taxi2024_hourly': 168, 'taxi2024_30min': 336, 'taxi2024_5min': 2016,
+                 'wikipedia_daily': 7}
+CONFIRM_REFERENCES = ('WSPI-H', 'WSPI-F2', 'WSPI-M', 'WSPI')
+CONFIRM_DIR = 'confirm'
 ID_COLS = ('window_id', 'timestamp', 'method', 'num_items')
 
 
@@ -547,6 +571,131 @@ def main_part_d(a, root: Path) -> int:
     return 1 if bad else 0
 
 
+def main_confirm(a, root: Path) -> int:
+    """--confirm --part tune|test: the run A, C and D methods of the confirmation
+    data (<root>/confirm/run_*), with the method family of main_part_d and the
+    references CONFIRM_REFERENCES on both parts.  kappa comes from the tuning part
+    of the development data."""
+    part = a.part
+    if part not in ('tune', 'test'):
+        print('--confirm works with --part tune or --part test')
+        return 2
+    if a.runs is not None or a.references is not None:
+        print('--runs and --references are not used with --confirm (both are fixed)')
+        return 2
+    croot = root / CONFIRM_DIR
+    out = Path(a.out) if a.out else croot / f'stats_{part}'
+    out = out if out.is_absolute() else ROOT / out
+    kept = [root / f'stats{x}' for x in ('', '_tune', '_test', '_tune_D', '_test_D', '_test_B',
+                                         '_explore')]
+    if out.resolve() in [k.resolve() for k in kept]:
+        print('--confirm: give --out a folder outside the development reports')
+        return 2
+    sf = root / 'stats_tune' / 'kappa_selection.json'
+    if not sf.exists():
+        print(f'missing {sf}: kappa comes from the tuning part of the development data')
+        return 2
+    kappa = json.loads(sf.read_text(encoding='utf-8')).get('selected_kappa')
+    if kappa is None:
+        print(f'{sf} has no selected kappa')
+        return 2
+    fs_sel = f'WSPI-FS{float(kappa):g}'
+    c_methods = ('WSPI', 'WSPI-S', fs_sel) + tuple(f'SMA{n}' for n in MA_LENGTHS) \
+        + tuple(f'EWMA{n}' for n in MA_LENGTHS) + ('GBM', 'GBM+W')
+    from_c = tuple(m for m in TEST_FROM_C
+                   if part == 'test' or m not in ('GBM', 'GBM+W')) + (fs_sel,)
+    refs = CONFIRM_REFERENCES
+    out.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    wrows, prow, missing, failed, reports = [], [], [], [], []
+    src = {}
+    for s in CONFIRM_BLOCK:
+        if a.scenarios and s not in a.scenarios:
+            continue
+        for h in a.horizons:
+            fa = croot / 'run_A' / s / f'h{h}'
+            fc = croot / 'run_C' / s / f'h{h}'
+            fd = croot / 'run_D' / s / f'h{h}'
+            tag = f'{s}/h{h}'
+            gone = [str(f.relative_to(root).as_posix()) for f in (fa, fc, fd)
+                    if not (f / 'metadata' / 'protocol_v5_run.json').exists()]
+            if gone:
+                missing += gone
+                continue
+            rows, ok = window_check('A', s, h, fa, RUNS['A']['methods'])
+            r2, ok2 = window_check('C', s, h, fc, c_methods)
+            r3, ok3 = window_check('D', s, h, fd, SUPP_RUNS['D']['methods'])
+            rows += r2 + r3
+            ok &= ok2 and ok3
+            for run, f in (('A=C', fc), ('A=D', fd)):
+                r = cross_run_check(s, h, fa, f)
+                r['run'] = run
+                rows.append(r)
+                ok &= r['status'] == 'OK'
+            r = equal_metric_row('MA64=SMA64', s, h, 'SMA64', fa / 'protocol' / 'MA64_protocol.csv',
+                                 fc / 'protocol' / 'SMA64_protocol.csv')
+            rows.append(r)
+            ok &= r['status'] == 'OK'
+            wrows += rows
+            if not ok:
+                failed.append(tag)
+                print(f'WINDOW CHECK FAILED  {tag}  (no tests for this folder)')
+                continue
+            tune, test = part_ids(fa)
+            ids = tune if part == 'tune' else test
+            prow.append(dict(scenario=s, horizon=h, n_windows=len(tune) + len(test),
+                             n_tune=len(tune), first_tune=tune[0] if tune else np.nan,
+                             last_tune=tune[-1] if tune else np.nan, n_test=len(test),
+                             first_test=test[0] if test else np.nan,
+                             last_test=test[-1] if test else np.nan, part=part))
+            b = max(CONFIRM_BLOCK[s], int(h))
+            src = {m: fa / 'protocol' / f'{m}_protocol.csv' for m in RUNS['A']['methods']}
+            for m in from_c:
+                src[m] = fc / 'protocol' / f'{m}_protocol.csv'
+            for m in LEVEL_NAMES:
+                src[m] = fd / 'protocol' / f'{m}_protocol.csv'
+            for ref in refs:
+                o = out / s / f'h{h}' / f'ref_{ref}'
+                done = (o / 'paired_tests.csv').exists() and \
+                    (o / 'metadata' / 'stats_run.json').exists()
+                if done and not a.force:
+                    state = 'kept'
+                else:
+                    t1 = time.time()
+                    analyse_part(src, ids, o, b, ref, a.B, part)
+                    state = f'{time.time() - t1:.1f}s'
+                reports.append(dict(part=part, run='confirm', scenario=s, horizon=h,
+                                    reference=ref, block=b,
+                                    folder=str(o.relative_to(out).as_posix())))
+                print(f'{part} confirm/{tag:<22} ref {ref:<8} block {b:<5} {state}', flush=True)
+
+    pd.DataFrame(wrows).to_csv(out / 'window_check.csv', index=False, encoding='utf-8')
+    pd.DataFrame(prow).to_csv(out / 'part_windows.csv', index=False, encoding='utf-8')
+    stack(reports, out, extra_cols=('part', 'run'))
+    plan = dict(root=str(croot), part=part, runs=['confirm: A, C, D'], horizons=a.horizons,
+                base_block=CONFIRM_BLOCK, block_rule='max(base block, horizon)', B=a.B,
+                seed=SEED,
+                split='split_ids of tools/run_param_grid.py on the WSPI windows of the '
+                      'confirmation run A (first 30 % = tuning part); the WSPI files of '
+                      'runs C and D equal the run A one',
+                selected_kappa=kappa, kappa_source=str(sf.relative_to(root).as_posix()),
+                references=list(refs), methods=sorted(src) if reports else [],
+                reports=reports, missing=missing, window_check_failed=failed,
+                created=time.strftime('%Y-%m-%d %H:%M:%S'),
+                runtime_seconds=round(time.time() - t0, 1))
+    (out / 'stats_plan.json').write_text(json.dumps(plan, indent=2), encoding='utf-8')
+    print(f'\nreports: {len(reports)}; run folders missing: {len(missing)}; '
+          f'window check failed: {len(failed)}; {time.time() - t0:.0f}s')
+    for m in missing:
+        print(f'  missing: {m}')
+    print(f'Saved to {out}')
+    bad = bool(failed) or (bool(missing) and not a.allow_missing) or a.B != N_BOOT
+    if a.B != N_BOOT:
+        print(f'NOTE: B = {a.B} is not the registered value {N_BOOT}; test run only')
+    print('STATS FAILED' if bad else 'STATS OK')
+    return 1 if bad else 0
+
+
 def main_part(a, root: Path) -> int:
     part = a.part
     runs = list(a.runs)
@@ -738,7 +887,8 @@ def main(argv=None):
                          'D alone with --part tune / test: WSPI-M and WSPI-H')
     ap.add_argument('--part', default='all', choices=('all', 'tune', 'test'),
                     help='all windows (default, runs A and B) or the tuning / test part')
-    ap.add_argument('--scenarios', nargs='+', default=None, choices=sorted(BASE_BLOCK))
+    ap.add_argument('--scenarios', nargs='+', default=None,
+                    choices=sorted(BASE_BLOCK) + sorted(CONFIRM_BLOCK))
     ap.add_argument('--horizons', nargs='+', type=int, default=list(HORIZONS))
     ap.add_argument('--B', type=int, default=N_BOOT, help='bootstrap resamples (fixed: 10000)')
     ap.add_argument('--force', action='store_true', help='recompute existing reports')
@@ -746,10 +896,17 @@ def main(argv=None):
                     help='--part test only: references in place of the five fixed ones '
                          '(needs --out other than stats_test)')
     ap.add_argument('--allow-missing', action='store_true')
+    ap.add_argument('--confirm', action='store_true',
+                    help='with --part tune / test: the confirmation data under <root>/confirm')
     a = ap.parse_args(argv)
 
     root = Path(a.root)
     root = root if root.is_absolute() else ROOT / root
+    allowed = CONFIRM_BLOCK if a.confirm else BASE_BLOCK
+    if a.scenarios and any(x not in allowed for x in a.scenarios):
+        ap.error('--scenarios: ' + ', '.join(allowed) + (' (with --confirm)' if a.confirm else ''))
+    if a.confirm:
+        return main_confirm(a, root)
     if a.runs is None:
         a.runs = ['A', 'B'] if a.part == 'all' else ['C']
     if a.part != 'all':

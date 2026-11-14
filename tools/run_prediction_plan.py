@@ -26,12 +26,20 @@ Supplementary runs (Experiment_Design_v2; same scenarios and horizons as run A):
               and WSPI-H (clamp c = 4 relative to mu_L); six scenarios, horizons
               1, 8, 24; bound check                              -> <root>/run_D/...
 
+Confirmation data (--confirm, with plans A, C and D only): the same programs on
+the four held-out scenarios taxi2024_hourly, taxi2024_30min, taxi2024_5min
+(NYC Yellow Taxi 2024) and wikipedia_daily (Wikipedia Web Traffic), horizons
+1, 8, 24.  The output root is results/paper2/confirm (so <root>/run_A/...,
+run_C/..., run_D/...).  Run C there has the fixed gate WSPI-FS3 only (kappa
+chosen on the tuning part of the development data), not WSPI-FS1 to WSPI-FS2.
+
 Examples (from the project root, Windows):
 
   python tools\run_prediction_plan.py --plan A --jobs 6 --mem-gb 12
   python tools\run_prediction_plan.py --plan B --jobs 6
   python tools\run_prediction_plan.py --plan D --jobs 6 --mem-gb 12
   python tools\run_prediction_plan.py --plan A --dry-run        # print the commands only
+  python tools\run_prediction_plan.py --confirm --plan A --jobs 6 --mem-gb 12
 
 Every job writes its console output to ``logs/prediction_plan/run_<plan>/
 <scenario>_h<h>.log`` (appended on every start).  ``<root>/run_<plan>/
@@ -68,6 +76,19 @@ RUN_C_METHODS = ('WSPI', 'WSPI-S', 'WSPI-FS1', 'WSPI-FS1.5', 'WSPI-FS2', 'WSPI-F
 RUN_C_SENS_METHODS = ('WSPI',) + tuple(f'WSPI-F2_c{c}_g{g}_p{p}' for c in (2, 4, 8)
                                        for g in (0.1, 0.3, 0.5) for p in (0.8, 1))
 RUN_D_METHODS = ('WSPI', 'WSPI-M', 'WSPI-H')
+
+# confirmation data (--confirm): scenario: (data file, causal item threshold)
+CONFIRM_SCENARIOS = {
+    'taxi2024_hourly': ('data/datasets/yellow_taxi_2024_all_hourly.csv', 24),
+    'taxi2024_30min': ('data/datasets/yellow_taxi_2024_all_30min.csv', 24),
+    'taxi2024_5min': ('data/datasets/yellow_taxi_2024_all_5min.csv', 24),
+    'wikipedia_daily': ('data/datasets/wikipedia_daily.csv', 50),
+}
+CONFIRM_FS = 'WSPI-FS3'          # kappa selected on the tuning part of the development data
+RUN_C_CONFIRM_METHODS = tuple(m for m in RUN_C_METHODS
+                              if not m.startswith('WSPI-FS') or m == CONFIRM_FS)
+CONFIRM_PLANS = ('A', 'C', 'D')
+CONFIRM_ROOT = 'results/paper2/confirm'
 PLANS = {
     'A': dict(scenarios=tuple(SCENARIOS), methods=None,
               flags=('--gate-profile', '--bound-check')),
@@ -82,21 +103,34 @@ PLANS = {
 }
 # estimated peak memory of one job (GB) and the start order (longest first)
 MEMORY_GB = {'youtube_hourly': 1.0, 'taxi_hourly': 1.0, 'taxi_30min': 1.0,
-             'taxi_5min': 1.5, 'movielens_daily': 6.0, 'movielens_weekly': 2.5}
+             'taxi_5min': 1.5, 'movielens_daily': 6.0, 'movielens_weekly': 2.5,
+             'taxi2024_hourly': 1.0, 'taxi2024_30min': 1.0, 'taxi2024_5min': 1.5,
+             'wikipedia_daily': 1.5}
 ORDER = {'A': ('taxi_5min', 'movielens_daily', 'taxi_30min', 'movielens_weekly',
                'taxi_hourly', 'youtube_hourly'),
          'B': ('taxi_hourly', 'youtube_hourly')}
 ORDER['C'] = ORDER['C_sens'] = ORDER['D'] = ORDER['A']
 ORDER['C_nlms'] = ORDER['B']
+CONFIRM_ORDER = ('taxi2024_5min', 'wikipedia_daily', 'taxi2024_30min', 'taxi2024_hourly')
 
 
 def build_jobs(plan: str, root: str, scenarios=None, horizons=None, python=None,
-               data_dir=None):
+               data_dir=None, confirm=False):
     spec = PLANS[plan]
-    scenarios = [s for s in ORDER[plan] if s in (scenarios or spec['scenarios'])]
+    if confirm:
+        if plan not in CONFIRM_PLANS:
+            raise ValueError(f'--confirm works with the plans {CONFIRM_PLANS} only')
+        spec = dict(spec, scenarios=tuple(CONFIRM_SCENARIOS))
+        if plan == 'C':
+            spec['methods'] = RUN_C_CONFIRM_METHODS
+        scenarios = [s for s in CONFIRM_ORDER if s in (scenarios or spec['scenarios'])]
+        table = CONFIRM_SCENARIOS
+    else:
+        scenarios = [s for s in ORDER[plan] if s in (scenarios or spec['scenarios'])]
+        table = SCENARIOS
     jobs = []
     for s in scenarios:
-        data, min_obs = SCENARIOS[s]
+        data, min_obs = table[s]
         if data_dir:
             data = str(Path(data_dir) / Path(data).name)
         for h in (horizons or spec.get('horizons', HORIZONS)):
@@ -207,8 +241,12 @@ def main(argv=None):
     ap.add_argument('--jobs', type=int, default=4, help='processes at the same time')
     ap.add_argument('--mem-gb', type=float, default=12.0,
                     help='limit on the summed memory estimate of the running jobs')
-    ap.add_argument('--root', default='results/paper2', help='output root')
-    ap.add_argument('--scenarios', nargs='+', default=None, choices=sorted(SCENARIOS))
+    ap.add_argument('--root', default=None,
+                    help=f'output root (default results/paper2; with --confirm {CONFIRM_ROOT})')
+    ap.add_argument('--confirm', action='store_true',
+                    help='the four scenarios of the confirmation data (plans A, C, D)')
+    ap.add_argument('--scenarios', nargs='+', default=None,
+                    choices=sorted(SCENARIOS) + sorted(CONFIRM_SCENARIOS))
     ap.add_argument('--horizons', nargs='+', type=int, default=None)
     ap.add_argument('--data-dir', default=None,
                     help='folder with the data files (default: data/datasets)')
@@ -216,14 +254,24 @@ def main(argv=None):
                     help='default: logs/prediction_plan/run_<plan>')
     ap.add_argument('--dry-run', action='store_true', help='print the commands and stop')
     a = ap.parse_args(argv)
+    if a.confirm and a.plan not in CONFIRM_PLANS:
+        ap.error(f'--confirm works with --plan {" / ".join(CONFIRM_PLANS)} only')
+    allowed = CONFIRM_SCENARIOS if a.confirm else SCENARIOS
+    if a.scenarios and any(s not in allowed for s in a.scenarios):
+        ap.error('--scenarios: ' + ('the confirmation scenarios are ' if a.confirm else
+                                    'the development scenarios are ') + ', '.join(allowed))
+    if a.root is None:
+        a.root = CONFIRM_ROOT if a.confirm else 'results/paper2'
 
-    jobs = build_jobs(a.plan, a.root, a.scenarios, a.horizons, data_dir=a.data_dir)
+    jobs = build_jobs(a.plan, a.root, a.scenarios, a.horizons, data_dir=a.data_dir,
+                      confirm=a.confirm)
     if a.dry_run:
         for j in jobs:
             print(f"{j['name']:<24} {j['mem_gb']:>4} GB  " + subprocess.list2cmdline(j['cmd']))
         print(f'{len(jobs)} jobs')
         return 0
-    log_dir = _abs(a.log_dir) if a.log_dir else ROOT / 'logs' / 'prediction_plan' / f'run_{a.plan}'
+    tag = f'confirm_run_{a.plan}' if a.confirm else f'run_{a.plan}'
+    log_dir = _abs(a.log_dir) if a.log_dir else ROOT / 'logs' / 'prediction_plan' / tag
     status_file = _abs(a.root) / f'run_{a.plan}' / 'plan_status.json'
     print(f'plan {a.plan}: {len(jobs)} jobs, {a.jobs} at a time, memory limit {a.mem_gb} GB')
     print(f'logs: {log_dir}')
