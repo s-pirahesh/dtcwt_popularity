@@ -58,6 +58,6 @@ __version__ = '1.0.0'
 
 # Show the available methods
 if __all__:
-    print(f"✓ Loaded {len(__all__)} methods: {', '.join(__all__)}")
+    print(f"[OK] Loaded {len(__all__)} methods: {', '.join(__all__)}")
 else:
-    print("⚠️  No methods loaded. Install dependencies: pip install pywt dtcwt")
+    print("[Fail]  No methods loaded. Install dependencies: pip install pywt dtcwt")
