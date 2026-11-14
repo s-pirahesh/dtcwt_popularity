@@ -7,7 +7,7 @@ data/raw/youtube/count_observation_upload.csv       Kaggle, "YouTube videos view
 data/raw/yellow_taxi/2025/yellow_tripdata_2025-MM.parquet   NYC TLC Trip Record Data, Yellow Taxi, 01 to 11
 data/raw/movielens/ratings.csv                      GroupLens MovieLens 32M (ML-32M)
 data/raw/yellow_taxi/2024/yellow_tripdata_2024-MM.parquet   NYC TLC Trip Record Data, Yellow Taxi, 01 to 12
-data/raw/wikipedia/train_2.csv.zip                  Kaggle, "Web Traffic Time Series Forecasting"
+data/raw/wikipedia/kaggle_web_traffic_dataset_with_missing_values.tsf   Zenodo 10.5281/zenodo.4656080 (CC BY 4.0)
 ```
 
 The prepared files go to `data/datasets/` (not kept in Git). The commands that
@@ -55,13 +55,18 @@ evaluation.
 after 2024 out of the last slot.
 
 **Wikipedia Web Traffic** (`data/converters/wikipedia_converter.py`). Daily
-views of Wikipedia pages from 1 July 2015 to 10 September 2017 (file
-`train_2.csv`). Only the rows whose page name ends with `_all-access_all-agents`
+views of Wikipedia pages from 1 July 2015 to 10 September 2017: the data of the
+Kaggle competition "Web Traffic Time Series Forecasting" in the copy of the
+Monash Time Series Forecasting Repository (Zenodo, "Kaggle Wikipedia Web Traffic
+Daily Dataset (with Missing Values)", file
+`kaggle_web_traffic_dataset_with_missing_values.tsf`; the Kaggle file
+`train_2.csv` is read too). Only the rows whose page name ends with `_all-access_all-agents`
 are items (one row per article and project; the other rows are parts of the
 same traffic). Of these rows, in file order, the rows 0, k, 2k, ... are kept,
 with k the smallest integer such that the number of kept rows times 803 days
-is at most 9,256,350. An empty cell is zero views. `item_id` is the row number
-of the page in the raw file; the page names and k are written next to the
+is at most 9,256,350. A missing value (an empty cell, or ? in the .tsf file)
+is zero views. `item_id` is the position
+of the series in the raw file; the page names and k are written next to the
 prepared file (`wikipedia_daily_pages.csv`, `wikipedia_daily_meta.json`).
 
 The item list of the evaluation is built causally from these files: an item

@@ -20,6 +20,12 @@ Wikipedia converter (``data/converters/wikipedia_converter.py``):
   7. prepare_data.py lists the converter and refuses the synthetic file, which
      does not have the 803 days of train_2.csv, without writing a file.
 
+  9. The Monash .tsf form of the same synthetic data (? for a missing value)
+     gives the same prepared file and the same page list as the CSV form; a
+     .tsf file is refused when the series names are not page names, a series
+     is one day short, a series starts on another day, or the attributes or
+     the frequency differ.
+
 Yellow Taxi converter (``data/converters/yellow_taxi_converter.py``, unchanged):
 
   8. With --yellow_taxi-start-date 2024-01-01 and --yellow_taxi-end-date
@@ -74,6 +80,20 @@ def synthetic(rng):
     raw = pd.DataFrame(vals, columns=[d.strftime('%Y-%m-%d') for d in dates])
     raw.insert(0, 'Page', pages)
     return raw
+
+
+def write_tsf(raw, path, names=None, start=FIRST, attrs=('series_name', 'start_timestamp'),
+              freq='daily', drop_last_of=None):
+    lines = ['# synthetic copy in the Monash format', '@relation web_traffic']
+    lines += [f'@attribute {a} {"string" if a == "series_name" else "date"}' for a in attrs]
+    lines += [f'@frequency {freq}', '@horizon 59', '@missing true', '@equallength true', '@data']
+    vals = raw.iloc[:, 1:].to_numpy(float)
+    for i, page in enumerate(raw['Page'] if names is None else names):
+        v = ['?' if np.isnan(x) else str(int(x)) for x in vals[i]]
+        if drop_last_of == i:
+            v = v[:-1]
+        lines.append(f'{page}:{start} 00-00-00:' + ','.join(v))
+    Path(path).write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
 def convert(raw_file, out, n_rows, max_cells, quiet=True):
@@ -202,6 +222,38 @@ def run_tests():
         check('7 prepare_data refuses a file that is not shaped like train_2.csv',
               r.returncode != 0 and 'expected 803 consecutive days' in msg and not o7.exists(),
               f'rc={r.returncode}')
+
+        # ---- 9 Monash .tsf form
+        ft = td / 'kaggle_web_traffic_dataset_with_missing_values.tsf'
+        write_tsf(raw, ft)
+        ct, _ = convert(ft, td / 'o9' / 'wikipedia_daily.csv', len(raw), max_cells)
+        check('9 tsf: same prepared file as the CSV form',
+              (td / 'o9' / 'wikipedia_daily.csv').read_bytes() == out.read_bytes())
+        check('9 tsf: same page list',
+              (td / 'o9' / 'wikipedia_daily_pages.csv').read_bytes()
+              == (td / 'out' / 'wikipedia_daily_pages.csv').read_bytes())
+        mt = json.loads((td / 'o9' / 'wikipedia_daily_meta.json').read_text(encoding='utf-8'))
+        check('9 tsf: metadata (k, missing cells, source file)',
+              mt['stride_k'] == meta['stride_k'] and mt['source_file'] == ft.name
+              and mt['n_missing_cells_set_to_zero'] == meta['n_missing_cells_set_to_zero'])
+        bad_tsf = {
+            'series names are not page names': dict(names=[f'T{i + 1}' for i in range(len(raw))]),
+            'a series one day short': dict(drop_last_of=7),
+            'series start on another day': dict(start='2016-01-02'),
+            'attributes differ': dict(attrs=('series_name',)),
+            'frequency differs': dict(freq='weekly'),
+        }
+        for name, kw in bad_tsf.items():
+            fb = td / 'bad.tsf'
+            write_tsf(raw, fb, **kw)
+            ob = td / 'ob9' / 'w.csv'
+            if ob.parent.exists():
+                shutil.rmtree(ob.parent)
+            try:
+                convert(fb, ob, len(raw), max_cells)
+                check(f'9 tsf refuses: {name}', False)
+            except ValueError:
+                check(f'9 tsf refuses: {name}', not ob.exists())
 
         # ---- 8 yellow taxi 2024 date range
         ts = pd.to_datetime(['2023-12-31 23:50:00', '2024-01-01 00:00:00', '2024-01-01 00:20:00',

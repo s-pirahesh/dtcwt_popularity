@@ -14,7 +14,7 @@ python prepare_data.py --dataset <name> --input <raw file or pattern> --output <
 | `youtube` | `youtube_converter.py` | `--youtube-granularity` (`none`), `--youtube-min-views-per-video` (100; the paper uses 50), `--youtube-start-date`, `--youtube-end-date` |
 | `yellow_taxi` | `yellow_taxi_converter.py` | `--yellow_taxi-granularity` (`15min`; the paper uses `hourly`, `30min`, `5min`), `--yellow_taxi-min-trips-per-location` (100; the paper uses 1), `--yellow_taxi-start-date` (the paper uses 2025-01-01), `--yellow_taxi-end-date`, `--yellow_taxi-extract-features` |
 | `movielens` | `movielens_converter.py` | general MovieLens converter; the paper uses `tools/prepare_movielens_v5.py` instead |
-| `wikipedia` | `wikipedia_converter.py` | Kaggle Wikipedia Web Traffic, `train_2.csv` (or `.zip`), daily; `--wikipedia-access-agent` (`all-access_all-agents`), `--wikipedia-max-cells` (9256350); rules in the file header |
+| `wikipedia` | `wikipedia_converter.py` | Kaggle Wikipedia Web Traffic, daily: the Monash `.tsf` copy on Zenodo or Kaggle `train_2.csv` (or `.zip`); `--wikipedia-access-agent` (`all-access_all-agents`), `--wikipedia-max-cells` (9256350); rules in the file header |
 
 Generic options of every converter: `--output-format` (`csv`, `parquet`,
 `feather`), `--quiet`, `--no-validate`.

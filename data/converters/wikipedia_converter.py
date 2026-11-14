@@ -2,13 +2,20 @@
 Wikipedia Web Traffic converter
 ===============================
 Converts the daily page views of the Kaggle competition "Web Traffic Time
-Series Forecasting" (Google, 2017), file ``train_2.csv`` (or ``train_2.csv.zip``),
-to the standard format ``timestamp,item_id,count``.
+Series Forecasting" (Google, 2017) to the standard format
+``timestamp,item_id,count``.  Two forms of the same data are read:
 
-The raw file is wide: one row per page (column ``Page``, the name ends with
-``_<project>_<access>_<agent>``) and one column per day from 2015-07-01 to
-2017-09-10 (803 days, 145,063 rows).  The rules, all fixed before the data
-were opened:
+  .tsf          the Monash Time Series Forecasting Repository copy on Zenodo,
+                "Kaggle Wikipedia Web Traffic Daily Dataset (with Missing
+                Values)", file kaggle_web_traffic_dataset_with_missing_values.tsf:
+                one line per series, <series_name>:<start_timestamp>:<values>,
+                ? for a missing value
+  .csv / .zip   the Kaggle file train_2.csv (or train_2.csv.zip): one row per
+                page (column Page), one column per day
+
+Either way there are 145,063 series (the page name ends with
+``_<project>_<access>_<agent>``) of 803 days, 2015-07-01 to 2017-09-10.  The
+rules, all fixed before the data were opened:
 
   shape check   the file must have the expected number of rows, consecutive
                 daily columns from the first to the last date, and only
@@ -24,13 +31,14 @@ were opened:
                 of a row, never its values
   missing       an empty cell is zero views; as in the standard format, a day
                 with zero views has no row
-  item_id       the row number of the page in the raw file (from 0); the page
+  item_id       the position of the series in the raw file (from 0); the page
                 names go to ``<output stem>_pages.csv``
   metadata      ``<output stem>_meta.json``: file hash, counts, k and the rules
 
 Only counts are printed, never view values.
 
-    python prepare_data.py --dataset wikipedia --input data/raw/wikipedia/train_2.csv.zip ^
+    python prepare_data.py --dataset wikipedia ^
+           --input data/raw/wikipedia/kaggle_web_traffic_dataset_with_missing_values.tsf ^
            --output data/datasets/wikipedia_daily.csv
 """
 import hashlib
@@ -69,8 +77,8 @@ class WikipediaConverter(BaseConverter):
     """Kaggle Wikipedia Web Traffic, daily page views."""
 
     DATASET_NAME = 'wikipedia'
-    SUPPORTED_FILE_TYPES = ['.csv', '.zip']
-    DESCRIPTION = 'Kaggle Wikipedia Web Traffic converter (daily page views, train_2.csv)'
+    SUPPORTED_FILE_TYPES = ['.tsf', '.csv', '.zip']
+    DESCRIPTION = 'Kaggle Wikipedia Web Traffic converter (daily page views; Monash .tsf or train_2.csv)'
 
     EXPECTED_ROWS = 145063
     FIRST_DATE = '2015-07-01'
@@ -106,30 +114,93 @@ class WikipediaConverter(BaseConverter):
 
     # ------------------------------------------------------------------
     def check_shape(self, raw: pd.DataFrame):
-        """Dates (consecutive, from first to last) and row count.  Raises
-        ValueError on any mismatch."""
+        """Wide CSV (train_2.csv): dates (consecutive, from first to last) and
+        row count.  Raises ValueError on any mismatch."""
         if raw.columns[0] != 'Page':
             raise ValueError(f'first column is {raw.columns[0]!r}, not Page')
         try:
             dates = pd.to_datetime(pd.Index(raw.columns[1:]), format='%Y-%m-%d')
         except (ValueError, TypeError) as e:
             raise ValueError(f'day columns are not dates: {e}')
+        self.check_pages_dates(raw['Page'], dates)
+        return dates
+
+    def check_pages_dates(self, pages: pd.Series, dates: pd.DatetimeIndex):
         expected = pd.date_range(self.first_date, self.last_date, freq='D')
         if len(dates) != len(expected) or not (dates == expected).all():
             raise ValueError(f'day columns: {len(dates)} from {dates.min().date()} to '
                              f'{dates.max().date()}; expected {len(expected)} consecutive days '
                              f'from {self.first_date.date()} to {self.last_date.date()}')
-        if self.expected_rows is not None and len(raw) != self.expected_rows:
-            raise ValueError(f'{len(raw)} rows; expected {self.expected_rows}')
-        if raw['Page'].isnull().any() or raw['Page'].duplicated().any():
+        if self.expected_rows is not None and len(pages) != self.expected_rows:
+            raise ValueError(f'{len(pages)} rows; expected {self.expected_rows}')
+        if pages.isnull().any() or pages.duplicated().any():
             raise ValueError('empty or repeated page names')
-        return dates
+
+    def read_tsf(self, file_path: Path):
+        """Monash .tsf file (Zenodo, "Kaggle Wikipedia Web Traffic Daily Dataset
+        (with Missing Values)").  Header: @attribute series_name, @attribute
+        start_timestamp, @frequency daily; one line per series after @data:
+        <series_name>:<start_timestamp>:<v1>,<v2>,...  with ? for a missing value.
+        Every series must start on the first date and have one value per day up
+        to the last date.  Returns (pages, dates, values)."""
+        n_days = len(pd.date_range(self.first_date, self.last_date, freq='D'))
+        attrs, freq, names, rows = [], None, [], []
+        with open(file_path, 'r', encoding='utf-8') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                low = line.lower()
+                if low.startswith('@attribute'):
+                    parts = line.split()
+                    attrs.append(parts[1] if len(parts) > 1 else '')
+                    continue
+                if low.startswith('@frequency'):
+                    freq = line.split()[1].lower() if len(line.split()) > 1 else None
+                    continue
+                if low.startswith('@data'):
+                    break
+            if attrs != ['series_name', 'start_timestamp']:
+                raise ValueError(f'tsf attributes {attrs}; expected series_name, start_timestamp')
+            if freq != 'daily':
+                raise ValueError(f'tsf frequency {freq!r}; expected daily')
+            for k, line in enumerate(fh):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    name, start, vals = line.rsplit(':', 2)
+                except ValueError:
+                    raise ValueError(f'tsf data line {k + 1}: not <name>:<start>:<values>')
+                try:
+                    t0 = pd.to_datetime(start.strip(), format='%Y-%m-%d %H-%M-%S')
+                except ValueError:
+                    raise ValueError(f'tsf data line {k + 1}: start timestamp {start!r}')
+                if t0 != self.first_date:
+                    raise ValueError(f'tsf series {len(names) + 1} starts on {start}; '
+                                     f'expected {self.first_date.date()}')
+                v = vals.split(',')
+                if len(v) != n_days:
+                    raise ValueError(f'tsf series {len(names) + 1} has {len(v)} values; '
+                                     f'expected {n_days}')
+                names.append(name)
+                rows.append(np.array([np.nan if x.strip() == '?' else float(x) for x in v]))
+        if not rows:
+            raise ValueError('tsf file without series')
+        dates = pd.date_range(self.first_date, self.last_date, freq='D')
+        pages = pd.Series(names, dtype=object)
+        self.check_pages_dates(pages, dates)
+        return pages, dates, np.vstack(rows)
 
     def _convert_single_file(self, file_path: Path, **kwargs) -> pd.DataFrame:
         self.log(f'Reading {file_path.name}')
-        raw = pd.read_csv(file_path, dtype={'Page': str})
-        dates = self.check_shape(raw)
-        values = raw.iloc[:, 1:].to_numpy(dtype=np.float64)
+        if file_path.suffix.lower() == '.tsf':
+            pages, dates, values = self.read_tsf(file_path)
+        else:
+            raw = pd.read_csv(file_path, dtype={'Page': str})
+            dates = self.check_shape(raw)
+            pages = raw['Page']
+            values = raw.iloc[:, 1:].to_numpy(dtype=np.float64)
         finite = np.isfinite(values)
         if (values[finite] < 0).any():
             raise ValueError('negative view counts')
@@ -139,9 +210,10 @@ class WikipediaConverter(BaseConverter):
             raise ValueError('infinite view counts')
 
         suffix = '_' + self.access_agent
-        selected = np.flatnonzero(raw['Page'].str.endswith(suffix).to_numpy())
+        selected = np.flatnonzero(pages.str.endswith(suffix).to_numpy())
         if len(selected) == 0:
-            raise ValueError(f'no page name ends with {suffix}')
+            raise ValueError(f'no page name ends with {suffix} (the item rule needs the '
+                             f'Wikipedia page names, e.g. AKB48_zh.wikipedia.org_all-access_spider)')
         k = stride_for(len(selected), len(dates), self.max_cells)
         keep = selected[::k]
 
@@ -153,10 +225,10 @@ class WikipediaConverter(BaseConverter):
                            'item_id': keep[item_pos].astype(np.int64),
                            'count': v[item_pos, day_idx]})
         self.pages = pd.DataFrame({'item_id': keep.astype(np.int64),
-                                   'page': raw['Page'].to_numpy()[keep]})
+                                   'page': pages.to_numpy()[keep]})
         self.info = dict(
             source_file=file_path.name, source_sha256=file_sha256(file_path),
-            n_rows=int(len(raw)), n_days=int(len(dates)),
+            n_rows=int(len(pages)), n_days=int(len(dates)),
             first_date=str(dates[0].date()), last_date=str(dates[-1].date()),
             access_agent=self.access_agent, n_selected=int(len(selected)),
             max_cells=self.max_cells, stride_k=int(k), n_items=int(len(keep)),
@@ -167,8 +239,8 @@ class WikipediaConverter(BaseConverter):
                        subset='rows 0, k, 2k, ... of the selected rows in file order; '
                               'k = smallest integer with ceil(n_selected / k) * n_days <= max_cells',
                        missing='empty cell = 0 views; days with 0 views have no row',
-                       item_id='row number of the page in the raw file, from 0'))
-        self.log(f'  rows {len(raw):,}, days {len(dates)} ({dates[0].date()} to {dates[-1].date()})')
+                       item_id='position of the series in the raw file, from 0'))
+        self.log(f'  rows {len(pages):,}, days {len(dates)} ({dates[0].date()} to {dates[-1].date()})')
         self.log(f'  selected ({suffix}): {len(selected):,}; k = {k}; items kept: {len(keep):,}')
         self.log(f'  output rows: {len(df):,}')
         return df
@@ -177,7 +249,7 @@ class WikipediaConverter(BaseConverter):
                 **kwargs) -> pd.DataFrame:
         if isinstance(input_path, (list, tuple)):
             if len(input_path) != 1:
-                raise ValueError('give exactly one raw file (train_2.csv or train_2.csv.zip)')
+                raise ValueError('give exactly one raw file (.tsf, train_2.csv or train_2.csv.zip)')
             input_path = input_path[0]
         df = super().convert(input_path, output_path, **kwargs)
         out = Path(output_path)
