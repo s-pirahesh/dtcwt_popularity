@@ -7,7 +7,7 @@ data/raw/youtube/count_observation_upload.csv       Kaggle, "YouTube videos view
 data/raw/yellow_taxi/2025/yellow_tripdata_2025-MM.parquet   NYC TLC Trip Record Data, Yellow Taxi, 01 to 11
 data/raw/movielens/ratings.csv                      GroupLens MovieLens 32M (ML-32M)
 data/raw/yellow_taxi/2024/yellow_tripdata_2024-MM.parquet   NYC TLC Trip Record Data, Yellow Taxi, 01 to 12
-data/raw/wikipedia/kaggle_web_traffic_dataset_with_missing_values.tsf   Zenodo 10.5281/zenodo.4656080 (CC BY 4.0)
+data/raw/wikipedia/web_traffic_extended_dataset_with_missing_values.tsf   Zenodo 10.5281/zenodo.7370977
 ```
 
 The prepared files go to `data/datasets/` (not kept in Git). The commands that
@@ -55,12 +55,12 @@ evaluation.
 after 2024 out of the last slot.
 
 **Wikipedia Web Traffic** (`data/converters/wikipedia_converter.py`). Daily
-views of Wikipedia pages from 1 July 2015 to 10 September 2017: the data of the
-Kaggle competition "Web Traffic Time Series Forecasting" in the copy of the
-Monash Time Series Forecasting Repository (Zenodo, "Kaggle Wikipedia Web Traffic
-Daily Dataset (with Missing Values)", file
-`kaggle_web_traffic_dataset_with_missing_values.tsf`; the Kaggle file
-`train_2.csv` is read too). Only the rows whose page name ends with `_all-access_all-agents`
+views of Wikipedia pages from 1 July 2015 to 10 September 2017, the 803 days of
+the Kaggle competition "Web Traffic Time Series Forecasting". The file is the
+extended copy of the Monash Time Series Forecasting Repository (Zenodo,
+"Extended Wikipedia Web Traffic Daily Dataset (with Missing Values)", the same
+pages to 30 June 2022 from the Wikimedia REST API); only the days up to
+10 September 2017 are used. The Kaggle file `train_2.csv` is read too. Only the rows whose page name ends with `_all-access_all-agents`
 are items (one row per article and project; the other rows are parts of the
 same traffic). Of these rows, in file order, the rows 0, k, 2k, ... are kept,
 with k the smallest integer such that the number of kept rows times 803 days

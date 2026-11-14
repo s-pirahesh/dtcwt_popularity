@@ -6,15 +6,20 @@ Series Forecasting" (Google, 2017) to the standard format
 ``timestamp,item_id,count``.  Two forms of the same data are read:
 
   .tsf          the Monash Time Series Forecasting Repository copy on Zenodo,
-                "Kaggle Wikipedia Web Traffic Daily Dataset (with Missing
-                Values)", file kaggle_web_traffic_dataset_with_missing_values.tsf:
-                one line per series, <series_name>:<start_timestamp>:<values>,
-                ? for a missing value
+                "Extended Wikipedia Web Traffic Daily Dataset (with Missing
+                Values)" (10.5281/zenodo.7370977; the same pages, 2015-07-01 to
+                2022-06-30, downloaded from the Wikimedia REST API; by the record,
+                the article names are kept, with ':' replaced by '-'): one line per
+                series, <series_name>:<start_timestamp>:<values>, ? for a missing
+                value.  Only the days up to the last date are kept.  (The
+                non-extended Monash copy names its series T1, T2, ... and is
+                refused by the item rule.)
   .csv / .zip   the Kaggle file train_2.csv (or train_2.csv.zip): one row per
                 page (column Page), one column per day
 
 Either way there are 145,063 series (the page name ends with
-``_<project>_<access>_<agent>``) of 803 days, 2015-07-01 to 2017-09-10.  The
+``_<project>_<access>_<agent>``); the 803 days from 2015-07-01 to 2017-09-10
+are used.  The
 rules, all fixed before the data were opened:
 
   shape check   the file must have the expected number of rows, consecutive
@@ -141,10 +146,11 @@ class WikipediaConverter(BaseConverter):
         (with Missing Values)").  Header: @attribute series_name, @attribute
         start_timestamp, @frequency daily; one line per series after @data:
         <series_name>:<start_timestamp>:<v1>,<v2>,...  with ? for a missing value.
-        Every series must start on the first date and have one value per day up
-        to the last date.  Returns (pages, dates, values)."""
+        Every series must start on the first date and have at least one value
+        per day up to the last date; a longer series (the extended copy, to
+        2022-06-30) is cut at the last date.  Returns (pages, dates, values)."""
         n_days = len(pd.date_range(self.first_date, self.last_date, freq='D'))
-        attrs, freq, names, rows = [], None, [], []
+        attrs, freq, names, rows, lengths = [], None, [], [], set()
         with open(file_path, 'r', encoding='utf-8') as fh:
             for line in fh:
                 line = line.strip()
@@ -179,10 +185,12 @@ class WikipediaConverter(BaseConverter):
                 if t0 != self.first_date:
                     raise ValueError(f'tsf series {len(names) + 1} starts on {start}; '
                                      f'expected {self.first_date.date()}')
-                v = vals.split(',')
-                if len(v) != n_days:
-                    raise ValueError(f'tsf series {len(names) + 1} has {len(v)} values; '
-                                     f'expected {n_days}')
+                n_vals = vals.count(',') + 1
+                if n_vals < n_days:
+                    raise ValueError(f'tsf series {len(names) + 1} has {n_vals} values; '
+                                     f'expected at least {n_days}')
+                lengths.add(n_vals)
+                v = vals.split(',', n_days)[:n_days]          # the first n_days days only
                 names.append(name)
                 rows.append(np.array([np.nan if x.strip() == '?' else float(x) for x in v]))
         if not rows:
@@ -190,10 +198,12 @@ class WikipediaConverter(BaseConverter):
         dates = pd.date_range(self.first_date, self.last_date, freq='D')
         pages = pd.Series(names, dtype=object)
         self.check_pages_dates(pages, dates)
+        self.tsf_lengths = sorted(lengths)
         return pages, dates, np.vstack(rows)
 
     def _convert_single_file(self, file_path: Path, **kwargs) -> pd.DataFrame:
         self.log(f'Reading {file_path.name}')
+        self.tsf_lengths = None
         if file_path.suffix.lower() == '.tsf':
             pages, dates, values = self.read_tsf(file_path)
         else:
@@ -229,6 +239,7 @@ class WikipediaConverter(BaseConverter):
         self.info = dict(
             source_file=file_path.name, source_sha256=file_sha256(file_path),
             n_rows=int(len(pages)), n_days=int(len(dates)),
+            tsf_series_lengths=self.tsf_lengths,
             first_date=str(dates[0].date()), last_date=str(dates[-1].date()),
             access_agent=self.access_agent, n_selected=int(len(selected)),
             max_cells=self.max_cells, stride_k=int(k), n_items=int(len(keep)),

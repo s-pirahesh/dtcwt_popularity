@@ -21,7 +21,8 @@ Wikipedia converter (``data/converters/wikipedia_converter.py``):
      does not have the 803 days of train_2.csv, without writing a file.
 
   9. The Monash .tsf form of the same synthetic data (? for a missing value)
-     gives the same prepared file and the same page list as the CSV form; a
+     gives the same prepared file and the same page list as the CSV form, also
+     when the series run past the last date (they are cut there); a
      .tsf file is refused when the series names are not page names, a series
      is one day short, a series starts on another day, or the attributes or
      the frequency differ.
@@ -83,16 +84,25 @@ def synthetic(rng):
 
 
 def write_tsf(raw, path, names=None, start=FIRST, attrs=('series_name', 'start_timestamp'),
-              freq='daily', drop_last_of=None):
+              freq='daily', drop_last_of=None, extra_days=0, rng=None, extended=False):
+    if extended:
+        attrs = ('series_name', 'start_timestamp', 'article', 'project', 'access', 'agent')
     lines = ['# synthetic copy in the Monash format', '@relation web_traffic']
-    lines += [f'@attribute {a} {"string" if a == "series_name" else "date"}' for a in attrs]
+    lines += [f'@attribute {a} {"date" if a == "start_timestamp" else "string"}' for a in attrs]
     lines += [f'@frequency {freq}', '@horizon 59', '@missing true', '@equallength true', '@data']
     vals = raw.iloc[:, 1:].to_numpy(float)
     for i, page in enumerate(raw['Page'] if names is None else names):
         v = ['?' if np.isnan(x) else str(int(x)) for x in vals[i]]
         if drop_last_of == i:
             v = v[:-1]
-        lines.append(f'{page}:{start} 00-00-00:' + ','.join(v))
+        if extra_days:
+            v += [str(int(x)) for x in rng.poisson(50, extra_days)]
+        if extended:
+            art, proj, acc, agent = page.rsplit('_', 3)
+            lines.append(f'T{i + 1}:{start} 00-00-00:{art.replace(":", "-")}:{proj}:{acc}:{agent}:'
+                         + ','.join(v))
+        else:
+            lines.append(f'{page}:{start} 00-00-00:' + ','.join(v))
     Path(path).write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
@@ -236,8 +246,17 @@ def run_tests():
         check('9 tsf: metadata (k, missing cells, source file)',
               mt['stride_k'] == meta['stride_k'] and mt['source_file'] == ft.name
               and mt['n_missing_cells_set_to_zero'] == meta['n_missing_cells_set_to_zero'])
+        fl = td / 'web_traffic_extended_dataset_with_missing_values.tsf'
+        write_tsf(raw, fl, extra_days=40, rng=rng, extended=True)
+        cl, _ = convert(fl, td / 'o9l' / 'wikipedia_daily.csv', len(raw), max_cells)
+        ml = json.loads((td / 'o9l' / 'wikipedia_daily_meta.json').read_text(encoding='utf-8'))
+        check('9 tsf: extended copy (article, project, access, agent; longer series cut '
+              'at the last date) gives the same file',
+              (td / 'o9l' / 'wikipedia_daily.csv').read_bytes() == out.read_bytes()
+              and ml['tsf_series_lengths'] == [days + 40] and ml['n_days'] == days)
         bad_tsf = {
             'series names are not page names': dict(names=[f'T{i + 1}' for i in range(len(raw))]),
+            'extended copy one day short': dict(extended=True, drop_last_of=3),
             'a series one day short': dict(drop_last_of=7),
             'series start on another day': dict(start='2016-01-02'),
             'attributes differ': dict(attrs=('series_name',)),
