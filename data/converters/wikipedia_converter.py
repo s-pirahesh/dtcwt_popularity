@@ -8,12 +8,16 @@ Series Forecasting" (Google, 2017) to the standard format
   .tsf          the Monash Time Series Forecasting Repository copy on Zenodo,
                 "Extended Wikipedia Web Traffic Daily Dataset (with Missing
                 Values)" (10.5281/zenodo.7370977; the same pages, 2015-07-01 to
-                2022-06-30, downloaded from the Wikimedia REST API; by the record,
-                the article names are kept, with ':' replaced by '-'): one line per
-                series, <series_name>:<start_timestamp>:<values>, ? for a missing
-                value.  Only the days up to the last date are kept.  (The
-                non-extended Monash copy names its series T1, T2, ... and is
-                refused by the item rule.)
+                2022-06-30, downloaded from the Wikimedia REST API): one line per
+                series, <series_name>:<start_timestamp>:<article>:<project>:
+                <access>:<agent>:<values>, ? for a missing value.  The series
+                name is T1, T2, ...; the page name is rebuilt as
+                <article>_<project>_<access>_<agent> (by the record, ':' in an
+                article name is replaced by '-').  Only the days up to the last
+                date are kept.  The two-attribute form
+                <series_name>:<start_timestamp>:<values> is also read; there the
+                series name must be the page name (the non-extended Monash copy
+                names its series T1, T2, ... and is refused by the item rule).
   .csv / .zip   the Kaggle file train_2.csv (or train_2.csv.zip): one row per
                 page (column Page), one column per day
 
@@ -43,7 +47,7 @@ rules, all fixed before the data were opened:
 Only counts are printed, never view values.
 
     python prepare_data.py --dataset wikipedia ^
-           --input data/raw/wikipedia/kaggle_web_traffic_dataset_with_missing_values.tsf ^
+           --input data/raw/wikipedia/web_traffic_extended_dataset_with_missing_values.tsf ^
            --output data/datasets/wikipedia_daily.csv
 """
 import hashlib
@@ -143,12 +147,17 @@ class WikipediaConverter(BaseConverter):
 
     def read_tsf(self, file_path: Path):
         """Monash .tsf file (Zenodo, "Kaggle Wikipedia Web Traffic Daily Dataset
-        (with Missing Values)").  Header: @attribute series_name, @attribute
-        start_timestamp, @frequency daily; one line per series after @data:
-        <series_name>:<start_timestamp>:<v1>,<v2>,...  with ? for a missing value.
-        Every series must start on the first date and have at least one value
-        per day up to the last date; a longer series (the extended copy, to
-        2022-06-30) is cut at the last date.  Returns (pages, dates, values)."""
+        (with Missing Values)" or its extended copy).  Header: @attribute
+        series_name, @attribute start_timestamp (two-attribute form), or these
+        two followed by article, project, access, agent (extended form);
+        @frequency daily.  One line per series after @data:
+        <series_name>:<start_timestamp>:<v1>,<v2>,...  or
+        <series_name>:<start_timestamp>:<article>:<project>:<access>:<agent>:<v1>,...
+        with ? for a missing value.  In the extended form the page name is
+        <article>_<project>_<access>_<agent>; in the two-attribute form it is
+        the series name.  Every series must start on the first date and have
+        at least one value per day up to the last date; a longer series (the
+        extended copy, to 2022-06-30) is cut at the last date.  Returns (pages, dates, values)."""
         n_days = len(pd.date_range(self.first_date, self.last_date, freq='D'))
         attrs, freq, names, rows, lengths = [], None, [], [], set()
         with open(file_path, 'r', encoding='utf-8') as fh:
@@ -166,8 +175,11 @@ class WikipediaConverter(BaseConverter):
                     continue
                 if low.startswith('@data'):
                     break
-            if attrs != ['series_name', 'start_timestamp']:
-                raise ValueError(f'tsf attributes {attrs}; expected series_name, start_timestamp')
+            two = ['series_name', 'start_timestamp']
+            ext = two + ['article', 'project', 'access', 'agent']
+            if attrs not in (two, ext):
+                raise ValueError(f'tsf attributes {attrs}; expected {two} or {ext}')
+            extended = attrs == ext
             if freq != 'daily':
                 raise ValueError(f'tsf frequency {freq!r}; expected daily')
             for k, line in enumerate(fh):
@@ -175,9 +187,15 @@ class WikipediaConverter(BaseConverter):
                 if not line:
                     continue
                 try:
-                    name, start, vals = line.rsplit(':', 2)
+                    head, vals = line.rsplit(':', 1)          # the values hold no ':'
+                    if extended:
+                        _, start, rest = head.split(':', 2)
+                        article, project, access, agent = rest.rsplit(':', 3)
+                        name = f'{article}_{project}_{access}_{agent}'
+                    else:
+                        name, start = head.rsplit(':', 1)
                 except ValueError:
-                    raise ValueError(f'tsf data line {k + 1}: not <name>:<start>:<values>')
+                    raise ValueError(f'tsf data line {k + 1}: fields do not match the attributes {attrs}')
                 try:
                     t0 = pd.to_datetime(start.strip(), format='%Y-%m-%d %H-%M-%S')
                 except ValueError:
