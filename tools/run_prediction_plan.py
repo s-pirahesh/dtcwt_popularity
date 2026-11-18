@@ -25,12 +25,15 @@ Supplementary runs (Experiment_Design_v2; same scenarios and horizons as run A):
   run D       WSPI and the window-mean level methods WSPI-M (control, no clamp)
               and WSPI-H (clamp c = 4 relative to mu_L); six scenarios, horizons
               1, 8, 24; bound check                              -> <root>/run_D/...
+  run E       WSPI, WSPI-H and the mechanism control WSPI-HL (WSPI-H without the
+              factor exp(alpha R - beta W_E)); six scenarios, horizons 1, 8, 24;
+              bound check (WSPI-H)                               -> <root>/run_E/...
 
-Confirmation data (--confirm, with plans A, C and D only): the same programs on
+Confirmation data (--confirm, with plans A, C, D and E only): the same programs on
 the four held-out scenarios taxi2024_hourly, taxi2024_30min, taxi2024_5min
 (NYC Yellow Taxi 2024) and wikipedia_daily (Wikipedia Web Traffic), horizons
 1, 8, 24.  The output root is results/paper2/confirm (so <root>/run_A/...,
-run_C/..., run_D/...).  Run C there has the fixed gate WSPI-FS3 only (kappa
+run_C/..., run_D/..., run_E/...).  Run C there has the fixed gate WSPI-FS3 only (kappa
 chosen on the tuning part of the development data), not WSPI-FS1 to WSPI-FS2.
 
 Examples (from the project root, Windows):
@@ -38,6 +41,8 @@ Examples (from the project root, Windows):
   python tools\run_prediction_plan.py --plan A --jobs 6 --mem-gb 12
   python tools\run_prediction_plan.py --plan B --jobs 6
   python tools\run_prediction_plan.py --plan D --jobs 6 --mem-gb 12
+  python tools\run_prediction_plan.py --plan E --jobs 6 --mem-gb 12
+  python tools\run_prediction_plan.py --confirm --plan E --jobs 6 --mem-gb 12
   python tools\run_prediction_plan.py --plan A --dry-run        # print the commands only
   python tools\run_prediction_plan.py --confirm --plan A --jobs 6 --mem-gb 12
 
@@ -76,6 +81,7 @@ RUN_C_METHODS = ('WSPI', 'WSPI-S', 'WSPI-FS1', 'WSPI-FS1.5', 'WSPI-FS2', 'WSPI-F
 RUN_C_SENS_METHODS = ('WSPI',) + tuple(f'WSPI-F2_c{c}_g{g}_p{p}' for c in (2, 4, 8)
                                        for g in (0.1, 0.3, 0.5) for p in (0.8, 1))
 RUN_D_METHODS = ('WSPI', 'WSPI-M', 'WSPI-H')
+RUN_E_METHODS = ('WSPI', 'WSPI-H', 'WSPI-HL')
 
 # confirmation data (--confirm): scenario: (data file, causal item threshold)
 CONFIRM_SCENARIOS = {
@@ -87,7 +93,7 @@ CONFIRM_SCENARIOS = {
 CONFIRM_FS = 'WSPI-FS3'          # kappa selected on the tuning part of the development data
 RUN_C_CONFIRM_METHODS = tuple(m for m in RUN_C_METHODS
                               if not m.startswith('WSPI-FS') or m == CONFIRM_FS)
-CONFIRM_PLANS = ('A', 'C', 'D')
+CONFIRM_PLANS = ('A', 'C', 'D', 'E')
 CONFIRM_ROOT = 'results/paper2/confirm'
 PLANS = {
     'A': dict(scenarios=tuple(SCENARIOS), methods=None,
@@ -100,6 +106,7 @@ PLANS = {
     'C_nlms': dict(scenarios=('youtube_hourly', 'taxi_hourly'), methods=None, flags=(),
                    horizons=(1,), script='experiments/nlms_convergence.py'),
     'D': dict(scenarios=tuple(SCENARIOS), methods=RUN_D_METHODS, flags=('--bound-check',)),
+    'E': dict(scenarios=tuple(SCENARIOS), methods=RUN_E_METHODS, flags=('--bound-check',)),
 }
 # estimated peak memory of one job (GB) and the start order (longest first)
 MEMORY_GB = {'youtube_hourly': 1.0, 'taxi_hourly': 1.0, 'taxi_30min': 1.0,
@@ -109,7 +116,7 @@ MEMORY_GB = {'youtube_hourly': 1.0, 'taxi_hourly': 1.0, 'taxi_30min': 1.0,
 ORDER = {'A': ('taxi_5min', 'movielens_daily', 'taxi_30min', 'movielens_weekly',
                'taxi_hourly', 'youtube_hourly'),
          'B': ('taxi_hourly', 'youtube_hourly')}
-ORDER['C'] = ORDER['C_sens'] = ORDER['D'] = ORDER['A']
+ORDER['C'] = ORDER['C_sens'] = ORDER['D'] = ORDER['E'] = ORDER['A']
 ORDER['C_nlms'] = ORDER['B']
 CONFIRM_ORDER = ('taxi2024_5min', 'wikipedia_daily', 'taxi2024_30min', 'taxi2024_hourly')
 
@@ -244,7 +251,7 @@ def main(argv=None):
     ap.add_argument('--root', default=None,
                     help=f'output root (default results/paper2; with --confirm {CONFIRM_ROOT})')
     ap.add_argument('--confirm', action='store_true',
-                    help='the four scenarios of the confirmation data (plans A, C, D)')
+                    help='the four scenarios of the confirmation data (plans A, C, D, E)')
     ap.add_argument('--scenarios', nargs='+', default=None,
                     choices=sorted(SCENARIOS) + sorted(CONFIRM_SCENARIOS))
     ap.add_argument('--horizons', nargs='+', type=int, default=None)

@@ -65,6 +65,11 @@ Window-mean level methods (run D; the methods of runs A, B and C are unchanged):
                  P_H / WSPI lies in [1 - s_m (1 - 1/c), 1 + s_m (c - 1)], inside
                  [1/c, c] (``methods.wspi_forecast.level_anchor_bounds``)
 
+Mechanism control (run E; the methods of runs A to D are unchanged):
+    WSPI-HL      WSPI-H without the structural factor exp(alpha R - beta W_E)
+                 (alpha = beta = 0): the score is the clamped level mu_hat alone;
+                 P_HL / mu_L lies in [1 - s_m (1 - 1/c), 1 + s_m (c - 1)]
+
 Author: Sajjad Pirahesh
 Date: November 2026
 """
@@ -122,6 +127,10 @@ RUN_C_SENS_METHODS = ('WSPI',) + SENS_METHODS
 # Window-mean level methods (run D)
 LEVEL_METHODS = ('WSPI-M', 'WSPI-H')
 RUN_D_METHODS = ('WSPI',) + LEVEL_METHODS
+
+# Mechanism control (run E): WSPI-H without the structural factor
+MECHANISM_METHODS = ('WSPI-HL',)
+RUN_E_METHODS = ('WSPI', 'WSPI-H') + MECHANISM_METHODS
 
 
 # =============================================================================
@@ -600,9 +609,12 @@ def make_level_scorer(name: str, horizon: int = 1, window: int = WINDOW,
                  (same steps as the unclamped branch of ``make_coef_scorer``)
       'WSPI-H'   the same forecast clamped relative to mu_L with c = ``clamp``,
                  lam = 1 (same steps as the clamped branch, anchor mu_L)
+      'WSPI-HL'  WSPI-H without the structural factor (run E): the score is
+                 the clamped level mu_hat alone
 
-    Replica of ``methods.wspi_forecast.get_level_methods``."""
-    if name not in LEVEL_METHODS:
+    Replica of ``methods.wspi_forecast.get_level_methods`` and
+    ``get_mechanism_methods``."""
+    if name not in LEVEL_METHODS + MECHANISM_METHODS:
         raise ValueError(name)
     if clamp < 1.0:
         raise ValueError('clamp >= 1 is required')
@@ -625,9 +637,12 @@ def make_level_scorer(name: str, horizon: int = 1, window: int = WINDOW,
         mu_hat = np.where(np.isfinite(mu_hat) & (mu_hat > 1e-12), mu_hat, mu_L)
         with np.errstate(divide='ignore', invalid='ignore'):
             blended = mu_L * np.where(ok, mu_hat / np.where(ok, mu_L, 1.0), 1.0)
+        if name == 'WSPI-HL':
+            struct = 1.0                                   # alpha = beta = 0
         return np.where(ok, blended * struct, 0.0)
 
-    tag = 'wspi_m' if name == 'WSPI-M' else f'wspi_h_c{clamp:g}'
+    tag = {'WSPI-M': 'wspi_m', 'WSPI-H': f'wspi_h_c{clamp:g}',
+           'WSPI-HL': f'wspi_hl_c{clamp:g}'}[name]
     f.__name__ = f'{tag}_h{horizon}_W{window}'
     return f
 
@@ -656,7 +671,7 @@ def supplementary_maker(name: str, horizon: int = 1, window: int = WINDOW) -> Op
     is not one (learned methods are built in ``tools/learned_baseline.py``)."""
     if name == 'WSPI-S':
         return lambda: make_control_scorer('WSPI-S', horizon, window)
-    if name in LEVEL_METHODS:
+    if name in LEVEL_METHODS or name in MECHANISM_METHODS:
         return lambda: make_level_scorer(name, horizon, window)
     if name in FS_METHODS:
         kappa = float(name[len('WSPI-FS'):])

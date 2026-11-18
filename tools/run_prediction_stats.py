@@ -114,6 +114,19 @@ as with --runs D.  Output <root>/confirm/stats_tune/ or <root>/confirm/stats_tes
                 --confirm --part tune
                 --confirm --part test
 
+Mechanism control (``--runs E``, with --part test only)
+------------------------------------------------------
+Run E (tools/run_prediction_plan.py --plan E) scores WSPI, WSPI-H and WSPI-HL,
+WSPI-H without the structural factor exp(alpha R - beta W_E).  One report per
+cell with reference WSPI-HL against WSPI-H (from run D) and MA64 (from run A);
+the Holm family is these two methods.  Same split, block rule, B and seed.
+Checks first: the run A, D and E folders pass the window check, the WSPI file
+of run E equals the one of run A, and WSPI-H of run E equals WSPI-H of run D.
+With --confirm the same on the confirmation data (<root>/confirm/run_*).
+Output <root>/stats_test_E/ or <root>/confirm/stats_test_E/:
+                --part test --runs E
+                --confirm --part test --runs E
+
 The learned methods are trained on the tuning windows, so they are only part of
 the test report.  Both parts write window_check.csv, part_windows.csv (number
 and range of the windows of each part), all_paired_tests.csv,
@@ -128,6 +141,8 @@ all_method_summary.csv and stats_plan.json.
     python tools\run_prediction_stats.py --root results\paper2 --part test --runs D
     python tools\run_prediction_stats.py --root results\paper2 --confirm --part tune
     python tools\run_prediction_stats.py --root results\paper2 --confirm --part test
+    python tools\run_prediction_stats.py --root results\paper2 --part test --runs E
+    python tools\run_prediction_stats.py --root results\paper2 --confirm --part test --runs E
 """
 import argparse
 import json
@@ -174,7 +189,10 @@ SUPP_RUNS = {
               + tuple(f'EWMA{n}' for n in MA_LENGTHS) + ('GBM', 'GBM+W')),
     'C_sens': dict(scenarios=tuple(BASE_BLOCK), methods=('WSPI',) + SENS_NAMES),
     'D': dict(scenarios=tuple(BASE_BLOCK), methods=('WSPI', 'WSPI-M', 'WSPI-H')),
+    'E': dict(scenarios=tuple(BASE_BLOCK), methods=('WSPI', 'WSPI-H', 'WSPI-HL')),
 }
+E_REFERENCE = 'WSPI-HL'          # mechanism control of run E (WSPI-H without the structural factor)
+E_FAMILY = ('WSPI-H', 'MA64')    # Holm family of the run E reports
 LEVEL_NAMES = ('WSPI-M', 'WSPI-H')
 D_REFERENCES = {'tune': ('WSPI-H', 'WSPI-M', 'WSPI-F2', 'WSPI', 'WSPI-F-YW'),
                 'test': ('WSPI-H', 'WSPI-M')}
@@ -706,6 +724,120 @@ def main_confirm(a, root: Path) -> int:
     return 1 if bad else 0
 
 
+def main_part_e(a, root: Path) -> int:
+    """--part test --runs E (development data) or --confirm --part test --runs E
+    (confirmation data): the mechanism control WSPI-HL (WSPI-H without the
+    structural factor) against WSPI-H and MA64 on the test windows.
+
+    Reference WSPI-HL; the Holm family is WSPI-H and MA64 (E_FAMILY).  WSPI-H is
+    read from run D and MA64 from run A, as in the earlier reports.  Checks first:
+    the run A, D and E folders pass the window check, the WSPI file of run E
+    equals the one of run A, and WSPI-H of run E equals WSPI-H of run D in every
+    metric column (same scorer).  Output <root>/stats_test_E/ or
+    <root>/confirm/stats_test_E/ (--out may not be an earlier report folder)."""
+    if a.part != 'test':
+        print('--runs E works with --part test only')
+        return 2
+    if a.references is not None:
+        print('--references is not used with --runs E (the reference is fixed)')
+        return 2
+    confirm = bool(a.confirm)
+    base_root = root / CONFIRM_DIR if confirm else root
+    blocks = CONFIRM_BLOCK if confirm else BASE_BLOCK
+    out = Path(a.out) if a.out else base_root / 'stats_test_E'
+    out = out if out.is_absolute() else ROOT / out
+    kept = [root / f'stats{x}' for x in ('', '_tune', '_test', '_tune_D', '_test_D', '_test_B',
+                                         '_explore')]
+    kept += [root / CONFIRM_DIR / x for x in ('stats_tune', 'stats_test')]
+    if out.resolve() in [k.resolve() for k in kept]:
+        print('--runs E: give --out a folder of its own (the earlier reports are kept as they are)')
+        return 2
+    out.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    wrows, prow, missing, failed, reports = [], [], [], [], []
+    src = {}
+    for s in blocks:
+        if a.scenarios and s not in a.scenarios:
+            continue
+        for h in a.horizons:
+            fa = base_root / 'run_A' / s / f'h{h}'
+            fd = base_root / 'run_D' / s / f'h{h}'
+            fe = base_root / 'run_E' / s / f'h{h}'
+            tag = f'{s}/h{h}'
+            gone = [str(f.relative_to(root).as_posix()) for f in (fa, fd, fe)
+                    if not (f / 'metadata' / 'protocol_v5_run.json').exists()]
+            if gone:
+                missing += gone
+                continue
+            rows, ok = window_check('A', s, h, fa, RUNS['A']['methods'])
+            r3, ok3 = window_check('D', s, h, fd, SUPP_RUNS['D']['methods'])
+            r4, ok4 = window_check('E', s, h, fe, SUPP_RUNS['E']['methods'])
+            rows += r3 + r4
+            ok &= ok3 and ok4
+            r = cross_run_check(s, h, fa, fe)
+            r['run'] = 'A=E'
+            rows.append(r)
+            ok &= r['status'] == 'OK'
+            r = equal_metric_row('D=E', s, h, 'WSPI-H', fd / 'protocol' / 'WSPI-H_protocol.csv',
+                                 fe / 'protocol' / 'WSPI-H_protocol.csv')
+            rows.append(r)
+            ok &= r['status'] == 'OK'
+            wrows += rows
+            if not ok:
+                failed.append(tag)
+                print(f'WINDOW CHECK FAILED  {tag}  (no tests for this folder)')
+                continue
+            tune, test = part_ids(fa)
+            prow.append(dict(scenario=s, horizon=h, n_windows=len(tune) + len(test),
+                             n_tune=len(tune), first_tune=tune[0] if tune else np.nan,
+                             last_tune=tune[-1] if tune else np.nan, n_test=len(test),
+                             first_test=test[0] if test else np.nan,
+                             last_test=test[-1] if test else np.nan, part='test'))
+            b = block_length(s, h, blocks[s])
+            src = {E_REFERENCE: fe / 'protocol' / f'{E_REFERENCE}_protocol.csv',
+                   'WSPI-H': fd / 'protocol' / 'WSPI-H_protocol.csv',
+                   'MA64': fa / 'protocol' / 'MA64_protocol.csv'}
+            o = out / s / f'h{h}' / f'ref_{E_REFERENCE}'
+            done = (o / 'paired_tests.csv').exists() and (o / 'metadata' / 'stats_run.json').exists()
+            if done and not a.force:
+                state = 'kept'
+            else:
+                t1 = time.time()
+                analyse_part(src, test, o, b, E_REFERENCE, a.B, 'test')
+                state = f'{time.time() - t1:.1f}s'
+            run_name = 'confirm_E' if confirm else 'E'
+            reports.append(dict(part='test', run=run_name, scenario=s, horizon=h,
+                                reference=E_REFERENCE, block=b,
+                                folder=str(o.relative_to(out).as_posix())))
+            print(f'test run_E/{tag:<22} ref {E_REFERENCE} block {b:<5} {state}', flush=True)
+
+    pd.DataFrame(wrows).to_csv(out / 'window_check.csv', index=False, encoding='utf-8')
+    pd.DataFrame(prow).to_csv(out / 'part_windows.csv', index=False, encoding='utf-8')
+    stack(reports, out, extra_cols=('part', 'run'))
+    plan = dict(root=str(base_root), part='test', runs=['E'], confirm=confirm,
+                horizons=a.horizons, base_block=blocks, block_rule=BLOCK_RULES[BLOCK_RULE],
+                B=a.B, seed=SEED,
+                split='split_ids of tools/run_param_grid.py on the WSPI windows of run A '
+                      '(first 30 % = tuning part); the WSPI file of run E equals the run A '
+                      'one and WSPI-H of run E equals WSPI-H of run D',
+                references=[E_REFERENCE], family=list(E_FAMILY),
+                methods=sorted(src) if reports else [],
+                reports=reports, missing=missing, window_check_failed=failed,
+                created=time.strftime('%Y-%m-%d %H:%M:%S'),
+                runtime_seconds=round(time.time() - t0, 1))
+    (out / 'stats_plan.json').write_text(json.dumps(plan, indent=2), encoding='utf-8')
+    print(f'\nreports: {len(reports)}; run folders missing: {len(missing)}; '
+          f'window check failed: {len(failed)}; {time.time() - t0:.0f}s')
+    for m in missing:
+        print(f'  missing: {m}')
+    print(f'Saved to {out}')
+    bad = bool(failed) or (bool(missing) and not a.allow_missing) or a.B != N_BOOT
+    if a.B != N_BOOT:
+        print(f'NOTE: B = {a.B} is not the registered value {N_BOOT}; test run only')
+    print('STATS FAILED' if bad else 'STATS OK')
+    return 1 if bad else 0
+
+
 def main_part(a, root: Path) -> int:
     part = a.part
     runs = list(a.runs)
@@ -713,6 +845,8 @@ def main_part(a, root: Path) -> int:
         return main_part_b(a, root)
     if runs == ['D']:
         return main_part_d(a, root)
+    if runs == ['E']:
+        return main_part_e(a, root)
     if 'C' not in runs or any(r not in ('C', 'C_sens') for r in runs):
         print('--part tune/test works on run C (and C_sens), on run D alone, or on run B '
               'alone with --part test: give --runs C [C_sens], --runs D or --runs B')
@@ -894,7 +1028,8 @@ def main(argv=None):
                     choices=sorted(RUNS) + sorted(SUPP_RUNS),
                     help='default: A B (--part all) or C (--part tune / test); '
                          'B alone with --part test: run B on the test part; '
-                         'D alone with --part tune / test: WSPI-M and WSPI-H')
+                         'D alone with --part tune / test: WSPI-M and WSPI-H; '
+                         'E alone with --part test (also with --confirm): WSPI-HL')
     ap.add_argument('--part', default='all', choices=('all', 'tune', 'test'),
                     help='all windows (default, runs A and B) or the tuning / test part')
     ap.add_argument('--scenarios', nargs='+', default=None,
@@ -907,7 +1042,8 @@ def main(argv=None):
                          '(needs --out other than stats_test)')
     ap.add_argument('--allow-missing', action='store_true')
     ap.add_argument('--confirm', action='store_true',
-                    help='with --part tune / test: the confirmation data under <root>/confirm')
+                    help='with --part tune / test: the confirmation data under <root>/confirm '
+                         '(with --runs E: --part test only)')
     ap.add_argument('--block-rule', default='max', choices=sorted(BLOCK_RULES),
                     help='max: b_h = max(b, h) (default, the fixed rule); window: '
                          'b_h = max(b, N + h - 1), a sensitivity analysis that needs --out')
@@ -929,6 +1065,8 @@ def main(argv=None):
             old = json.loads(plan_file.read_text(encoding='utf-8')).get('block_rule')
             if old != BLOCK_RULES[a.block_rule]:
                 ap.error(f'--out {o} holds reports of another block rule ({old})')
+    if a.confirm and a.runs == ['E']:
+        return main_part_e(a, root)
     if a.confirm:
         return main_confirm(a, root)
     if a.runs is None:
@@ -936,7 +1074,7 @@ def main(argv=None):
     if a.part != 'all':
         return main_part(a, root)
     if any(r in SUPP_RUNS for r in a.runs):
-        print('runs C, C_sens and D are only tested on a part: use --part tune or --part test')
+        print('runs C, C_sens, D and E are only tested on a part: use --part tune or --part test')
         return 2
     out = Path(a.out) if a.out else root / 'stats'
     out = out if out.is_absolute() else ROOT / out

@@ -42,6 +42,9 @@ Methods
   WSPI-M     window mean of a   no      1          (mean-reversion control)
   WSPI-H     window mean of a   c = 4,  1          (level with a memory that grows
                                 anchor mu_L         with the horizon)
+  WSPI-HL    window mean of a   c = 4,  1          (WSPI-H without the factor
+                                anchor mu_L         exp(alpha R - beta W_E):
+                                                    alpha = beta = 0; mechanism control)
 
 Clamp.  A forecast coefficient is kept inside [a_n / c, c * a_n], where a_n is
 the last observed coefficient.  The last element of the extended sequence has
@@ -86,6 +89,9 @@ Neither method has a new free parameter (c = 4 as above).  For WSPI-H
     1 - s_m (1 - 1/c)  <=  P_H / WSPI  <=  1 + s_m (c - 1)
 
 which lies inside [1/c, c] for every n and m.  WSPI-M has no upper bound.
+WSPI-HL is WSPI-H with alpha = beta = 0, so its score is the level mu_hat alone
+and 1 - s_m (1 - 1/c) <= P_HL / mu_L <= 1 + s_m (c - 1).  It is a control: it
+measures what the structural factor exp(alpha R - beta W_E) adds to WSPI-H.
 
 Bounds.  With the clamp and lam in [0, 1], for n observed and m forecast
 coefficients (W_n = 2 - 2^(1-n)):
@@ -680,4 +686,15 @@ def get_level_methods(horizon: int = 1) -> Dict[str, WSPIForecast]:
                                clamp=None, name='WSPI-M'),
         'WSPI-H': WSPIForecast(predictor='mean', gate='none', horizon=horizon,
                                clamp=CLAMP, clamp_anchor='level', name='WSPI-H'),
+    }
+
+
+def get_mechanism_methods(horizon: int = 1) -> Dict[str, WSPIForecast]:
+    """The mechanism control WSPI-HL: WSPI-H with alpha = beta = 0, so the score
+    is the clamped window-mean level mu_hat without the structural factor
+    exp(alpha R - beta W_E).  No new free parameter."""
+    return {
+        'WSPI-HL': WSPIForecast(predictor='mean', gate='none', horizon=horizon,
+                                clamp=CLAMP, clamp_anchor='level', alpha=0.0, beta=0.0,
+                                name='WSPI-HL'),
     }
