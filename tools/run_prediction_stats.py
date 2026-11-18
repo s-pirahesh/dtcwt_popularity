@@ -7,7 +7,10 @@ h<h>`` folder, with the settings fixed before the runs:
   references   run A: WSPI-FG, WSPI-F2, WSPI          run B: WSPI-FA
   block        b_h = max(b, h) windows, with the base block b of the scenario
                (BASE_BLOCK: the block of the stored horizon-1 tests);
-               at horizon h the ground truth of h consecutive windows overlaps
+               at horizon h the ground truth of h consecutive windows overlaps;
+               ``--block-rule window`` (sensitivity analysis): b_h = max(b, N + h - 1)
+               with the window length N = 64, so that windows of two blocks share
+               less of their input; it needs an ``--out`` folder of its own
   test         two-sided Wilcoxon on block means, Holm within one
                scenario x horizon x metric, alpha 0.05 (column ``verdict``)
   bootstrap    circular block bootstrap, B = 10000, seed 42
@@ -144,6 +147,10 @@ from tools import stats_report                                   # noqa: E402
 BASE_BLOCK = {'youtube_hourly': 24, 'taxi_hourly': 168, 'taxi_30min': 336,
               'taxi_5min': 2016, 'movielens_daily': 7, 'movielens_weekly': 4}
 HORIZONS = (1, 8, 24)
+WINDOW = 64                      # window length N of tools/prediction_protocol.py
+BLOCK_RULES = {'max': 'max(base block, horizon)',
+               'window': 'max(base block, window + horizon - 1)'}
+BLOCK_RULE = 'max'               # set by --block-rule
 RUNS = {
     'A': dict(scenarios=tuple(BASE_BLOCK), references=('WSPI-FG', 'WSPI-F2', 'WSPI'),
               methods=('WSPI', 'WSPI-FG', 'WSPI-F2', 'WSPI-F-YW', 'WSPI-F', 'WSPI-FT',
@@ -184,8 +191,11 @@ CONFIRM_DIR = 'confirm'
 ID_COLS = ('window_id', 'timestamp', 'method', 'num_items')
 
 
-def block_length(scenario: str, horizon: int) -> int:
-    return max(BASE_BLOCK[scenario], int(horizon))
+def block_length(scenario: str, horizon: int, base: int | None = None) -> int:
+    b = BASE_BLOCK[scenario] if base is None else int(base)
+    if BLOCK_RULE == 'window':
+        return max(b, WINDOW + int(horizon) - 1)
+    return max(b, int(horizon))
 
 
 def read_protocol(path: Path) -> pd.DataFrame:
@@ -435,7 +445,7 @@ def main_part_b(a, root: Path) -> int:
     pd.DataFrame(prow).to_csv(out / 'part_windows.csv', index=False, encoding='utf-8')
     stack(reports, out, extra_cols=('part', 'run'))
     plan = dict(root=str(root), part='test', runs=['B'], horizons=a.horizons,
-                base_block=BASE_BLOCK, block_rule='max(base block, horizon)', B=a.B, seed=SEED,
+                base_block=BASE_BLOCK, block_rule=BLOCK_RULES[BLOCK_RULE], B=a.B, seed=SEED,
                 split='split_ids of tools/run_param_grid.py on the WSPI windows of run A '
                       '(first 30 % = tuning part); the run B WSPI file equals the run A one',
                 references=list(spec['references']), reports=reports, missing=missing,
@@ -549,7 +559,7 @@ def main_part_d(a, root: Path) -> int:
     pd.DataFrame(prow).to_csv(out / 'part_windows.csv', index=False, encoding='utf-8')
     stack(reports, out, extra_cols=('part', 'run'))
     plan = dict(root=str(root), part=part, runs=['D'], horizons=a.horizons,
-                base_block=BASE_BLOCK, block_rule='max(base block, horizon)', B=a.B, seed=SEED,
+                base_block=BASE_BLOCK, block_rule=BLOCK_RULES[BLOCK_RULE], B=a.B, seed=SEED,
                 split='split_ids of tools/run_param_grid.py on the WSPI windows of run A '
                       '(first 30 % = tuning part); the WSPI files of runs C and D equal '
                       'the run A one',
@@ -648,7 +658,7 @@ def main_confirm(a, root: Path) -> int:
                              last_tune=tune[-1] if tune else np.nan, n_test=len(test),
                              first_test=test[0] if test else np.nan,
                              last_test=test[-1] if test else np.nan, part=part))
-            b = max(CONFIRM_BLOCK[s], int(h))
+            b = block_length(s, h, CONFIRM_BLOCK[s])
             src = {m: fa / 'protocol' / f'{m}_protocol.csv' for m in RUNS['A']['methods']}
             for m in from_c:
                 src[m] = fc / 'protocol' / f'{m}_protocol.csv'
@@ -673,7 +683,7 @@ def main_confirm(a, root: Path) -> int:
     pd.DataFrame(prow).to_csv(out / 'part_windows.csv', index=False, encoding='utf-8')
     stack(reports, out, extra_cols=('part', 'run'))
     plan = dict(root=str(croot), part=part, runs=['confirm: A, C, D'], horizons=a.horizons,
-                base_block=CONFIRM_BLOCK, block_rule='max(base block, horizon)', B=a.B,
+                base_block=CONFIRM_BLOCK, block_rule=BLOCK_RULES[BLOCK_RULE], B=a.B,
                 seed=SEED,
                 split='split_ids of tools/run_param_grid.py on the WSPI windows of the '
                       'confirmation run A (first 30 % = tuning part); the WSPI files of '
@@ -851,7 +861,7 @@ def main_part(a, root: Path) -> int:
         pd.DataFrame(sens_rows).to_csv(out / 'sensitivity_summary.csv', index=False,
                                        encoding='utf-8')
     plan = dict(root=str(root), part=part, runs=runs, horizons=a.horizons,
-                base_block=BASE_BLOCK, block_rule='max(base block, horizon)', B=a.B, seed=SEED,
+                base_block=BASE_BLOCK, block_rule=BLOCK_RULES[BLOCK_RULE], B=a.B, seed=SEED,
                 split='split_ids of tools/run_param_grid.py on the WSPI windows of run A '
                       '(first 30 % = tuning part)',
                 selected_kappa=kappa if part == 'test' else (sel_info or {}).get('selected_kappa'),
@@ -898,13 +908,27 @@ def main(argv=None):
     ap.add_argument('--allow-missing', action='store_true')
     ap.add_argument('--confirm', action='store_true',
                     help='with --part tune / test: the confirmation data under <root>/confirm')
+    ap.add_argument('--block-rule', default='max', choices=sorted(BLOCK_RULES),
+                    help='max: b_h = max(b, h) (default, the fixed rule); window: '
+                         'b_h = max(b, N + h - 1), a sensitivity analysis that needs --out')
     a = ap.parse_args(argv)
+    global BLOCK_RULE
+    BLOCK_RULE = a.block_rule
 
     root = Path(a.root)
     root = root if root.is_absolute() else ROOT / root
     allowed = CONFIRM_BLOCK if a.confirm else BASE_BLOCK
     if a.scenarios and any(x not in allowed for x in a.scenarios):
         ap.error('--scenarios: ' + ', '.join(allowed) + (' (with --confirm)' if a.confirm else ''))
+    if a.block_rule != 'max':
+        if not a.out:
+            ap.error('--block-rule window needs --out (a folder of its own)')
+        o = Path(a.out) if Path(a.out).is_absolute() else ROOT / a.out
+        plan_file = o / 'stats_plan.json'
+        if plan_file.exists():
+            old = json.loads(plan_file.read_text(encoding='utf-8')).get('block_rule')
+            if old != BLOCK_RULES[a.block_rule]:
+                ap.error(f'--out {o} holds reports of another block rule ({old})')
     if a.confirm:
         return main_confirm(a, root)
     if a.runs is None:
@@ -973,7 +997,7 @@ def main(argv=None):
             pd.concat(parts, ignore_index=True).to_csv(out / f'all_{name}.csv', index=False,
                                                        encoding='utf-8')
     plan = dict(root=str(root), runs=a.runs, horizons=a.horizons, base_block=BASE_BLOCK,
-                block_rule='max(base block, horizon)', B=a.B, seed=SEED,
+                block_rule=BLOCK_RULES[BLOCK_RULE], B=a.B, seed=SEED,
                 references={r: list(RUNS[r]['references']) for r in a.runs},
                 reports=reports, missing=missing, window_check_failed=failed,
                 created=time.strftime('%Y-%m-%d %H:%M:%S'),
