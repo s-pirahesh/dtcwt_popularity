@@ -8,7 +8,7 @@ are k = 32..48 (the first ones are padded by reflection), a few thousand
 item-windows.  The sample is for timing only; its results are not used.
 
     python tools\make_timing_sample.py --data data\datasets\youtube_hourly.csv ^
-           --slots 48 --out results\paper2\smoke\timing_sample\youtube_hourly.csv
+           --slots 48 --out results\prediction\smoke\timing_sample\youtube_hourly.csv
 """
 import argparse
 from pathlib import Path

@@ -17,6 +17,12 @@ The paper proposes three training-free, wavelet-based methods:
 They are compared with six time-domain baselines: AF, EWMA, RRD, VSE,
 CompoundPop and PFRF (`baselines/`).
 
+Release 4.1 adds a second use of the same coefficient domain: forecasting the
+trend-band coefficients and scoring the items from the forecast, at horizons of
+1, 8 and 24 slots (see [Popularity prediction](#popularity-prediction-release-41)).
+The results of the first paper are unchanged: `evaluation/protocol_v5.py` has one
+new optional argument (`horizon`), and its default keeps the behaviour of 4.0.x.
+
 ## Installation
 
 Python 3.12 was used for all reported results.
@@ -50,16 +56,63 @@ python tools/run_v5_eval.py --data data/datasets/youtube_hourly.csv --min-obs 50
 How to get the datasets and how to rebuild every experiment, table and figure
 of the paper: see [REPRODUCE.md](REPRODUCE.md).
 
+## Popularity prediction (release 4.1)
+
+The forecasting methods work in the wavelet-coefficient domain and need no
+training. A method forecasts the next trend-band coefficients of an item,
+extends the coefficient sequence by the forecast, and scores the item from the
+extended sequence together with the structural factor of WSPI. Without a
+forecast the score is WSPI. The module header of `methods/wspi_forecast.py`
+gives the formulas and the score bounds.
+
+| Method | Idea |
+|---|---|
+| **WSPI-F2** | AR(2) (Yule-Walker) forecast of the coefficients, kept within a factor `c = 4` of the last coefficient, blended into the score by a gate that depends on the trend share `R` and the entropy `W_E`. |
+| **WSPI-H** | The forecast is the mean of the observed coefficients, kept within a factor `c = 4` of `mu_L`. The weight of the forecast in the score grows with the horizon. No free parameter. |
+| WSPI-M, WSPI-HL | Controls: WSPI-H without the clamp, and WSPI-H without the factor `exp(alpha*R - beta*W_E)`. |
+| WSPI-F, WSPI-F-YW, WSPI-FT, WSPI-FA, WSPI-FG, WSPI-S, WSPI-FS1 to WSPI-FS3 | Other forecasters and gates of the same form (NLMS, Theil-Sen, ARMA(1,1), a backtest gate, a smoothing control and a skill gate). |
+
+They are compared with time-domain forecasts: Persistence, Holt, AR(2)
+(Yule-Walker) on the series, moving averages (MA64, SMA8 to SMA64), the
+exponential means EWMA8 to EWMA64, ARIMA(1,0,1), and the learned baselines GBM
+and GBM+W (`tools/learned_baseline.py`). The evaluation is the protocol V5
+described below, with the ground truth taken at horizon `h`
+(`evaluation/protocol_v5.py`, parameter `horizon`; the default 1 is the
+protocol of the first paper).
+
+Score one series with a forecasting method:
+
+```python
+import numpy as np
+from methods.wspi_forecast import get_level_methods
+
+methods = get_level_methods(horizon=24)      # {'WSPI-M': ..., 'WSPI-H': ...}
+history = np.random.poisson(5, size=64).astype(float)   # last 64 slots
+print(methods['WSPI-H'].assess_single(history))
+```
+
+The experiments are run by `tools/run_prediction_plan.py` (one job per scenario
+and horizon, with resume after an interruption), the paired tests by
+`tools/run_prediction_stats.py`, and the decision rules by
+`tools/prediction_decision.py`. The tables, figures and decision files of the
+study are built from the result files by `tools/prediction_numbers.py`,
+`tools/prediction_figures.py` and the other `tools/prediction_*.py` programs;
+`tools/compare_prediction_outputs.py` checks them against stored copies. The held-out data of the study (NYC Yellow Taxi
+2024 and the Wikipedia Web Traffic series) are converted by the converters in
+`data/converters/`. Every step is listed in [REPRODUCE.md](REPRODUCE.md),
+sections 18 to 25.
+
 ## Repository layout
 
 | Folder | Content |
 |---|---|
-| `methods/` | WSPI, DTCWT+AF, DWT+AF and the ablation variants of WSPI |
+| `methods/` | WSPI, DTCWT+AF, DWT+AF and the ablation variants of WSPI; the coefficient-domain forecasting methods (`wspi_forecast.py`) |
 | `baselines/` | The six time-domain baselines |
 | `evaluation/` | Evaluation protocol (`protocol_v5.py`, `fast_evaluator.py`), metrics (NDCG@K, Spearman rho, RSI@K, rank distortion), window sweep and responsiveness analysis |
-| `data/converters/` | Converters from the public raw data to the standard CSV format (see [data/README.md](data/README.md)) |
+| `data/converters/` | Converters from the public raw data (YouTube, NYC Yellow Taxi, MovieLens, Wikipedia Web Traffic) to the standard CSV format (see [data/README.md](data/README.md)) |
 | `prepare_data.py` | Command-line front end of the converters |
-| `tools/` | One program per experiment (`run_*.py`), statistics (`stats_report.py`), audits and unit tests (`test_*.py`) |
+| `experiments/` | Selection of the forecast gate on synthetic data and the NLMS convergence study (prediction) |
+| `tools/` | One program per experiment (`run_*.py`), statistics (`stats_report.py`), the prediction runs, plans, paired tests, decision rules, tables and figures (`run_prediction*.py`, `prediction_*.py`), audits and unit tests (`test_*.py`) |
 | `scripts/` | Programs that build the figures and tables of the paper and its Supplementary Information from the result files |
 | `results/` | Output of the experiments (CSV and JSON; not kept in Git) |
 
@@ -106,6 +159,7 @@ batched scorers give the same scores.
 If you use this code, please cite the paper and the archived release of this
 repository on Zenodo: <https://doi.org/10.5281/zenodo.23062475> (this DOI
 always points to the latest version; every version also has its own DOI).
+[CITATION.cff](CITATION.cff) gives the citation of the release.
 
 ## License
 

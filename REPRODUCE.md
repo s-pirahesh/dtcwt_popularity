@@ -283,3 +283,300 @@ The pipeline figure is drawn in TikZ in the LaTeX source of the paper.
 `evaluation/fast_evaluator.py` in `compat` mode reproduces the protocol of the
 first submission of the paper; the protocol of the revised paper is
 `evaluation/protocol_v5.py`.
+
+# Popularity prediction (release 4.1)
+
+Sections 18 to 25 reproduce the forecasting study: the held-out data, the runs,
+the paired tests, the decision rules, and the tables, figures and decision files. They use the six scenarios of section 2
+as development data and four held-out scenarios. The results go to
+`results/prediction/` (CSV and JSON only). The commands are for the root of the
+repository, with the library versions of `requirements.txt` (this includes
+`statsmodels`, `scikit-learn` and `joblib`).
+
+## 18. Held-out data
+
+| Scenario | Source | Prepared file |
+|---|---|---|
+| `taxi2024_hourly`, `taxi2024_30min`, `taxi2024_5min` | NYC TLC Trip Record Data, Yellow Taxi, January to December 2024 (`yellow_tripdata_2024-01.parquet` ... `-12.parquet`) | `data/datasets/yellow_taxi_2024_all_{hourly,30min,5min}.csv` |
+| `wikipedia_daily` | Extended Wikipedia Web Traffic Daily Dataset (with missing values), Monash forecasting repository on Zenodo, DOI `10.5281/zenodo.7370977`, file `web_traffic_extended_dataset_with_missing_values.tsf` (unzip the downloaded archive) | `data/datasets/wikipedia_daily.csv` |
+
+Put the raw files in `data/raw/yellow_taxi/2024/` and `data/raw/wikipedia/`, then:
+
+```
+python prepare_data.py --dataset yellow_taxi --input "data/raw/yellow_taxi/2024/*.parquet" --output data/datasets/yellow_taxi_2024_all_hourly.csv --yellow_taxi-granularity hourly --yellow_taxi-min-trips-per-location 1 --yellow_taxi-start-date 2024-01-01 --yellow_taxi-end-date "2024-12-31 23:59:59"
+python prepare_data.py --dataset yellow_taxi --input "data/raw/yellow_taxi/2024/*.parquet" --output data/datasets/yellow_taxi_2024_all_30min.csv --yellow_taxi-granularity 30min --yellow_taxi-min-trips-per-location 1 --yellow_taxi-start-date 2024-01-01 --yellow_taxi-end-date "2024-12-31 23:59:59"
+python prepare_data.py --dataset yellow_taxi --input "data/raw/yellow_taxi/2024/*.parquet" --output data/datasets/yellow_taxi_2024_all_5min.csv --yellow_taxi-granularity 5min --yellow_taxi-min-trips-per-location 1 --yellow_taxi-start-date 2024-01-01 --yellow_taxi-end-date "2024-12-31 23:59:59"
+python prepare_data.py --dataset wikipedia --input data/raw/wikipedia/web_traffic_extended_dataset_with_missing_values.tsf --output data/datasets/wikipedia_daily.csv
+```
+
+The Wikipedia converter keeps the rows `all-access_all-agents` of the 803 days
+from 1 July 2015 to 10 September 2017 and, in file order, every fourth of these
+rows (39,402 rows, 9,851 items). The step, 4, is the smallest k for which the kept
+rows times 803 days do not exceed 9,256,350, the number of result rows of the
+largest taxi scenario at horizon 1; the rule is in `data/README.md`. The taxi
+files keep all 263 zones. The MD5 sums of the files used in the study are:
+
+| File | Rows | Items | MD5 (written on Windows) |
+|---|---|---|---|
+| `yellow_taxi_2024_all_hourly.csv` | 1,062,021 | 263 | `30f2ddce3b4f723f6640d7d1597246a6` |
+| `yellow_taxi_2024_all_30min.csv` | 1,715,758 | 263 | `35d1a4f0e4f90305966e92d388317112` |
+| `yellow_taxi_2024_all_5min.csv` | 5,909,825 | 263 | `408030ee8fcc74e410954bdc0a17de05` |
+| `wikipedia_daily.csv` | 7,424,757 | 9,851 | `99597c30d9d0e661917f7aea2f3dfc05` |
+
+The item threshold `--min-obs` is 24 for the three taxi files and 50 for
+Wikipedia; the settings of the six development scenarios are in
+`tools/run_prediction_plan.py` (`SCENARIOS` and `CONFIRM_SCENARIOS`) and equal
+the table of section 2.
+
+## 19. Selection of the gate on synthetic data, and unit tests
+
+The settings of the forecast gate (the number of backtest origins and the source
+of the backtest) are chosen on synthetic series only:
+
+```
+python experiments/select_gate_synthetic.py --out results/prediction/gate_selection_public
+```
+
+Every program of the study has a unit test that runs in a few seconds on
+synthetic data and prints `ALL OK`:
+
+| Test | Program tested |
+|---|---|
+| `tools/test_wspi_forecast.py` | `methods/wspi_forecast.py` (forecasters, gates, bounds, exact reduction to WSPI) |
+| `tools/test_level_methods.py`, `tools/test_mechanism_control.py` | WSPI-M, WSPI-H, WSPI-HL and plans D and E |
+| `tools/test_supplementary_methods.py`, `tools/test_learned_baseline.py` | WSPI-S, WSPI-FS, SMA, EWMA, sensitivity, GBM and GBM+W, plans C, C_sens and C_nlms |
+| `tools/test_prediction.py`, `tools/test_prediction_resume.py` | batched scorers, runner, resume and bound check, plan A and B |
+| `tools/test_prediction_stats.py`, `tools/test_prediction_stats_part.py`, `tools/test_prediction_stats_references.py`, `tools/test_prediction_stats_run_b.py`, `tools/test_prediction_stats_run_d.py`, `tools/test_prediction_stats_block_rule.py` | `tools/run_prediction_stats.py`: paired tests, parts, references, runs B and D, block rule |
+| `tools/test_prediction_confirm.py`, `tools/test_wikipedia_converter.py` | held-out data: plans with `--confirm`, paired tests with `--confirm`, Wikipedia converter |
+| `tools/test_select_gate_synthetic.py` | `experiments/select_gate_synthetic.py` (reproduces the stored selection) |
+| `tools/test_check_reproduction.py`, `tools/test_estimate_runtime.py` | `tools/check_reproduction.py` and the run-time estimators |
+| `tools/test_compare_prediction_outputs.py` | `tools/compare_prediction_outputs.py` (section 25) |
+
+```
+python tools/test_wspi_forecast.py
+python tools/test_prediction.py
+```
+
+and so on for every file of the table.
+
+## 20. Runs
+
+`tools/run_prediction_plan.py` starts one job for every scenario and horizon
+(1, 8 and 24 slots) as cores and memory allow. If the computer stops, give the
+same command again: finished jobs end in seconds and interrupted jobs resume.
+`--dry-run` prints the commands only. Every job writes
+`results/prediction/run_<plan>/<scenario>/h<h>/` and a log under
+`logs/prediction_plan/`.
+
+| Plan | Methods | Scenarios |
+|---|---|---|
+| `A` | WSPI, WSPI-FG, WSPI-F2, WSPI-F-YW, WSPI-F, WSPI-FT, Persistence, Holt, ARYW, MA64 (with the gate profile and the bound check) | six development scenarios |
+| `B` | WSPI, WSPI-FA, ARIMA(1,0,1) | `youtube_hourly`, `taxi_hourly` |
+| `C` | WSPI, WSPI-S, WSPI-FS1, WSPI-FS1.5, WSPI-FS2, WSPI-FS3 (the number is `kappa`), SMA8 to SMA64, EWMA8 to EWMA64, GBM, GBM+W | six development scenarios |
+| `C_sens` | WSPI and the 18 settings of WSPI-F2 (`c` in 2, 4, 8; `gamma` in 0.1, 0.3, 0.5; `phi_d` in 0.8, 1) | six development scenarios |
+| `C_nlms` | convergence of the NLMS forecaster (`experiments/nlms_convergence.py`), horizon 1 | `youtube_hourly`, `taxi_hourly` |
+| `D` | WSPI, WSPI-M, WSPI-H | six development scenarios |
+| `E` | WSPI, WSPI-H, WSPI-HL | six development scenarios |
+
+```
+python tools/run_prediction_plan.py --plan A --jobs 6 --mem-gb 10
+python tools/run_prediction_plan.py --plan B --jobs 6
+python tools/run_prediction_plan.py --plan C --jobs 6 --mem-gb 10
+python tools/run_prediction_plan.py --plan C_sens --jobs 6 --mem-gb 10
+python tools/run_prediction_plan.py --plan C_nlms --jobs 2
+python tools/run_prediction_plan.py --plan D --jobs 6 --mem-gb 12
+python tools/run_prediction_plan.py --plan E --jobs 6 --mem-gb 12
+```
+
+`--jobs` is the number of parallel jobs and `--mem-gb` the limit of the summed
+estimated peak memory (MovieLens daily needs about 6 GB). Plan A took about 6
+hours of method time and plan B, with one maximum-likelihood fit per item and
+window, about 99 hours (the study used six parallel jobs). The estimators
+`tools/estimate_runtime.py` and `tools/estimate_plan_runtime.py` predict the time
+from a short preview run.
+
+## 21. Paired tests on the development data
+
+`tools/run_prediction_stats.py` calls `tools/stats_report.py` on every run
+folder: circular block bootstrap (B = 10,000, seed 42), block-level two-sided
+Wilcoxon test with Holm correction, block length `max(b, h)` slots for the base
+block `b` of the scenario and the horizon `h`. Before any test it checks that the
+runs are paired (same windows and items in every method, and WSPI equal across
+plans). The first 30 % of the common windows of plan A are the tuning part and
+the rest the test part. Run the commands in this order; the test part of plan C
+needs the selection of `kappa` written by the tuning part.
+
+```
+python tools/run_prediction_stats.py --root results/prediction
+python tools/run_prediction_stats.py --root results/prediction --part tune --runs C
+python tools/run_prediction_stats.py --root results/prediction --part test --runs C C_sens
+python tools/run_prediction_stats.py --root results/prediction --part test --runs C --references WSPI-F-YW --out results/prediction/stats_explore
+python tools/run_prediction_stats.py --root results/prediction --part test --runs B
+python tools/run_prediction_stats.py --root results/prediction --part tune --runs D
+python tools/run_prediction_stats.py --root results/prediction --part test --runs D
+```
+
+| Output folder | Content |
+|---|---|
+| `stats/` | Plans A and B on all windows |
+| `stats_tune/`, `stats_test/` | Plan C on the tuning part (selection of `kappa`) and on the test part (with `C_sens`) |
+| `stats_explore/` | The test part with WSPI-F-YW as an additional reference |
+| `stats_test_B/` | Plan B on the test part |
+| `stats_tune_D/`, `stats_test_D/` | The level methods of plan D on the tuning and test parts |
+
+Every folder holds `all_paired_tests.csv` (the column `verdict` is `ref_better`,
+`ref_worse` or `n.s.`), `all_method_summary.csv`, `part_windows.csv`,
+`window_check.csv` and `stats_plan.json`. The options of the program are
+described in the header of `tools/run_prediction_stats.py`.
+
+## 22. Runs and tests on the held-out data
+
+The same programs run on the four held-out scenarios with `--confirm`. The runs
+go to `results/prediction/confirm/` and use the `kappa` selected on the
+development data.
+
+```
+python tools/run_prediction_plan.py --confirm --plan A --jobs 6 --mem-gb 12
+python tools/run_prediction_plan.py --confirm --plan D --jobs 6 --mem-gb 12
+python tools/run_prediction_plan.py --confirm --plan C --jobs 6 --mem-gb 12
+python tools/run_prediction_plan.py --confirm --plan E --jobs 6 --mem-gb 12
+python tools/run_prediction_stats.py --root results/prediction --confirm --part tune
+python tools/run_prediction_stats.py --root results/prediction --confirm --part test
+```
+
+The outputs are `confirm/stats_tune/` and `confirm/stats_test/`.
+
+## 23. Mechanism control and block-length sensitivity
+
+Plan E scores WSPI-H without the structural factor (WSPI-HL). Its paired tests
+(reference WSPI-HL against WSPI-H and MA64, test part) are:
+
+```
+python tools/run_prediction_stats.py --root results/prediction --part test --runs E
+python tools/run_prediction_stats.py --root results/prediction --confirm --part test --runs E
+```
+
+with the outputs `stats_test_E/` and `confirm/stats_test_E/`.
+
+The block length is also tested with `--block-rule window`, which uses the block
+`max(b, N + h - 1)` with the window length `N = 64`, so that the windows of two
+blocks share less of their input. Every call needs an `--out` folder of its own:
+
+```
+python tools/run_prediction_stats.py --root results/prediction --part test --runs C C_sens --block-rule window --out results/prediction/stats_test_window
+python tools/run_prediction_stats.py --root results/prediction --part test --runs D --block-rule window --out results/prediction/stats_test_D_window
+python tools/run_prediction_stats.py --root results/prediction --part test --runs B --block-rule window --out results/prediction/stats_test_B_window
+python tools/run_prediction_stats.py --root results/prediction --confirm --part test --block-rule window --out results/prediction/confirm/stats_test_window
+python tools/run_prediction_stats.py --root results/prediction --part test --runs E --block-rule window --out results/prediction/stats_test_E_window
+python tools/run_prediction_stats.py --root results/prediction --confirm --part test --runs E --block-rule window --out results/prediction/confirm/stats_test_E_window
+```
+
+## 24. Decision rules and folder index
+
+`tools/prediction_decision.py` applies the rules fixed for plans A and B (the
+comparison of the forecast gate with the structural gate, the claims of a gain
+over the best time-domain forecast, and the comparison with ARIMA). It reads only
+the `verdict` column of the paired tests:
+
+```
+python tools/prediction_decision.py --root results/prediction
+```
+
+The output is `results/prediction/decision/`.
+
+| Folder under `results/prediction/` | Content |
+|---|---|
+| `run_A/` ... `run_E/`, `run_C_sens/`, `run_C_nlms/` | Window-by-window results of the plans of section 20 |
+| `confirm/run_A/` ... `confirm/run_E/` | The same plans on the held-out data |
+| `stats*/`, `confirm/stats*/` | Paired tests of sections 21 to 23 |
+| `decision/` | Output of `tools/prediction_decision.py` |
+| `decision_test/`, `decision_explore/`, `decision_paper/`, `decision_D/`, `confirm/decision/` | Output of `tools/prediction_test_analysis.py` (section 25) |
+| `decision_E/` | Output of `tools/prediction_mechanism_read.py` (section 25) |
+| `decision_review/` | Output of `tools/prediction_block_sensitivity.py` (section 25) |
+| `prediction_numbers.csv` | Output of `tools/prediction_numbers.py` (section 25) |
+| `gate_selection*/` | Selection of the gate on synthetic data |
+| `repro/`, `smoke*/` | Checks and short test runs (not used for any result) |
+
+## 25. Tables, figures and decision files
+
+The programs of this section read result files only (CSV and JSON under
+`results/prediction/`). They compute no statistic: the verdicts, means and
+intervals come from `tools/run_prediction_stats.py` (sections 21 to 23). They
+need `pandas`, `numpy` and `matplotlib` and write into folders of their own,
+never into the run folders. Do sections 20 to 24 first, then run the commands
+below in this order.
+
+**Numbers file.** `tools/prediction_numbers.py` collects the numbers of plans A
+and B (means, intervals, run times, gate profile, score bounds) into
+`results/prediction/prediction_numbers.csv`. It stops with exit code 1 if a
+folder is missing, if a mean differs from the run summary, or if a score bound
+was violated.
+
+```
+python tools/prediction_numbers.py
+```
+
+**Decision files.** Where two parts are listed, run the tuning part first: the
+test part reads its output.
+
+| Command (all with `--root results/prediction`) | Output under `results/prediction/` |
+|---|---|
+| `python tools/prediction_test_analysis.py` | `decision_test/` |
+| `python tools/prediction_test_analysis.py --explore` | `decision_explore/` |
+| `python tools/prediction_test_analysis.py --paper` | `decision_paper/` |
+| `python tools/prediction_test_analysis.py --run-d tune`, then `--run-d test` | `decision_D/` |
+| `python tools/prediction_test_analysis.py --confirm tune`, then `--confirm test` | `confirm/decision/` |
+| `python tools/prediction_mechanism_read.py` | `decision_E/` |
+| `python tools/prediction_block_sensitivity.py --block`, then `--tables` | `decision_review/` |
+
+`--block` reads the reports of section 23 that were written with
+`--block-rule window`. With `--figures DIR` the last program also writes four
+supplementary Markdown tables into `DIR`. The header of each program lists its
+inputs and outputs. One more program gives an aggregate view of all
+wavelet-domain methods on the test part (average rank over the four main
+metrics, first place by metric, gain against the best baseline of all methods,
+and the pairs of one model in the two domains):
+
+```
+python tools/prediction_aggregate_analysis.py results/prediction OUTPUT_FOLDER
+```
+
+**Tables and figures.** `tools/prediction_figures.py` writes Markdown tables
+(`tab_*.md`), LaTeX tables (`tab_*.tex`), figures (`fig_*.pdf` and `.png`) and a
+manifest (`figures_manifest*.json`) that names the result files each item was
+made from. Each option writes its own set; the header of the program lists the
+files of every option. The `--points` run replaces the figures of the plain run
+that have the same names with the final versions (points with error bars), so
+run the plain command first and the `--points` command after it into the same
+folder.
+
+```
+python tools/prediction_figures.py --root results/prediction --out paper_figures/prediction --manuscript --si
+python tools/prediction_figures.py --root results/prediction --out paper_figures/prediction --test-part
+python tools/prediction_figures.py --root results/prediction --out paper_figures/prediction --test-part --points
+python tools/prediction_figures.py --root results/prediction --out paper_figures/prediction --paper-test
+python tools/prediction_figures.py --root results/prediction --out paper_figures/prediction --paper-test --points
+python tools/prediction_figures.py --root results/prediction --out paper_figures/prediction --confirm-tables
+python tools/prediction_figures.py --root results/prediction --out paper_figures/prediction --si-test
+python tools/prediction_figures.py --root results/prediction --out paper_figures/prediction --frame
+```
+
+`--out` must not lie inside `results/`.
+
+**Check against stored copies.** `tools/compare_prediction_outputs.py` compares
+every file of one folder with the file of the same name in another folder:
+
+```
+python tools/compare_prediction_outputs.py paper_figures/prediction STORED_FOLDER
+python tools/compare_prediction_outputs.py results/prediction_check/decision_test results/prediction/decision_test
+```
+
+Tables, CSV and JSON files must be identical; line endings, the one-line note
+`<!-- Generated by ... -->` of a table and the `created` and `root` fields of a
+JSON file are not compared. A JSON file that holds the SHA-256 of another file
+(for example `screen_tune.json` in `decision_D/`) matches only if that file has
+the line endings of the stored run. PNG files are compared pixel by pixel; their
+size can change by a few pixels with the version of `matplotlib` or the fonts of
+the computer, so a differing PNG file is listed as a warning (`--strict-png` makes
+it an error). PDF files are not compared. The program exits with 1 if any table,
+CSV or JSON file differs.

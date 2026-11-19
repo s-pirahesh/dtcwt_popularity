@@ -25,8 +25,8 @@ seconds per fit of a scorer come from a timing sample (``--fit-timing``:
 output of ``make_timing_sample.py``: scorer_seconds / rows).  ARIMA falls back
 to ``results/thesis_v16/arima_timing.csv`` if the sample has no ARIMA row.
 
-    python tools\estimate_runtime.py --preview results\paper2\smoke\youtube_hourly ^
-           [--base results\paper2\repro] [--fit-timing results\paper2\smoke\timing_sample]
+    python tools\estimate_runtime.py --preview results\prediction\smoke\youtube_hourly ^
+           [--base results\prediction\repro] [--fit-timing results\prediction\smoke\timing_sample]
 
 Writes ``runtime_estimate.csv`` (``--out``) and prints totals in hours.
 """

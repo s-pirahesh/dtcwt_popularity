@@ -250,15 +250,15 @@ def test_names():
     check('plans A and B unchanged',
           PL.PLANS['A']['methods'] is None and PL.PLANS['A']['flags'] == ('--gate-profile', '--bound-check')
           and tuple(PL.PLANS['B']['methods']) == ('WSPI', 'WSPI-FA', 'ARIMA'))
-    jobs = PL.build_jobs('C_nlms', 'results/paper2')
+    jobs = PL.build_jobs('C_nlms', 'results/prediction')
     check('plan C_nlms: two scenarios, horizon 1, own script',
           len(jobs) == 2 and all(j['horizon'] == 1 for j in jobs) and
           all(Path(j['cmd'][1]).name == 'nlms_convergence.py' for j in jobs))
-    jobs = PL.build_jobs('C', 'results/paper2')
+    jobs = PL.build_jobs('C', 'results/prediction')
     check('plan C: 18 jobs with run_prediction.py', len(jobs) == 18 and
           all(Path(j['cmd'][1]).name == 'run_prediction.py' for j in jobs) and
           all('--resume' in j['cmd'] and '--bound-check' in j['cmd'] for j in jobs))
-    jobs_a = PL.build_jobs('A', 'results/paper2')
+    jobs_a = PL.build_jobs('A', 'results/prediction')
     check('plan A: commands as before (run_prediction.py, gate profile, no --methods)',
           len(jobs_a) == 18 and all(Path(j['cmd'][1]).name == 'run_prediction.py' and
                                     '--methods' not in j['cmd'] for j in jobs_a))

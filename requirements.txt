@@ -8,10 +8,10 @@ scipy==1.17.0
 PyWavelets==1.9.0
 dtcwt==0.14.0
 #
-# Forecasting baselines (ARIMA and the ARMA(1,1) coefficient forecaster; paper 2)
+# Forecasting baselines (ARIMA and the ARMA(1,1) coefficient forecaster; popularity prediction)
 statsmodels==0.15.0
 #
-# Learned baselines GBM and GBM+W (paper 2, tools/learned_baseline.py)
+# Learned baselines GBM and GBM+W (popularity prediction, tools/learned_baseline.py)
 scikit-learn==1.9.1
 joblib==1.6.0
 #

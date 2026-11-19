@@ -14,21 +14,21 @@ Examples (from the project root, Windows):
   # run A on one scenario, three horizons
   python tools\run_prediction.py --data data\datasets\youtube_hourly.csv ^
          --min-obs 50 --horizons 1 8 24 --gate-profile ^
-         --out results\paper2\run_A\youtube_hourly
+         --out results\prediction\run_A\youtube_hourly
 
   # run B: ARMA(1,1) in the coefficient domain against ARIMA on the raw signal
   # (statsmodels MLE, one fit per item and window; hours).  One horizon per
   # call, so that the calls can run on separate cores.
   python tools\run_prediction.py --data data\datasets\youtube_hourly.csv ^
          --min-obs 50 --horizons 8 --methods WSPI WSPI-FA ARIMA ^
-         --out results\paper2\run_B\youtube_hourly
+         --out results\prediction\run_B\youtube_hourly
 
   # a long run that can be interrupted: give the same command again and it
   # continues (complete methods are skipped, the slow methods continue from
   # the last scored window); see tools/prediction_resume.py
   python tools\run_prediction.py --data data\datasets\youtube_hourly.csv ^
          --min-obs 50 --horizons 8 --methods WSPI WSPI-FA ARIMA --resume ^
-         --bound-check --out results\paper2\run_B\youtube_hourly
+         --bound-check --out results\prediction\run_B\youtube_hourly
 
 Outputs, for every horizon h (``--out``/h<h>/):
   protocol/<method>_protocol.csv         window by window (V5 columns)
@@ -67,7 +67,7 @@ supplementary method is checked against the bounds of its own clamp c.
          --min-obs 50 --horizons 1 8 24 --bound-check ^
          --methods WSPI WSPI-S WSPI-FS1 WSPI-FS1.5 WSPI-FS2 WSPI-FS3 SMA8 SMA16 ^
                    SMA32 SMA64 EWMA8 EWMA16 EWMA32 EWMA64 GBM GBM+W ^
-         --out results\paper2\run_C\youtube_hourly
+         --out results\prediction\run_C\youtube_hourly
 
 Window-mean level methods (run D): WSPI-M (control, no clamp) and WSPI-H (clamp
 c = 4 relative to mu_L).  With --bound-check, WSPI-H is checked against its own
@@ -75,7 +75,7 @@ limits [1 - s_m (1 - 1/c), 1 + s_m (c - 1)], which lie inside [1/c, c].
 
   python tools\run_prediction.py --data data\datasets\youtube_hourly.csv ^
          --min-obs 50 --horizons 1 8 24 --bound-check ^
-         --methods WSPI WSPI-M WSPI-H --out results\paper2\run_D\youtube_hourly
+         --methods WSPI WSPI-M WSPI-H --out results\prediction\run_D\youtube_hourly
 
 --resume does not change any result file; the state is kept in --resume-dir
 (default logs/prediction_resume/).  scorer_timing.csv and the run time in the

@@ -134,7 +134,7 @@ def main():
           and D.MAIN_METRICS == ('ndcg@10', 'spearman_rho', 'rsi@10', 'robustness_distortion'))
 
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp) / 'paper2'
+        root = Path(tmp) / 'prediction'
         build(root)
         for k in S.BASE_BLOCK:                         # small blocks for the synthetic data
             S.BASE_BLOCK[k] = TEST_BLOCK

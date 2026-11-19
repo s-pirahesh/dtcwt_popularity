@@ -39,7 +39,7 @@ Outputs (--out, CSV/JSON only):
   selection_run.json      settings, seeds, versions, chosen configuration
 
 Example (from the project root, Windows):
-  python experiments\select_gate_synthetic.py --out results\paper2\gate_selection_public
+  python experiments\select_gate_synthetic.py --out results\prediction\gate_selection_public
 
 The result is identical to the single run of the pre-registration
 (``tools/test_select_gate_synthetic.py`` compares them when the files exist).

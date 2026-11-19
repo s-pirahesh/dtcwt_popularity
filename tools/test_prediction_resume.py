@@ -281,8 +281,8 @@ def test_bounds():
 
 
 def test_plan(tmp: Path):
-    ja = run_prediction_plan.build_jobs('A', 'results/paper2')
-    jb = run_prediction_plan.build_jobs('B', 'results/paper2')
+    ja = run_prediction_plan.build_jobs('A', 'results/prediction')
+    jb = run_prediction_plan.build_jobs('B', 'results/prediction')
     check('run A: 18 jobs, run B: 6 jobs', len(ja) == 18 and len(jb) == 6)
     check('every job resumes and checks the bound; run A writes the gate profile',
           all('--resume' in j['cmd'] and '--bound-check' in j['cmd'] for j in ja + jb)

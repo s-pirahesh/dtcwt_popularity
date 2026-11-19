@@ -29,7 +29,7 @@ Outputs (``--out``/h1/):
   metadata/nlms_convergence_run.json
 
     python experiments\nlms_convergence.py --data data\datasets\youtube_hourly.csv ^
-           --min-obs 50 --out results\paper2\run_C_nlms\youtube_hourly
+           --min-obs 50 --out results\prediction\run_C_nlms\youtube_hourly
 
 ``--horizons`` accepts only 1 (the forecast is one coefficient ahead);
 ``--resume`` skips a scenario whose output files exist.  Both are there so that

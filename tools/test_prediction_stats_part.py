@@ -127,7 +127,7 @@ def main():
 
 def run_tests():
     with tempfile.TemporaryDirectory() as td:
-        root = Path(td) / 'paper2'
+        root = Path(td) / 'prediction'
         build(root)
         ids = list(range(64, 64 + N_WIN))
         tune, test = split_ids(ids)

@@ -6,7 +6,7 @@ Unit checks for the confirmation data (--confirm)
 folders (no data file is read).
 
   1. Plan: 12 jobs per plan (four held-out scenarios x three horizons) under
-     results/paper2/confirm; the data files and item thresholds of the
+     results/prediction/confirm; the data files and item thresholds of the
      held-out scenarios; run C with WSPI-FS3 only among the gates; the
      development plans are unchanged; refusals (--confirm with plan B, C_sens,
      C_nlms; a development scenario with --confirm).
@@ -133,7 +133,7 @@ def plan_tests():
     check('1 wikipedia: threshold 50, taxi 2024: 24',
           P.CONFIRM_SCENARIOS['wikipedia_daily'][1] == 50
           and all(P.CONFIRM_SCENARIOS[s][1] == 24 for s in SCEN if s.startswith('taxi')))
-    dev = P.build_jobs('A', 'results/paper2')
+    dev = P.build_jobs('A', 'results/prediction')
     check('1 development plan A unchanged', len(dev) == 18
           and {j['scenario'] for j in dev} == set(P.SCENARIOS))
     for plan in ('B', 'C_sens', 'C_nlms'):

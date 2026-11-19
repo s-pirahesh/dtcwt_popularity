@@ -46,7 +46,7 @@ Outputs (``--out``, default ``<root>/decision``):
 If a cell of rule 1 is missing the narrative is UNDETERMINED and the exit code
 is 1; the other tables hold what exists.
 
-    python tools\prediction_decision.py --root results\paper2
+    python tools\prediction_decision.py --root results\prediction
 """
 import argparse
 import hashlib
@@ -239,7 +239,7 @@ def negative_results(paired, cells, claims, domain, bounds):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--root', default='results/paper2')
+    ap.add_argument('--root', default='results/prediction')
     ap.add_argument('--stats', default=None, help='default: <root>/stats')
     ap.add_argument('--out', default=None, help='default: <root>/decision')
     a = ap.parse_args(argv)

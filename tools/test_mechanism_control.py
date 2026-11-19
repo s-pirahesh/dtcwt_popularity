@@ -142,15 +142,15 @@ def test_wiring():
           PL.RUN_E_METHODS == P.RUN_E_METHODS and S.SUPP_RUNS['E']['methods'] == P.RUN_E_METHODS)
     check('earlier method lists unchanged', P.LEVEL_METHODS == ('WSPI-M', 'WSPI-H') and
           P.RUN_D_METHODS == ('WSPI', 'WSPI-M', 'WSPI-H') and PL.RUN_D_METHODS == P.RUN_D_METHODS)
-    jobs = PL.build_jobs('E', 'results/paper2', python='python')
+    jobs = PL.build_jobs('E', 'results/prediction', python='python')
     ok = len(jobs) == 18 and all(j['cmd'][j['cmd'].index('--methods') + 1:] == list(P.RUN_E_METHODS)
                                  and '--bound-check' in j['cmd'] and '--resume' in j['cmd']
-                                 and j['out'].startswith('results/paper2/run_E/') for j in jobs)
+                                 and j['out'].startswith('results/prediction/run_E/') for j in jobs)
     check('plan E: 18 jobs, methods, bound check, resume, output run_E', ok, f'({len(jobs)} jobs)')
-    cj = PL.build_jobs('E', 'results/paper2/confirm', python='python', confirm=True)
+    cj = PL.build_jobs('E', 'results/prediction/confirm', python='python', confirm=True)
     check('plan E --confirm: 12 jobs on the confirmation scenarios',
           len(cj) == 12 and {j['scenario'] for j in cj} == set(PL.CONFIRM_SCENARIOS)
-          and all(j['out'].startswith('results/paper2/confirm/run_E/') for j in cj))
+          and all(j['out'].startswith('results/prediction/confirm/run_E/') for j in cj))
     check('plan D unchanged', [j['cmd'][j['cmd'].index('--methods') + 1:] for j in
                                PL.build_jobs('D', 'r', python='python')][0] == list(P.RUN_D_METHODS))
     check('no clamp entry for the bound check of WSPI-HL (its bound is relative to mu_L)',

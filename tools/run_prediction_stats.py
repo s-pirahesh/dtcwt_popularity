@@ -34,8 +34,8 @@ A report that exists is not computed again (``--force`` to recompute).  Run
 folders that are missing are listed and make the exit code 1, unless
 ``--allow-missing`` is given (the tables then hold what exists).
 
-    python tools\run_prediction_stats.py --root results\paper2
-    python tools\run_prediction_stats.py --root results\paper2 --runs A --allow-missing
+    python tools\run_prediction_stats.py --root results\prediction
+    python tools\run_prediction_stats.py --root results\prediction --runs A --allow-missing
 
 Tuning and test parts (``--part``, supplementary run C)
 -------------------------------------------------------
@@ -73,7 +73,7 @@ of run A in every metric column.
                 place of the five above (same 21 methods, block, B and seed).  For
                 an extra reference after the test reports exist; --out must then
                 name another folder, so stats_test/ stays as it is:
-                --part test --runs C --references WSPI-F-YW --out results/paper2/stats_explore
+                --part test --runs C --references WSPI-F-YW --out results/prediction/stats_explore
 
   --runs B     only with --part test: the run B methods (WSPI, WSPI-FA, ARIMA)
                 on the test windows of the same split (split_ids of the run A WSPI
@@ -132,17 +132,17 @@ the test report.  Both parts write window_check.csv, part_windows.csv (number
 and range of the windows of each part), all_paired_tests.csv,
 all_method_summary.csv and stats_plan.json.
 
-    python tools\run_prediction_stats.py --root results\paper2 --part tune --runs C
-    python tools\run_prediction_stats.py --root results\paper2 --part test --runs C C_sens
-    python tools\run_prediction_stats.py --root results\paper2 --part test --runs C ^
-        --references WSPI-F-YW --out results\paper2\stats_explore
-    python tools\run_prediction_stats.py --root results\paper2 --part test --runs B
-    python tools\run_prediction_stats.py --root results\paper2 --part tune --runs D
-    python tools\run_prediction_stats.py --root results\paper2 --part test --runs D
-    python tools\run_prediction_stats.py --root results\paper2 --confirm --part tune
-    python tools\run_prediction_stats.py --root results\paper2 --confirm --part test
-    python tools\run_prediction_stats.py --root results\paper2 --part test --runs E
-    python tools\run_prediction_stats.py --root results\paper2 --confirm --part test --runs E
+    python tools\run_prediction_stats.py --root results\prediction --part tune --runs C
+    python tools\run_prediction_stats.py --root results\prediction --part test --runs C C_sens
+    python tools\run_prediction_stats.py --root results\prediction --part test --runs C ^
+        --references WSPI-F-YW --out results\prediction\stats_explore
+    python tools\run_prediction_stats.py --root results\prediction --part test --runs B
+    python tools\run_prediction_stats.py --root results\prediction --part tune --runs D
+    python tools\run_prediction_stats.py --root results\prediction --part test --runs D
+    python tools\run_prediction_stats.py --root results\prediction --confirm --part tune
+    python tools\run_prediction_stats.py --root results\prediction --confirm --part test
+    python tools\run_prediction_stats.py --root results\prediction --part test --runs E
+    python tools\run_prediction_stats.py --root results\prediction --confirm --part test --runs E
 """
 import argparse
 import json
@@ -1022,7 +1022,7 @@ def main_part(a, root: Path) -> int:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--root', default='results/paper2')
+    ap.add_argument('--root', default='results/prediction')
     ap.add_argument('--out', default=None, help='default: <root>/stats')
     ap.add_argument('--runs', nargs='+', default=None,
                     choices=sorted(RUNS) + sorted(SUPP_RUNS),

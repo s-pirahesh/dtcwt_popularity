@@ -2,7 +2,7 @@ r"""
 Unit checks for experiments/select_gate_synthetic.py
 ====================================================
   1. Identity with the pre-registered run: the script is run once into a
-     temporary folder and compared with results/paper2/gate_selection/
+     temporary folder and compared with results/prediction/gate_selection/
      (selection_summary.csv, selection_cells.csv, diagnostics.csv).  The
      configurations, the chosen configuration and the group sizes must be
      equal, the numbers equal to 1e-9.  If those files do not exist (a clone
@@ -35,7 +35,7 @@ sys.path.insert(0, str(ROOT))
 import experiments.select_gate_synthetic as S                         # noqa: E402
 from tools.prediction_protocol import CoefFeatures                    # noqa: E402
 
-REFERENCE = ROOT / 'results' / 'paper2' / 'gate_selection'
+REFERENCE = ROOT / 'results' / 'prediction' / 'gate_selection'
 FAILED = []
 
 

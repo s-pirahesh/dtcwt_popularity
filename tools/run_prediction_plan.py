@@ -32,7 +32,7 @@ Supplementary runs (Experiment_Design_v2; same scenarios and horizons as run A):
 Confirmation data (--confirm, with plans A, C, D and E only): the same programs on
 the four held-out scenarios taxi2024_hourly, taxi2024_30min, taxi2024_5min
 (NYC Yellow Taxi 2024) and wikipedia_daily (Wikipedia Web Traffic), horizons
-1, 8, 24.  The output root is results/paper2/confirm (so <root>/run_A/...,
+1, 8, 24.  The output root is results/prediction/confirm (so <root>/run_A/...,
 run_C/..., run_D/..., run_E/...).  Run C there has the fixed gate WSPI-FS3 only (kappa
 chosen on the tuning part of the development data), not WSPI-FS1 to WSPI-FS2.
 
@@ -94,7 +94,7 @@ CONFIRM_FS = 'WSPI-FS3'          # kappa selected on the tuning part of the deve
 RUN_C_CONFIRM_METHODS = tuple(m for m in RUN_C_METHODS
                               if not m.startswith('WSPI-FS') or m == CONFIRM_FS)
 CONFIRM_PLANS = ('A', 'C', 'D', 'E')
-CONFIRM_ROOT = 'results/paper2/confirm'
+CONFIRM_ROOT = 'results/prediction/confirm'
 PLANS = {
     'A': dict(scenarios=tuple(SCENARIOS), methods=None,
               flags=('--gate-profile', '--bound-check')),
@@ -249,7 +249,7 @@ def main(argv=None):
     ap.add_argument('--mem-gb', type=float, default=12.0,
                     help='limit on the summed memory estimate of the running jobs')
     ap.add_argument('--root', default=None,
-                    help=f'output root (default results/paper2; with --confirm {CONFIRM_ROOT})')
+                    help=f'output root (default results/prediction; with --confirm {CONFIRM_ROOT})')
     ap.add_argument('--confirm', action='store_true',
                     help='the four scenarios of the confirmation data (plans A, C, D, E)')
     ap.add_argument('--scenarios', nargs='+', default=None,
@@ -268,7 +268,7 @@ def main(argv=None):
         ap.error('--scenarios: ' + ('the confirmation scenarios are ' if a.confirm else
                                     'the development scenarios are ') + ', '.join(allowed))
     if a.root is None:
-        a.root = CONFIRM_ROOT if a.confirm else 'results/paper2'
+        a.root = CONFIRM_ROOT if a.confirm else 'results/prediction'
 
     jobs = build_jobs(a.plan, a.root, a.scenarios, a.horizons, data_dir=a.data_dir,
                       confirm=a.confirm)

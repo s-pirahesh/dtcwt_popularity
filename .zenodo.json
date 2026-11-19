@@ -1,7 +1,8 @@
 {
-  "title": "WSPI: Wavelet-Structured Popularity Index - source code",
+  "title": "WSPI: Wavelet-Structured Popularity Index and popularity forecasting in the wavelet-coefficient domain - source code",
+  "version": "4.1.1",
   "upload_type": "software",
-  "description": "Source code for the paper \"WSPI: A Wavelet-Structured Popularity Index for Stable Content Ranking via Trend-Noise Separation\" (Scientific Reports, revised version). It contains the WSPI index and the two other wavelet-based methods (DTCWT+AF and DWT+AF), the six baselines, the evaluation protocol, the scripts that build the datasets from the public sources, the scripts of every experiment, and the scripts that regenerate every table and figure of the paper and its Supplementary Information. Library versions are pinned in requirements.txt.",
+  "description": "Source code for the paper \"WSPI: A Wavelet-Structured Popularity Index for Stable Content Ranking via Trend-Noise Separation\" (Scientific Reports, revised version). It contains the WSPI index and the two other wavelet-based methods (DTCWT+AF and DWT+AF), the six baselines, the evaluation protocol, the scripts that build the datasets from the public sources, the scripts of every experiment, and the scripts that regenerate every table and figure of the paper and its Supplementary Information. Release 4.1 adds training-free forecasting methods in the wavelet-coefficient domain (WSPI-F2, WSPI-H and their controls), the forecasting evaluation at horizons of 1, 8 and 24 slots with its run plans, paired tests and decision rules, the converters for the held-out Yellow Taxi 2024 and Wikipedia Web Traffic data, and the programs that build the tables, figures and decision files of the forecasting study from the result files. Library versions are pinned in requirements.txt.",
   "creators": [
     {
       "name": "Pirahesh, Sajjad",
@@ -27,6 +28,8 @@
     "multi-scale analysis",
     "trend-noise separation",
     "temporal ranking stability",
-    "edge caching"
+    "edge caching",
+    "popularity forecasting",
+    "training-free forecasting"
   ]
 }

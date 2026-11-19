@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below, and the paper of the method you use."
+title: "dtcwt_popularity: Wavelet-Structured Popularity Index (WSPI) and popularity forecasting in the wavelet-coefficient domain"
+type: software
+version: 4.1.1
+license: MIT
+repository-code: "https://github.com/s-pirahesh/dtcwt_popularity"
+authors:
+  - family-names: Pirahesh
+    given-names: Sajjad
+    affiliation: "Faculty of Electrical and Computer Engineering, University of Tabriz, Tabriz, Iran"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23062475
+    description: "Concept DOI of the Zenodo archive; it always resolves to the latest version. Every version also has its own DOI."
+keywords:
+  - data popularity estimation
+  - dual-tree complex wavelet transform
+  - multi-scale analysis
+  - trend-noise separation
+  - temporal ranking stability
+  - popularity forecasting
+references:
+  - type: article
+    title: "WSPI: A Wavelet-Structured Popularity Index for Stable Content Ranking via Trend-Noise Separation"
+    authors:
+      - family-names: Pirahesh
+        given-names: Sajjad
+      - family-names: Mohammad Khanli
+        given-names: Leyli
+      - family-names: Baradarani
+        given-names: Aryaz
+    journal: "Scientific Reports"
+    doi: 10.1038/s41598-026-78774-x

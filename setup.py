@@ -35,7 +35,7 @@ else:
 
 setup(
     name='dtcwt-popularity',
-    version='4.0.3',
+    version='4.1.1',
     author='Sajjad Pirahesh',
     author_email='pirahesh@phd.tabrizu.ac.ir',
     description='DTCWT-based Data Popularity Assessment for Distributed Systems',

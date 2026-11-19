@@ -20,8 +20,8 @@ The estimate comes from measured times, never from a guess:
 Assumption: the ratio to WSPI carries over from the preview scenario to the
 other scenarios (the methods work row by row on the same matrices).
 
-    python tools\estimate_plan_runtime.py --preview results\paper2\smoke_C\youtube_hourly\h1 ^
-           --run-a results\paper2\run_A --out results\paper2\smoke_C\runtime_estimate_C.csv
+    python tools\estimate_plan_runtime.py --preview results\prediction\smoke_C\youtube_hourly\h1 ^
+           --run-a results\prediction\run_A --out results\prediction\smoke_C\runtime_estimate_C.csv
 
 Prints the core hours of every run and the longest job; writes one row per job.
 """
@@ -98,7 +98,7 @@ def estimate(preview: Path, run_a: Path):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--preview', required=True, help='h<h> folder of a run C preview')
-    ap.add_argument('--run-a', default='results/paper2/run_A')
+    ap.add_argument('--run-a', default='results/prediction/run_A')
     ap.add_argument('--out', default=None, help='CSV with one row per job')
     ap.add_argument('--jobs', type=int, default=6, help='parallel jobs (for the wall time)')
     a = ap.parse_args(argv)

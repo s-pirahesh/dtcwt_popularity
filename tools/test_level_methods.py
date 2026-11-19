@@ -247,7 +247,7 @@ def test_names(X):
           P.RUN_D_METHODS == ('WSPI', 'WSPI-M', 'WSPI-H'))
     check('plan D methods == prediction_protocol.RUN_D_METHODS',
           tuple(PL.PLANS['D']['methods']) == P.RUN_D_METHODS)
-    jobs = PL.build_jobs('D', 'results/paper2')
+    jobs = PL.build_jobs('D', 'results/prediction')
     check('plan D: 18 jobs with run_prediction.py, bound check, output run_D',
           len(jobs) == 18 and all(Path(j['cmd'][1]).name == 'run_prediction.py' and
                                   '--bound-check' in j['cmd'] and '--resume' in j['cmd'] and

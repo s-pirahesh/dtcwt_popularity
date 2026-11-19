@@ -24,8 +24,8 @@ missing from the candidate is a failure, not a skip.
 Layout of the candidate: ``<candidate>/<scenario>/h1/...``, which is what
 ``run_prediction.py --horizons 1 --out <candidate>/<scenario>`` writes.
 
-    python tools/check_reproduction.py --candidate results/paper2/repro
-    python tools/check_reproduction.py --candidate results/paper2/smoke ^
+    python tools/check_reproduction.py --candidate results/prediction/repro
+    python tools/check_reproduction.py --candidate results/prediction/smoke ^
            --scenarios youtube_hourly
 
 Exit code 0 and a last line ``REPRODUCTION OK`` if every check passes,
